@@ -4,12 +4,21 @@ import uuid
 import os
 
 from src.database import get_db, Base, engine
-from src.crud import PhotoCRUD
+from src.crud import UserCRUD, PhotoCRUD
 from src.storage import StorageService
 from src.models import Photo, EntityTypeEnum
 
 app = FastAPI(title="Aiven + R2 Photo API")
 storage_service = StorageService()
+
+@app.get("/user/{email}")
+def read_user(email: str, db: Session = Depends(get_db)):
+    user_logic = UserCRUD(db)
+    user = user_logic.get_user_by_email(email)
+
+    if not user:
+        return{"error": "User not found"}
+    return user
 
 @app.post("/upload-photo")
 async def upload_photo(
