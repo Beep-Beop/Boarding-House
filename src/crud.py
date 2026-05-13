@@ -1,30 +1,46 @@
 from sqlalchemy.orm import Session
-from src.models import Photo, EntityTypeEnum
+from src.models import Users, Photo
+
+class UserCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create_user(self, name, email, password, role, **kwargs):
+        new_user = Users(
+            name=name, 
+            email=email, 
+            password=password, 
+            role=role,
+            **kwargs
+        )
+        self.db.add(new_user)
+        self.db.commit()
+        self.db.refresh(new_user)
+        return new_user
+
+    def get_user_by_email(self, email: str):
+        return self.db.query(Users).filter(Users.email == email).first()
+
 
 class PhotoCRUD:
-    def __init__(self, db_session: Session):
-        self.db = db_session
+    def __init__(self, db: Session):
+        self.db = db
 
-    def create(self, entity_type: EntityTypeEnum, entity_id: int, photo_url: str, is_primary: bool = False, sort_order: int = 0) -> Photo:
-        db_photo = Photo(
+    def add_photo(self, entity_type, entity_id, photo_url, is_primary=False, sort_order=0):
+        new_photo = Photo(
             entity_type=entity_type,
             entity_id=entity_id,
             photo_url=photo_url,
             is_primary=is_primary,
             sort_order=sort_order
         )
-        self.db.add(db_photo)
+        self.db.add(new_photo)
         self.db.commit()
-        self.db.refresh(db_photo)
-        return db_photo
+        self.db.refresh(new_photo)
+        return new_photo
 
-    def get(self, photo_id: int) -> Photo:
-        return self.db.query(Photo).filter(Photo.photo_id == photo_id).first()
-
-    def delete(self, photo_id: int) -> bool:
-        photo = self.get(photo_id)
-        if photo:
-            self.db.delete(photo)
-            self.db.commit()
-            return True
-        return False
+    def get_photos_for_entity(self, entity_type: str, entity_id: int):
+        return self.db.query(Photo).filter(
+            Photo.entity_type == entity_type, 
+            Photo.entity_id == entity_id
+        ).all()

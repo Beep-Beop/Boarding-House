@@ -3,18 +3,28 @@ from sqlalchemy.orm import Session
 import uuid
 import os
 
+from typing import Literal
 from src.database import get_db, Base, engine
-from src.crud import PhotoCRUD
+from src.crud import UserCRUD, PhotoCRUD
 from src.storage import StorageService
-from src.models import Photo, EntityTypeEnum
+from src.models import Users, Photo
 
 app = FastAPI(title="Aiven + R2 Photo API")
 storage_service = StorageService()
 
+@app.get("/user/{email}")
+def read_user(email: str, db: Session = Depends(get_db)):
+    user_logic = UserCRUD(db)
+    user = user_logic.get_user_by_email(email)
+
+    if not user:
+        return{"error": "User not found"}
+    return user
+
 @app.post("/upload-photo")
 async def upload_photo(
     file: UploadFile = File(...),
-    entity_type: EntityTypeEnum = Form(...),
+    entity_type: Literal['listing', 'room'] = Form(...),
     entity_id: int = Form(...),
     is_primary: bool = Form(False),
     sort_order: int = Form(0),
