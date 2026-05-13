@@ -8,6 +8,4 @@ if not exist .venv (
 ) else (
     call .venv\Scripts\activate
 )
-echo Starting the program...
-python main.py
 pause
