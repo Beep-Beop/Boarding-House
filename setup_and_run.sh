@@ -7,5 +7,3 @@ if [ ! -d ".venv" ]; then
 else
     source .venv/bin/activate
 fi
-echo "Starting the program..."
-python3 main.py
