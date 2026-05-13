@@ -8,7 +8,6 @@ from src.database import Base
 
 @pytest.fixture(scope="session")
 def db_engine():
-    # Force use of local docker DB for tests to protect Aiven production data
     test_db_url = "mysql+pymysql://root:rootpassword@127.0.0.1:3306/testdb"
     engine = create_engine(test_db_url)
     Base.metadata.create_all(bind=engine)
