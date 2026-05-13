@@ -5,11 +5,11 @@ from src.database import Base
 
 #Independent Table
     #Users (Done)
-    #Location
+    #Location (Done)
     #Amenities
 
 #1st Level Dependent Table
-    #Boarding House
+    #Boarding House (Done)
     #Photo (Done)
     #Admin Logs
     #Reports
