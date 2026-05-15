@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from src.models import (Users, Photo, BoardingHouse, Location, 
                         Amenities, Bookings, Reviews, AdminLogs, 
                         Reports, Notifications, Rooms, ListingAmenities,
@@ -55,11 +56,10 @@ class AmenitiesCRUD:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, amenity_name: str, icon: str, category: str) -> Amenities:
+    def create(self, amenity_name: str, **kwargs) -> Amenities:
         amenity = Amenities(
             amenity_name=amenity_name,
-            icon=icon,
-            category=category
+            **kwargs
         )
         self.db.add(amenity)
         self.db.commit()
@@ -70,6 +70,37 @@ class AmenitiesCRUD:
         return self.db.query(Amenities).all()
     
 #1st-Level Dependent Tables
+
+class BoardingHouseCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, owner_id: int, location_id: int, bh_name: str, **kwargs) -> BoardingHouse:
+        bh = BoardingHouse(
+            owner_id=owner_id,
+            location_id=location_id,
+            bh_name=bh_name,
+            **kwargs
+        )
+        self.db.add(bh)
+        self.db.commit()
+        self.db.refresh(bh)
+        return bh
+    
+    def get(self, listing_id: int) -> BoardingHouse:
+        return self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == listing_id).first()
+    
+    def get_by_owner(self, owner_id: int):
+        return self.db.query(BoardingHouse).filter(BoardingHouse.owner_id == owner_id).all()
+    
+    def update_status(self, listing_id: int, status: str) -> bool:
+        bh = self.get(listing_id)
+        if bh:
+            bh.status = status
+            self.db.commit()
+            return True
+        return False
+        
 
 class PhotoCRUD:
     def __init__(self, db: Session):
@@ -93,3 +124,71 @@ class PhotoCRUD:
             Photo.entity_type == entity_type, 
             Photo.entity_id == entity_id
         ).all()
+    
+class AdminLogCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, admin_id: int, action: str, target_type: str, target_id: int, **kwargs) -> AdminLogs:
+        log = AdminLogs(
+            admin_id=admin_id,
+            action=action,
+            target_type=target_type,
+            target_id=target_id
+            **kwargs
+        )
+        self.db.add(log)
+        self.db.commit()
+        self.db.refresh(log)
+        return log
+    
+    def get_recent(self, limit: int = 50):
+        return self.db.query(AdminLogs).order_by(desc(AdminLogs.performed_at)).limit(limit).all()
+    
+class ReportsCRUD:
+    def __init__(self, db:Session):
+        self.db = db
+
+        def create(self, reporter_id: int, reviewed_id: int, target_type: str, target_id: int, reason: str, **kwargs) -> Reports:
+            reports = Reports(
+                reporter_id=reporter_id,
+                reviewed_id=reviewed_id,
+                target_type=target_type,
+                target_id=target_id,
+                reason=reason,
+                **kwargs
+            )
+            self.db.add(reports)
+            self.db.commit()
+            self.db.refresh(reports)
+            return reports
+
+
+
+class NotificationCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, user_id: int, type: str, content: str, **kwargs) -> Notifications:
+        notif = Notifications(
+            user_id=user_id,
+            type=type,
+            content=content,
+            **kwargs
+        )
+        self.db.add(notif)
+        self.db.commit()
+        self.db.refresh(notif)
+        return notif
+    
+    def get_user_unread(self, user_id: int):
+        return self.db.query(Notifications).filter(Notifications.user_id == user_id, Notifications.is_read == False).all()
+    
+    def mark_as_read(self, notif_id: int) -> bool:
+        notif = self.db.query(Notifications).filter(Notifications.notif_id == notif_id).first()
+        if notif:
+            notif.is_read = True
+            self.db.commit()
+            return True
+        return False
+    
