@@ -149,21 +149,39 @@ class ReportsCRUD:
     def __init__(self, db:Session):
         self.db = db
 
-        def create(self, reporter_id: int, reviewed_id: int, target_type: str, target_id: int, reason: str, **kwargs) -> Reports:
-            reports = Reports(
-                reporter_id=reporter_id,
-                reviewed_id=reviewed_id,
-                target_type=target_type,
-                target_id=target_id,
-                reason=reason,
-                **kwargs
-            )
-            self.db.add(reports)
+    def create(self, reporter_id: int, reviewed_id: int, target_type: str, target_id: int, reason: str, **kwargs) -> Reports:
+        reports = Reports(
+            reporter_id=reporter_id,
+            reviewed_id=reviewed_id,
+            target_id=target_id,
+            target_type=target_type,
+            reason=reason,
+            **kwargs
+        )
+        self.db.add(reports)
+        self.db.commit()
+        self.db.refresh(reports)
+        return reports
+
+    #Specific report
+    def get_reports(self, report_id: int):
+        return self.db.query(Reports).filter(Reports.report_id == report_id).first()
+
+    #All of the complaints against a specific baording house
+    def get_reports_by_listing(self, listing_id: int):
+        return self.db.query(Reports).filter(
+            Reports.target_type == 'listing',
+            Reports.target_id == listing_id
+        ).all()
+
+    def update_status(self, report_id: int, new_status: str) -> bool:
+        report = self.get_reports(report_id)
+
+        if report:
+            report.status = new_status
             self.db.commit()
-            self.db.refresh(reports)
-            return reports
-
-
+            return True
+        return False
 
 class NotificationCRUD:
     def __init__(self, db: Session):
