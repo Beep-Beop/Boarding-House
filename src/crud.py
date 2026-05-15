@@ -336,8 +336,8 @@ class BookingsCRUD:
             check_out=check_out,
             total_price=total_price,
             notes=notes,
-            **kwargs,
-            status='pending'
+            status='pending',
+            **kwargs
         )
         self.db.add(booking)
         self.db.commit()
@@ -377,7 +377,7 @@ class ReviewCRUD:
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, user_id: int, listing_id: int, rating: int, comment: str = None, booking_id: int = None, *kwargs) -> Reviews:
+    def create(self, user_id: int, listing_id: int, rating: int, comment: str = None, booking_id: int = None, **kwargs) -> Reviews:
         is_verified = True if booking_id is not None else False
 
         reviews = Reviews(
