@@ -210,3 +210,167 @@ class NotificationCRUD:
             return True
         return False
     
+#Second-Level Dependent Tables
+
+class RoomsCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, listing_id: int, capacity: int, price_per_month: float, **kwagrs) -> Rooms:
+        rooms = Rooms(
+            listing_id=listing_id,
+            capacity=capacity,
+            price_per_month=price_per_month,
+            **kwagrs
+        )
+        self.db.add(rooms)
+        self.db.commit()
+        self.db.refresh(rooms)
+        return rooms
+    
+    def get_room(self, room_id: int):
+        return self.db.query(Rooms).filter(Rooms.room_id == room_id).first()
+    
+    def get_room_by_listing(self, listing_id: int, available_only: bool = False):
+        query =  self.db.query(Rooms).filter(Rooms.listing_id == listing_id)
+        if available_only:
+            query = query.filter(Rooms.availability == True)
+            
+        return query.all()
+    
+    def update(self, room_id: int, **kwargs) -> bool:
+        room = self.get_room(room_id)
+        if not room:
+            return False
+        
+        for key, value in kwargs.items():
+            if hasattr(room, key) and value is not None:
+                setattr(room, key, value)
+        
+        self.db.commit()
+        return True
+    
+    def delete(self, room_id: int) -> bool:
+        room = self.get_room(room_id)
+        if room:
+            self.db.delete(room)
+            self.db.commit()
+            return True
+        return False
+    
+class ListingAmenitiesCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def add_amenities_to_listing(self, listing_id: int, amenity_id: int, notes: str = None) -> ListingAmenities:
+        exists = self.db.query(ListingAmenities).filter(
+            ListingAmenities.listing_id == listing_id,
+            ListingAmenities.amenity_id == amenity_id
+        ).first()
+
+        if exists:
+            return exists
+        
+        listing_amenity = ListingAmenities(
+            listing_id=listing_id,
+            amenity_id=amenity_id,
+            notes=notes
+        )
+        self.db.add(listing_amenity)
+        self.db.commit()
+        self.db.refresh(listing_amenity)
+        return listing_amenity
+    
+    def get_amenities_by_listing(self, listing_id: int):
+        return self.db.query(ListingAmenities).filter(ListingAmenities.listing_id == listing_id).all()
+    
+    def remove_amenity_from_listing(self, listing_id: int, amenity_id: int) -> bool:
+        item = self.db.query(ListingAmenities).filter(
+            ListingAmenities.listing_id == listing_id,
+            ListingAmenities.amenity_id == amenity_id
+        ).first()
+
+        if item:
+            self.db.delete(item)
+            self.db.commit()
+            return True
+        return False
+    
+class FavoritesCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def toggle_favorite(self, user_id: int, listing_id: int, notes: str = None) -> dict:
+        existing_fav = self.db.query(Favorites).filter(
+            Favorites.user_id == user_id,
+            Favorites.listing_id == listing_id
+        ).first()
+
+        if existing_fav:
+            self.db.delete(existing_fav)
+            self.db.commit()
+            return {"action": "removed", "is_favorite": False}
+        
+        new_fav = Favorites(
+            user_id==user_id,
+            listing_id==listing_id,
+            notes==notes
+        )
+        self.db.add(new_fav)
+        self.db.commit()
+        self.db.refresh(new_fav)
+        return {"action": "added", "is_favorite": True}
+    
+    def get_user_fav(self, user_id: int):
+        return self.db.query(Favorites).filter(Favorites.user_id == user_id).first()
+    
+class BookingsCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, user_id: int, room_id: int, check_in, check_out, total_price: float, notes: str = None, *kwargs) ->Bookings:
+        booking = Bookings(
+            user_id=user_id,
+            room_id=room_id,
+            check_in=check_in,
+            check_out=check_out,
+            total_price=total_price,
+            notes=notes,
+            **kwargs,
+            status='pending'
+        )
+        self.db.add(booking)
+        self.db.commit()
+        self.db.refresh(booking)
+        return booking
+    
+    def get_booking(self, booking_id: int):
+        return self.db.query(Bookings).filter(Bookings.booking_id == booking_id).first()
+    
+    def get_user_booking(self, user_id: int):
+        return self.db.query(Bookings).filter(Bookings.user_id == user_id).all()
+    
+    def get_room_booking(self, room_id: int):
+        return self.db.query(Bookings).filter(Bookings.room_id == room_id).all()
+    
+    def update_status(self, booking_id: int, new_status: str, changed_by_user_id: int) ->bool:
+        booking = self.get_booking(booking_id)
+        if not booking:
+            return False
+        
+        old_status = booking_status
+        booking_status = new_status
+
+        history_entry = BookingHistory(
+            booking_id=booking_id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by_user_id=changed_by_user_id
+        )
+        self.db.add(history_entry)
+        self.db.commit()
+        return True
+
+    
+
+        
