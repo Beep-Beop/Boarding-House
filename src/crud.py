@@ -106,7 +106,7 @@ class PhotoCRUD:
     def __init__(self, db: Session):
         self.db = db
 
-    def add_photo(self, entity_type, entity_id, photo_url, is_primary=False, sort_order=0):
+    def create(self, entity_type, entity_id, photo_url, is_primary=False, sort_order=0):
         new_photo = Photo(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -134,7 +134,7 @@ class AdminLogCRUD:
             admin_id=admin_id,
             action=action,
             target_type=target_type,
-            target_id=target_id
+            target_id=target_id,
             **kwargs
         )
         self.db.add(log)
@@ -312,9 +312,9 @@ class FavoritesCRUD:
             return {"action": "removed", "is_favorite": False}
         
         new_fav = Favorites(
-            user_id==user_id,
-            listing_id==listing_id,
-            notes==notes
+            user_id=user_id,
+            listing_id=listing_id,
+            notes=notes
         )
         self.db.add(new_fav)
         self.db.commit()
@@ -322,13 +322,13 @@ class FavoritesCRUD:
         return {"action": "added", "is_favorite": True}
     
     def get_user_fav(self, user_id: int):
-        return self.db.query(Favorites).filter(Favorites.user_id == user_id).first()
+        return self.db.query(Favorites).filter(Favorites.user_id == user_id).all()
     
 class BookingsCRUD:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, user_id: int, room_id: int, check_in, check_out, total_price: float, notes: str = None, *kwargs) ->Bookings:
+    def create(self, user_id: int, room_id: int, check_in, check_out, total_price: float, notes: str = None, **kwargs) ->Bookings:
         booking = Bookings(
             user_id=user_id,
             room_id=room_id,
@@ -358,19 +358,115 @@ class BookingsCRUD:
         if not booking:
             return False
         
-        old_status = booking_status
-        booking_status = new_status
+        old_status = booking.status
+        booking.status = new_status
 
         history_entry = BookingHistory(
             booking_id=booking_id,
             old_status=old_status,
             new_status=new_status,
-            changed_by_user_id=changed_by_user_id
+            changed_by=changed_by_user_id
         )
         self.db.add(history_entry)
         self.db.commit()
         return True
-
     
+#Fourth-Level Dependent Tables
 
+class ReviewCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, user_id: int, listing_id: int, rating: int, comment: str = None, booking_id: int = None, *kwargs) -> Reviews:
+        is_verified = True if booking_id is not None else False
+
+        reviews = Reviews(
+            user_id=user_id,
+            listing_id=listing_id,
+            rating=rating,
+            comment=comment,
+            booking_id=booking_id,
+            is_verified=is_verified,
+            **kwargs
+        )
+        self.db.add(reviews)
+        self.db.commit()
+        self.db.refresh(reviews)
+        return reviews
+    
+    def get_review(self, review_id: int):
+        return self.db.query(Reviews).filter(Reviews.review_id == review_id).first()
+    
+    def get_reviews_by_listing(self, listing_id: int):
+        return self.db.query(Reviews).filter(
+            Reviews.listing_id == listing_id
+        ).order_by(Reviews.created_at.desc()).all()
+    
+    def update(self, review_id: int, **kwargs) -> bool:
+        review = self.get_review(review_id)
+        if not review:
+            return False
         
+        for key, value in kwargs.items():
+            if hasattr(review, key) and value is not None:
+                setattr(review, key, value)
+
+        self.db.commit()
+        return True
+    
+    def delete(self, review_id: int) -> bool:
+        review = self.get_review(review_id)
+        if review:
+            self.db.delete(review)
+            self.db.commit()
+            return True
+        return False
+    
+class BookingHistoryCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_history_by_booking(self, booking_id: int):
+        return self.db.query(BookingHistory).filter(
+            BookingHistory.booking_id == booking_id
+        ).order_by(BookingHistory.changed_at.asc()).all()
+    
+    def get_changes_by_user(self, changed_by_user_id: int):
+        return self.db.query(BookingHistory).filter(
+            BookingHistory.changed_by == changed_by_user_id
+        ).order_by(BookingHistory.changed_at.desc()).all()
+    
+class PaymentCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, booking_id: int, amount: float, method: str, reference_no: str = None, **kwargs) -> Payments:
+        payments = Payments(
+            booking_id=booking_id,
+            amount=amount,
+            method=method,
+            reference_no=reference_no,
+            status='pending',
+            **kwargs
+        )
+        self.db.add(payments)
+        self.db.commit()
+        self.db.refresh(payments)
+        return payments
+    
+    def get_payment(self, payment_id: int):
+        return self.db.query(Payments).filter(Payments.payment_id == payment_id).first()
+    
+    def get_payment_by_booking(self, booking_id: int):
+        return self.db.query(Payments).filter(
+            Payments.booking_id == booking_id
+            ).order_by(Payments.paid_at.desc()).all()
+    
+    def update_status(self, payment_id: int, new_status: str) -> bool:
+        payment = self.get_payment(payment_id)
+        if not payment:
+            return False
+        
+        payment.status = new_status
+        self.db.commit()
+        return True
