@@ -105,7 +105,7 @@ class AdminLogsBase(BaseModel):
     target_type: Literal['listing', 'user', 'report', 'booking'] = Field(..., examples="listing")
     description: Optional[str] = None
     
-class AdminLogsCreat(AdminLogsBase):
+class AdminLogsCreate(AdminLogsBase):
     ip_address: Optional[str] = Field(None, max_length=45)
 
 class AdminLogsResponse(AdminLogsBase):
@@ -115,3 +115,10 @@ class AdminLogsResponse(AdminLogsBase):
 
     class Config:
         from_attributes = True
+
+class ReportsBase(BaseModel):
+    reason: Optional[str]
+
+class ReportsCreate(ReportsBase):
+    
+class ReportsResponse(ReportsBase):
