@@ -83,3 +83,35 @@ class BoardingHouseResponse(BoardingHouseBase):
 
     class Config:
         from_attributes = True
+
+class PhotoBase(BaseModel):
+    entity_type: Literal['listing', 'room'] = Field(..., examples='listing')
+    photo_url: str = Field(..., max_length=255)
+
+class PhotoCreate(PhotoBase):
+    pass
+
+class PhotoResponse(PhotoBase):
+    photo_id: int
+    entity_id: int
+    is_primary: bool
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+class AdminLogsBase(BaseModel):
+    action: str = Field(..., max_length=255)
+    target_type: Literal['listing', 'user', 'report', 'booking'] = Field(..., examples="listing")
+    description: Optional[str] = None
+    
+class AdminLogsCreat(AdminLogsBase):
+    ip_address: Optional[str] = Field(None, max_length=45)
+
+class AdminLogsResponse(AdminLogsBase):
+    log_id: int
+    admin_id: int
+    performed_at: datetime
+
+    class Config:
+        from_attributes = True
