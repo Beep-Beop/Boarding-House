@@ -117,8 +117,38 @@ class AdminLogsResponse(AdminLogsBase):
         from_attributes = True
 
 class ReportsBase(BaseModel):
+    target_type: Literal['listing', 'user', 'review', 'booking'] = Field(..., examples='listing')
     reason: Optional[str]
 
 class ReportsCreate(ReportsBase):
-    
+    reporter_id: int
+    reviewed_id: int
+
 class ReportsResponse(ReportsBase):
+    report_id: int
+    target_id: int
+    status: Literal['pending', 'reviewd', 'resolved', 'dismissed']
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class NotificationsBase(BaseModel):
+    type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples='booking')
+    reference_type: str = Field(None, max_length=100)
+
+class NotificationsCreate(NotificationsBase):
+    triggered_by: int
+
+class NotificationsResponse(NotificationsBase):
+    notif_id: int
+    user_id: int
+    content: Optional[str]
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True    
+
+#Second-Level Dependent Tables
+
