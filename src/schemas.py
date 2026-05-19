@@ -83,3 +83,72 @@ class BoardingHouseResponse(BoardingHouseBase):
 
     class Config:
         from_attributes = True
+
+class PhotoBase(BaseModel):
+    entity_type: Literal['listing', 'room'] = Field(..., examples='listing')
+    photo_url: str = Field(..., max_length=255)
+
+class PhotoCreate(PhotoBase):
+    pass
+
+class PhotoResponse(PhotoBase):
+    photo_id: int
+    entity_id: int
+    is_primary: bool
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+class AdminLogsBase(BaseModel):
+    action: str = Field(..., max_length=255)
+    target_type: Literal['listing', 'user', 'report', 'booking'] = Field(..., examples="listing")
+    description: Optional[str] = None
+    
+class AdminLogsCreate(AdminLogsBase):
+    ip_address: Optional[str] = Field(None, max_length=45)
+
+class AdminLogsResponse(AdminLogsBase):
+    log_id: int
+    admin_id: int
+    performed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ReportsBase(BaseModel):
+    target_type: Literal['listing', 'user', 'review', 'booking'] = Field(..., examples='listing')
+    reason: Optional[str]
+
+class ReportsCreate(ReportsBase):
+    reporter_id: int
+    reviewed_id: int
+
+class ReportsResponse(ReportsBase):
+    report_id: int
+    target_id: int
+    status: Literal['pending', 'reviewd', 'resolved', 'dismissed']
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class NotificationsBase(BaseModel):
+    type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples='booking')
+    reference_type: str = Field(None, max_length=100)
+
+class NotificationsCreate(NotificationsBase):
+    triggered_by: int
+
+class NotificationsResponse(NotificationsBase):
+    notif_id: int
+    user_id: int
+    content: Optional[str]
+    is_read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True    
+
+#Second-Level Dependent Tables
+
