@@ -55,39 +55,34 @@ class BoardingHouseApp(ctk.CTk):
 
     def show_login_page(self):
         self.clear_container()
-
-        login_frame = ctk.CTkFrame(self.container,
-                                   corner_radius=10,
-                                   fg_color=self.card_color)
         
-        login_frame.place(relx=0.5, rely=0.5, anchor="center")
 
-        logo_label = ctk.CTkLabel(login_frame,
+        logo_label = ctk.CTkLabel(self.container,
                                   text="[Wala Pang Logo]",
                                   text_color=self.text_color,
                                   font=self.body_light_font)
         logo_label.pack(pady=(40, 20), padx=40)
 
-        title_label = ctk.CTkLabel(login_frame,
+        title_label = ctk.CTkLabel(self.container,
                                    text="Boarding House Finder",
                                    text_color=self.text_color,
                                    font=self.title_font)
         title_label.pack(pady=(10, 30), padx=40)
 
-        self.email_entry = ctk.CTkEntry(login_frame,
+        self.email_entry = ctk.CTkEntry(self.container,
                                         placeholder_text="Email",
-                                        width=260,
-                                        height=45,
+                                        width=519,
+                                        height=50,
                                         font=self.body_font,
                                         fg_color="#FFFFFF",
                                         border_color=self.entry_border,
                                         text_color=self.text_color)
         self.email_entry.pack(pady=12, padx=50)
 
-        self.password_entry = ctk.CTkEntry(login_frame,
+        self.password_entry = ctk.CTkEntry(self.container,
                                            placeholder_text="Password",
-                                           width=260,
-                                           height=45,
+                                           width=519,
+                                           height=50,
                                            show="*",
                                            font=self.body_font,
                                            fg_color="#FFFFFF",
@@ -95,17 +90,17 @@ class BoardingHouseApp(ctk.CTk):
                                            text_color=self.text_color)
         self.password_entry.pack(pady=12, padx=50)
 
-        self.error_label = ctk.CTkLabel(login_frame,
+        self.error_label = ctk.CTkLabel(self.container,
                                         text="",
                                         text_color=self.error_red,
                                         font=self.body_light_font)
         self.error_label.pack(pady=(0, 5))
 
-        login_btn = ctk.CTkButton(login_frame,
+        login_btn = ctk.CTkButton(self.container,
                                   text="Log In",
-                                  width=260,
-                                  height=45,
-                                  corner_radius=20,
+                                  width=519,
+                                  height=50,
+                                  corner_radius=6,
                                   font=self.body_bold_font,
                                   fg_color=self.primary_color,
                                   hover_color=self.hover_color,
