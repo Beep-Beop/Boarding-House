@@ -51,10 +51,9 @@ class AmenitiesBase(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
 
 class AmenitiesCreate(AmenitiesBase):
-    amenity_name: str = Field(..., max_length=100)
+    pass
 
 class AmenitiesResponse(AmenitiesBase):
-    amenity_name: str = Field(..., max_length=100)
     amenity_id: int
 
     class Config:
@@ -85,11 +84,11 @@ class BoardingHouseResponse(BoardingHouseBase):
         from_attributes = True
 
 class PhotoBase(BaseModel):
-    entity_type: Literal['listing', 'room'] = Field(..., examples='listing')
+    entity_type: Literal['listing', 'room'] = Field(..., examples=['listing'])
     photo_url: str = Field(..., max_length=255)
 
 class PhotoCreate(PhotoBase):
-    pass
+    entity_id: int
 
 class PhotoResponse(PhotoBase):
     photo_id: int
@@ -102,48 +101,56 @@ class PhotoResponse(PhotoBase):
 
 class AdminLogsBase(BaseModel):
     action: str = Field(..., max_length=255)
-    target_type: Literal['listing', 'user', 'report', 'booking'] = Field(..., examples="listing")
+    target_type: Literal['listing', 'user', 'report', 'booking'] = Field(..., examples=["listing"])
     description: Optional[str] = None
     
 class AdminLogsCreate(AdminLogsBase):
+    target_id: int
     ip_address: Optional[str] = Field(None, max_length=45)
 
 class AdminLogsResponse(AdminLogsBase):
     log_id: int
     admin_id: int
+    target_id: int
+    ip_address: Optional[str]
     performed_at: datetime
 
     class Config:
         from_attributes = True
 
 class ReportsBase(BaseModel):
-    target_type: Literal['listing', 'user', 'review', 'booking'] = Field(..., examples='listing')
-    reason: Optional[str]
+    target_type: Literal['listing', 'user', 'review', 'booking'] = Field(..., examples=['listing'])
+    reason: str
 
 class ReportsCreate(ReportsBase):
+    target_id: int
     reporter_id: int
-    reviewed_id: int
+    reviewed_id: Optional[int] = None
 
 class ReportsResponse(ReportsBase):
+    reporter_id: int
     report_id: int
     target_id: int
-    status: Literal['pending', 'reviewd', 'resolved', 'dismissed']
+    status: Literal['pending', 'reviewed', 'resolved', 'dismissed']
+    reviewed_id: Optional[int]
     created_at: datetime
 
     class Config:
         from_attributes = True
 
 class NotificationsBase(BaseModel):
-    type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples='booking')
-    reference_type: str = Field(None, max_length=100)
+    type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples=['booking'])
+    reference_type: str = Field(..., max_length=100)
+    content: str
 
 class NotificationsCreate(NotificationsBase):
-    triggered_by: int
+    user_id: int
+    triggered_by: Optional[int]
 
 class NotificationsResponse(NotificationsBase):
     notif_id: int
     user_id: int
-    content: Optional[str]
+    triggered_by: Optional[int]
     is_read: bool
     created_at: datetime
 
