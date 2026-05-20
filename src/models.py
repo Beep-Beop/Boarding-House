@@ -229,7 +229,7 @@ class BookingHistory(Base):
 class Payments(Base):
     __tablename__ = "PAYMENTS"
 
-    payment_id = Column(Integer, primary_key=True, autautoincrement=True)
+    payment_id = Column(Integer, primary_key=True, autoincrement=True)
     booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="CASCADE"), nullable=False)
     amount = Column(DECIMAL(10, 2), nullable=False)
     method = Column(Enum('gcash', 'bank_transfer', 'cash', 'card'), nullable=False)

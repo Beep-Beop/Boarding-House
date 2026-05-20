@@ -1,72 +1,117 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import uuid
-import os
+import bcrypt
+from typing import List
+from pydantic import BaseModel
 
-from typing import Literal
-from src.database import get_db, Base, engine
-from src.crud import UserCRUD, PhotoCRUD
-from src.storage import StorageService
-from src.models import Users, Photo
+from src import models, schemas
+from src.database import engine, get_db
 
-app = FastAPI(title="Aiven + R2 Photo API")
-storage_service = StorageService()
+app = FastAPI(title="Boarding House Finder API")
 
-@app.get("/user/{email}")
-def read_user(email: str, db: Session = Depends(get_db)):
-    user_logic = UserCRUD(db)
-    user = user_logic.get_user_by_email(email)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    if not user:
-        return{"error": "User not found"}
-    return user
+# ---  Password Security ---
+def get_password_hash(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed_password.decode('utf-8')
 
-@app.post("/upload-photo")
-async def upload_photo(
-    file: UploadFile = File(...),
-    entity_type: Literal['listing', 'room'] = Form(...),
-    entity_id: int = Form(...),
-    is_primary: bool = Form(False),
-    sort_order: int = Form(0),
-    db: Session = Depends(get_db)
-):
-    content = await file.read()
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    password_byte_enc = plain_password.encode('utf-8')
+    hashed_password_byte_enc = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_byte_enc, hashed_password_byte_enc)
+
+@app.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     
-    file_extension = os.path.splitext(file.filename)[1]
-    r2_key = f"photos/{entity_type.value}/{entity_id}/{uuid.uuid4()}{file_extension}"
+    #Check for existing user
+    existing_user = db.query(models.Users).filter(models.Users.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email is already registered")
     
-    upload_success = storage_service.upload_file(content, r2_key)
-    if not upload_success:
-        raise HTTPException(status_code=500, detail="Failed to upload photo to Cloudflare R2.")
+    #Hashed Password
+    hashed_pwd = get_password_hash(user.password)
 
-    crud = PhotoCRUD(db)
-    try:
-        photo = crud.create(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            photo_url=r2_key,
-            is_primary=is_primary,
-            sort_order=sort_order
+    #Create new User
+    new_user = models.Users(
+        name=user.name,
+        email=user.email,
+        password=hashed_pwd,
+        role=user.role,
+        phone=user.phone
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+# --- Login ---
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/login")
+def login_user(credentials: LoginRequest, db: Session = Depends(get_db)):
+    
+    #Find user by email
+    user = db.query(models.Users).filter(models.Users.email == credentials.email).first()
+    
+    #Verify if user exist
+    if not user or not verify_password(credentials.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
         )
-        return {
-            "message": "Photo uploaded successfully!",
-            "photo_id": photo.photo_id,
-            "photo_url": photo.photo_url
-        }
-    except Exception as e:
-        storage_service.delete_file(r2_key)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    #Check if banned
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail=f"Account is {user.status}"
+        )
 
-@app.get("/photos")
-def list_photos(db: Session = Depends(get_db)):
-    photos = db.query(Photo).all()
-    return [
-        {
-            "photo_id": p.photo_id, 
-            "entity_type": p.entity_type,
-            "entity_id": p.entity_id,
-            "photo_url": p.photo_url,
-            "is_primary": p.is_primary
-        } 
-        for p in photos
-    ]
+    #JWT Token later
+    return {
+        "message": "Login successful!", 
+        "user_id": user.user_id, 
+        "role": user.role,
+        "name": user.name
+    }
+
+# --- Boarding House ---
+@app.post("/boarding-houses/", response_model=schemas.BoardingHouseResponse)
+def create_boarding_house(listing: schemas.BoardingHouseCreate, owner_id: int, db: Session = Depends(get_db)):
+
+    #owner_id will be removed
+    new_listing = models.BoardingHouse(
+        owner_id=owner_id, #Will be removed
+        location_id=listing.location_id,
+        bh_name=listing.bh_name,
+        description=listing.description,
+        price_range=listing.price_range,
+        permit_url=listing.permit_url,
+        rules=listing.rules,
+        min_stay_months=listing.min_stay_months
+    )
+
+    db.add(new_listing)
+    db.commit()
+    db.refresh(new_listing)
+    return new_listing
+
+@app.get("/boarding-houses/", response_model=List[schemas.BoardingHouseResponse])
+def get_all_boarding_houses(db: Session = Depends(get_db)):
+
+    listing = db.query(models.BoardingHouse).all()
+    return listing
