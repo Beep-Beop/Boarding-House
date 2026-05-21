@@ -38,6 +38,26 @@ class BoardingHouseApp(ctk.CTk):
         target_height = int((pad_h / pad_w) * target_width)
         self.google_icon = ctk.CTkImage(padded_google, size=(target_width, target_height))
 
+        self.bk_btn = ctk.CTkImage(Image.open("assets/bk_btn.png"), size=(80, 60))
+        raw_bk_btn = Image.open("assets/bk_btn.png")
+        bk_orig_w, bk_orig_h = raw_bk_btn.size
+        padded_bk_btn = Image.new("RGBA", (bk_orig_w + 40, bk_orig_h + 40), (255, 255, 255, 0))
+        padded_bk_btn.paste(raw_bk_btn, (20, 20))
+        bk_btn_pad_w, bk_btn_pad_h = padded_bk_btn.size
+        target_width_btn = 70
+        target_height_btn = int((bk_btn_pad_h / bk_btn_pad_w) * target_width_btn)
+        self.bk_btn_icon = ctk.CTkImage(padded_bk_btn, size=(target_width_btn, target_height_btn))
+
+        self.bk_btn_hvr = ctk.CTkImage(Image.open("assets/bk_btn_hvr.png"), size=(80, 60))
+        raw_bk_btn_hvr = Image.open("assets/bk_btn_hvr.png")
+        bk_hvr_orig_w, bk_hvr_orig_h = raw_bk_btn_hvr.size
+        padded_bk_btn_hvr = Image.new("RGBA", (bk_hvr_orig_w + 40, bk_hvr_orig_h + 40), (255, 255, 255, 0))
+        padded_bk_btn_hvr.paste(raw_bk_btn_hvr, (20, 20))
+        bk_btn_hvr_pad_w, bk_btn_hvr_pad_h = padded_bk_btn_hvr.size
+        target_width_hvr = 70
+        target_height_hvr = int((bk_btn_hvr_pad_h / bk_btn_hvr_pad_w) * target_width_hvr)
+        self.bk_btn_hvr_icon = ctk.CTkImage(padded_bk_btn_hvr, size=(target_width_hvr, target_height_hvr))
+
         self.title_font = ctk.CTkFont(family="Novecento sans wide Normal", size=32, weight="bold")
         self.alt_title_font = ctk.CTkFont(family="Novecento sans wide Normal", size=24, weight="bold")
         self.body_bold_font = ctk.CTkFont(family="Novecento sans wide Normal", size=20, weight="bold")
@@ -161,7 +181,8 @@ class BoardingHouseApp(ctk.CTk):
 
         # Email Row
         email_frame = ctk.CTkFrame(self.form_container, 
-                                   fg_color="transparent")
+                                   fg_color="transparent"
+                                   )
         email_frame.pack(pady=(0, 15))
 
         self.email_label = ctk.CTkLabel(email_frame, 
@@ -326,7 +347,160 @@ class BoardingHouseApp(ctk.CTk):
         self.show_toast("BEEEEP BOOOOOP", is_error=False)
     
     def show_register_page(self):
-        self.show_toast("asdjladasd", is_error=False)
+        self.clear_container()
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        self.bk_btn_frame = ctk.CTkFrame(self.form_container,
+                                  fg_color="transparent"
+                                  )
+        self.bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+
+        self.back_btn = ctk.CTkLabel(self.bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+        self.back_btn.bind("<Leave>", lambda event: self.back_btn.configure(image=self.bk_btn_icon))
+
+        # Logo
+        logo_label = ctk.CTkLabel(self.form_container,
+                                  text=None,
+                                  image=self.logo,
+                                  width=140,
+                                  height=32
+                                  )
+        logo_label.pack(pady=(5, 15))
+
+        welcome_label = ctk.CTkLabel(self.form_container,
+                                     text="WELCOME TO",
+                                     width=121,
+                                     height=5,
+                                     font=self.body_bold_font,
+                                     text_color="#4D4D4D"
+                                    )
+        welcome_label.pack(pady=(0, 7))
+
+        title_label = ctk.CTkLabel(self.form_container, 
+                                   text="BOARDING HOUSE FINDER", 
+                                   width=273, 
+                                   height=20,
+                                   font=self.alt_title_font, 
+                                   text_color="#4D4D4D"
+                                   )
+        title_label.pack(pady=(0, 10))
+
+        notes_label = ctk.CTkLabel(self.form_container, 
+                                   text="Please enter your login details", 
+                                   width=213, 
+                                   height=5,
+                                   font=self.body_paragraph_font, 
+                                   text_color="#4D4D4D"
+                                   )
+        notes_label.pack(pady=(0, 7))
+
+        # Email Row
+        email_frame = ctk.CTkFrame(self.form_container, 
+                                   fg_color="transparent"
+                                   )
+        email_frame.pack(pady=(0, 15))
+
+        self.email_label = ctk.CTkLabel(email_frame, 
+                                        text="Email", 
+                                        font=self.body_light_font, 
+                                        text_color=self.text_color
+                                        )
+        self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        email_bg_frame = ctk.CTkFrame(email_frame, 
+                                      width=400, 
+                                      height=40, 
+                                      fg_color="#F8F8F8",
+                                      border_color=self.entry_border, 
+                                      border_width=1, 
+                                      corner_radius=6
+                                      )
+        email_bg_frame.pack()
+        email_bg_frame.pack_propagate(False) 
+
+        self.email_entry = ctk.CTkEntry(email_bg_frame, 
+                                        placeholder_text="example@gmail.com", 
+                                        height=30,
+                                        font=self.body_light_font, 
+                                        fg_color="transparent", 
+                                        border_width=0,
+                                        text_color=self.text_color
+                                        )
+        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        
+        name_frame = ctk.CTkFrame(self.form_container,
+                                  fg_color="transparent"
+                                  )
+        name_frame.pack(fill="x", pady=(10, 0))
+
+
+        # Name Row
+        self.f_name_label = ctk.CTkLabel(name_frame,
+                                      text="First Name",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.f_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        f_name_bg_frame = ctk.CTkFrame(name_frame,
+                                          width=280,
+                                          height=40,
+                                          fg_color="#F8F8F8",
+                                          border_color=self.entry_border,
+                                          border_width=1,
+                                          corner_radius=6
+                                          )
+        f_name_bg_frame.pack(fill="x")
+        f_name_bg_frame.pack_propagate(False)
+
+        self.f_name_entry = ctk.CTkEntry(f_name_bg_frame,
+                                       placeholder_text="Juan",
+                                       height=30,
+                                       font=self.body_light_font,
+                                       fg_color="transparent",
+                                       border_width=0,
+                                       text_color=self.text_color
+                                       )
+        self.f_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        self.l_name_label = ctk.CTkLabel(name_frame,
+                                      text="Last Name",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.l_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        l_name_bg_frame = ctk.CTkFrame(name_frame,
+                                          width=280,
+                                          height=40,
+                                          fg_color="#F8F8F8",
+                                          border_color=self.entry_border,
+                                          border_width=1,
+                                          corner_radius=6
+                                          )
+        l_name_bg_frame.pack(fill="x")
+        l_name_bg_frame.pack_propagate(False)
+
+        self.l_name_entry = ctk.CTkEntry(l_name_bg_frame,
+                                       placeholder_text="Dela Cruz",
+                                       height=30,
+                                       font=self.body_light_font,
+                                       fg_color="transparent",
+                                       border_width=0,
+                                       text_color=self.text_color
+                                       )
+        self.l_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
 if __name__ == "__main__":
     app = BoardingHouseApp()

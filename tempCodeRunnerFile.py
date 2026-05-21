@@ -1,2 +1,2 @@
 
-                                      fg_color="transparent"
+        # Logo
