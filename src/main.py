@@ -93,7 +93,6 @@ def login_user(credentials: LoginRequest, db: Session = Depends(get_db)):
 @app.post("/boarding-houses/", response_model=schemas.BoardingHouseResponse)
 def create_boarding_house(listing: schemas.BoardingHouseCreate, owner_id: int, db: Session = Depends(get_db)):
 
-    #owner_id will be removed
     new_listing = models.BoardingHouse(
         owner_id=owner_id, #Will be removed
         location_id=listing.location_id,
