@@ -592,8 +592,8 @@ class BoardingHouseApp(ctk.CTk):
         self.next_btn.pack(pady=(10, 10))
 
     def attempt_register(self):
-        f_name = self.f_name_entry.get()
-        l_name = self.l_name_entry.get()
+        f_name = self.f_name_entry.get().strip()
+        l_name = self.l_name_entry.get().strip()
         email = self.email_entry.get()
         password = self.create_pass_entry.get()
         confirm_password = self.confirm_pass_entry.get()
@@ -602,6 +602,7 @@ class BoardingHouseApp(ctk.CTk):
 
             if password != confirm_password:
                 self.show_toast("Password Do Not Match!", is_error=True)
+                return
 
             full_name = f"{f_name} {l_name}"
 
@@ -630,6 +631,8 @@ class BoardingHouseApp(ctk.CTk):
                 self.show_toast("Error: Is your backend server running?", is_error=True)
         else:
             self.show_toast("Please fill in all fields.", is_error=True)
+
+
 if __name__ == "__main__":
     app = BoardingHouseApp()
     app.mainloop()
