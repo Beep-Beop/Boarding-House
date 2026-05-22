@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from src import crud, schemas, database
+from src import crud, schemas, database, security
 
 # 1. CREATE ROUTER
 # Kapag sa ibang table, palitan niyo lang yung prefix at tags (ex: "/boardinghouse")
@@ -18,8 +18,13 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
     if user_crud.get_user_by_email(user.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    user_dict = user.model_dump()
+
+    hashed_pw = security.get_password_hash(user.password)
+    user_dict["password"] = hashed_pw
+
     # Save sa database. 
-    return user_crud.create(**user.model_dump())
+    return user_crud.create(**user_dict)
 
 # 3. GET ROUTE (READ)
 # Gagamitin ito para kumuha ng specific user gamit ang ID nila sa URL.

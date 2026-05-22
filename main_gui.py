@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from PIL import Image
 import os
+import requests
 
 ctk.set_appearance_mode("Light")
 
@@ -68,6 +69,7 @@ class BoardingHouseApp(ctk.CTk):
         self.primary_color = "#AC7F5E"
         self.entry_border = "#E0E0E0" 
         self.hover_color = "#C5A376"
+        self.hover_color_text = "#E2E2E2"
         self.text_color = "#3E362A"
         self.error_red = "#D9534F"
         
@@ -87,7 +89,6 @@ class BoardingHouseApp(ctk.CTk):
             widget.destroy()
     
     def show_toast(self, message, is_error=True):
-        """Displays a sleek notification and prevents spam-clicking bugs."""
         
         if self.toast_timer is not None:
             self.after_cancel(self.toast_timer)
@@ -103,7 +104,7 @@ class BoardingHouseApp(ctk.CTk):
         
         self.current_toast = ctk.CTkFrame(self, 
                                           fg_color=bg_color, 
-                                          corner_radius=20, 
+                                          corner_radius=6, 
                                           width=350,
                                           height=40)
         self.current_toast.place(relx=0.5, rely=-0.1, anchor="center") 
@@ -115,7 +116,6 @@ class BoardingHouseApp(ctk.CTk):
                                  font=self.body_paragraph_font)
         msg_label.place(relx=0.5, rely=0.5, anchor="center")
 
-        # 5. Animation Logic
         def animate_in(current_rely=-0.1):
             if self.current_toast is None or not self.current_toast.winfo_exists(): return
             
@@ -192,7 +192,8 @@ class BoardingHouseApp(ctk.CTk):
                                         )
         self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        email_bg_frame = ctk.CTkFrame(email_frame, 
+        # THE "FAKE" ENTRY (Visual box user sees)
+        email_fake_entry = ctk.CTkFrame(email_frame, 
                                       width=400, 
                                       height=40, 
                                       fg_color="#F8F8F8",
@@ -200,12 +201,13 @@ class BoardingHouseApp(ctk.CTk):
                                       border_width=1, 
                                       corner_radius=6
                                       )
-        email_bg_frame.pack()
-        email_bg_frame.pack_propagate(False) 
+        email_fake_entry.pack()
+        email_fake_entry.pack_propagate(False) 
 
-        self.email_entry = ctk.CTkEntry(email_bg_frame, 
+        # THE "REAL" ENTRY (Where user types, tightly wrapped & centered)
+        self.email_entry = ctk.CTkEntry(email_fake_entry, 
                                         placeholder_text="example@gmail.com", 
-                                        height=30,
+                                        height=24, # Tight wrap around text
                                         font=self.body_light_font, 
                                         fg_color="transparent", 
                                         border_width=0,
@@ -224,7 +226,8 @@ class BoardingHouseApp(ctk.CTk):
                                            )
         self.password_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        password_bg_frame = ctk.CTkFrame(password_frame, 
+        # THE "FAKE" ENTRY
+        password_fake_entry = ctk.CTkFrame(password_frame, 
                                          width=400, 
                                          height=40, 
                                          fg_color="#F8F8F8",
@@ -232,12 +235,13 @@ class BoardingHouseApp(ctk.CTk):
                                          border_width=1, 
                                          corner_radius=6
                                          )
-        password_bg_frame.pack()
-        password_bg_frame.pack_propagate(False)
+        password_fake_entry.pack()
+        password_fake_entry.pack_propagate(False)
 
-        self.password_entry = ctk.CTkEntry(password_bg_frame, 
+        # THE "REAL" ENTRY
+        self.password_entry = ctk.CTkEntry(password_fake_entry, 
                                            placeholder_text="Password", 
-                                           width=400, height=30,
+                                           height=24, # Tight wrap around text
                                            show="•", 
                                            font=self.body_light_font, 
                                            fg_color="transparent",
@@ -267,7 +271,7 @@ class BoardingHouseApp(ctk.CTk):
                                             font=self.body_paragraph_font,
                                             text_color="#AC7F5E", 
                                             fg_color="transparent",        
-                                            hover_color="#F8F8F8",        
+                                            hover_color=self.hover_color_text,     
                                             width=0,                       
                                             height=20,
                                             command=self.forgot_password)
@@ -321,15 +325,12 @@ class BoardingHouseApp(ctk.CTk):
                                           font=ctk.CTkFont(family="Poppins", size=15, weight="bold"),
                                           text_color=self.primary_color,
                                           fg_color="transparent",
-                                          hover_color="#F8F8F8",
+                                          hover_color=self.hover_color_text,
                                           width=0,
                                           height=20,
                                           command=self.show_register_page
                                           )
         self.register_btn.pack(side="left")
-
-
-
 
     def attempt_login(self):
         email = self.email_entry.get()
@@ -439,69 +440,196 @@ class BoardingHouseApp(ctk.CTk):
                                         )
         self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
         
-        name_frame = ctk.CTkFrame(self.form_container,
-                                  fg_color="transparent"
-                                  )
-        name_frame.pack(fill="x", pady=(10, 0))
+        # =========================================================
+        # 1. NAME ROW (First Name & Last Name)
+        # =========================================================
+        name_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        name_frame.pack(pady=(0, 15))
 
-
-        # Name Row
+        # --- FIRST NAME (Column 0) ---
         self.f_name_label = ctk.CTkLabel(name_frame,
-                                      text="First Name",
+                                      text="First name",
                                       font=self.body_light_font,
                                       text_color=self.text_color
                                       )
-        self.f_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        self.f_name_label.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=(0, 5))
 
-        f_name_bg_frame = ctk.CTkFrame(name_frame,
-                                          width=280,
+        # THE "FAKE" ENTRY (Visual box user sees)
+        f_name_fake_entry = ctk.CTkFrame(name_frame,
+                                          width=195, 
                                           height=40,
                                           fg_color="#F8F8F8",
                                           border_color=self.entry_border,
                                           border_width=1,
                                           corner_radius=6
                                           )
-        f_name_bg_frame.pack(fill="x")
-        f_name_bg_frame.pack_propagate(False)
+        f_name_fake_entry.grid(row=1, column=0, padx=(0, 5))
+        f_name_fake_entry.pack_propagate(False)
 
-        self.f_name_entry = ctk.CTkEntry(f_name_bg_frame,
+        # THE "REAL" ENTRY (Where user types, tightly wrapped & centered)
+        self.f_name_entry = ctk.CTkEntry(f_name_fake_entry,
                                        placeholder_text="Juan",
-                                       height=30,
+                                       height=24, # Tight wrap around text
                                        font=self.body_light_font,
                                        fg_color="transparent",
                                        border_width=0,
                                        text_color=self.text_color
                                        )
-        self.f_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.f_name_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
 
+        # --- LAST NAME (Column 1) ---
         self.l_name_label = ctk.CTkLabel(name_frame,
-                                      text="Last Name",
+                                      text="Last name",
                                       font=self.body_light_font,
                                       text_color=self.text_color
                                       )
-        self.l_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        self.l_name_label.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
 
-        l_name_bg_frame = ctk.CTkFrame(name_frame,
-                                          width=280,
+        # THE "FAKE" ENTRY
+        l_name_fake_entry = ctk.CTkFrame(name_frame,
+                                          width=195, 
                                           height=40,
                                           fg_color="#F8F8F8",
                                           border_color=self.entry_border,
                                           border_width=1,
                                           corner_radius=6
                                           )
-        l_name_bg_frame.pack(fill="x")
-        l_name_bg_frame.pack_propagate(False)
+        l_name_fake_entry.grid(row=1, column=1, padx=(5, 0))
+        l_name_fake_entry.pack_propagate(False)
 
-        self.l_name_entry = ctk.CTkEntry(l_name_bg_frame,
+        # THE "REAL" ENTRY
+        self.l_name_entry = ctk.CTkEntry(l_name_fake_entry,
                                        placeholder_text="Dela Cruz",
-                                       height=30,
+                                       height=24,
                                        font=self.body_light_font,
                                        fg_color="transparent",
                                        border_width=0,
                                        text_color=self.text_color
                                        )
-        self.l_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.l_name_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
 
+        # =========================================================
+        # 2. PASSWORD ROW (Create & Confirm Password)
+        # =========================================================
+        pass_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        pass_frame.pack(pady=(0, 15))
+
+        # --- CREATE PASSWORD (Column 0) ---
+        self.c_pass_label = ctk.CTkLabel(pass_frame,
+                                        text="Create Password",
+                                        font=self.body_light_font,
+                                        text_color=self.text_color
+                                      )
+        self.c_pass_label.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=(0, 5))
+
+        # THE "FAKE" ENTRY
+        c_pass_fake_entry = ctk.CTkFrame(pass_frame,
+                                    width=195,
+                                    height=40,
+                                    fg_color="#F8F8F8",
+                                    border_color=self.entry_border,
+                                    border_width=1,
+                                    corner_radius=6
+                                    )
+        c_pass_fake_entry.grid(row=1, column=0, padx=(0, 5))
+        c_pass_fake_entry.pack_propagate(False)
+
+        # THE "REAL" ENTRY
+        self.create_pass_entry = ctk.CTkEntry(c_pass_fake_entry,
+                                         placeholder_text="••••••••",
+                                         height=24,
+                                         show="•",
+                                         font=self.body_light_font,
+                                         fg_color="transparent",
+                                         border_width=0,
+                                         text_color=self.text_color
+                                         )
+        self.create_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+        
+        # --- CONFIRM PASSWORD (Column 1) ---
+        self.confirm_pass_label = ctk.CTkLabel(pass_frame,
+                                               text="Confirm Password",
+                                               font=self.body_light_font,
+                                               text_color=self.text_color
+                                               )
+        self.confirm_pass_label.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+
+        # THE "FAKE" ENTRY
+        confirm_pass_fake_entry = ctk.CTkFrame(pass_frame,
+                                          width=195,
+                                          height=40,
+                                          fg_color="#F8F8F8",
+                                          border_color=self.entry_border,
+                                          border_width=1,
+                                          corner_radius=6
+                                          )
+        confirm_pass_fake_entry.grid(row=1, column=1, padx=(5, 0))
+        confirm_pass_fake_entry.pack_propagate(False)
+
+        # THE "REAL" ENTRY
+        self.confirm_pass_entry = ctk.CTkEntry(confirm_pass_fake_entry,
+                                               placeholder_text="••••••••",
+                                               height=24,
+                                               show="•",
+                                               font=self.body_light_font,
+                                               fg_color="transparent",
+                                               border_width=0,
+                                               text_color=self.text_color
+                                               )
+        self.confirm_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+
+        self.next_btn = ctk.CTkButton(self.form_container,
+                                      text="REGISTER",
+                                      width=350,
+                                      height=45,
+                                      corner_radius=6,
+                                      font=self.body_bold_font,
+                                      fg_color=self.primary_color,
+                                      hover_color=self.hover_color,
+                                      text_color="#FFFFFF",
+                                      command=self.attempt_register # Update to Email Verification
+                                      )
+        self.next_btn.pack(pady=(10, 10))
+
+    def attempt_register(self):
+        f_name = self.f_name_entry.get()
+        l_name = self.l_name_entry.get()
+        email = self.email_entry.get()
+        password = self.create_pass_entry.get()
+        confirm_password = self.confirm_pass_entry.get()
+
+        if f_name and l_name and email and password and confirm_password:
+
+            if password != confirm_password:
+                self.show_toast("Password Do Not Match!", is_error=True)
+
+            full_name = f"{f_name} {l_name}"
+
+            try:
+                user_data = {
+                    "name": full_name,
+                    "email": email,
+                    "password": password,
+                    "role": "student"
+                }
+                
+                response = requests.post("http://127.0.0.1:8000/users/", json=user_data)
+                
+                if response.status_code == 200:
+                    self.show_toast("Success! Account created.", is_error=False)
+                    self.after(2000, self.show_login_page) 
+                    
+                elif response.status_code == 400:
+                    error_msg = response.json().get("detail", "Registration failed.")
+                    self.show_toast(error_msg, is_error=True)
+                    
+                else:
+                    self.show_toast("Server error. Try again later.", is_error=True)
+                    
+            except requests.exceptions.ConnectionError:
+                self.show_toast("Error: Is your backend server running?", is_error=True)
+        else:
+            self.show_toast("Please fill in all fields.", is_error=True)
 if __name__ == "__main__":
     app = BoardingHouseApp()
     app.mainloop()
