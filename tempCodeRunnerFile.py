@@ -1,2 +1,2 @@
-
-                                      fg_color="transparent"
+r_width=0,
+                                               text_
