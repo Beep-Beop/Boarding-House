@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
+from src import crud, schemas, database, security
 from photos import router as photos_router
 from social import router as social_router
 from notifications import router as notifications_router
