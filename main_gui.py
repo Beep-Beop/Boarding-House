@@ -333,11 +333,32 @@ class BoardingHouseApp(ctk.CTk):
         self.register_btn.pack(side="left")
 
     def attempt_login(self):
-        email = self.email_entry.get()
+        email = self.email_entry.get().strip()
         password = self.password_entry.get()
 
         if email and password:
-            self.show_toast("BEEEEEEP", is_error=False)
+            try:
+                login_data = {
+                    "email": email,
+                    "password": password
+                }
+
+                response = requests.post("http://127.0.0.1:8000/auth/login", json=login_data)
+
+                if response.status_code == 200:
+                    user_info = response.json()
+                    self.show_toast(f"Welcome Back, {user_info['name']}", is_error=False)
+                
+                elif response.status_code in [401, 403]:
+                    error_msg = response.json().get("detail", "Login failed.")
+                    self.show_toast(error_msg, is_error=True)
+                
+                else:
+                    self.show_toast("Server error. Try again Later.", is_error=True)
+
+            except requests.exceptions.ConnectionError:
+                self.show_toast("Error: Backend Error", is_error=True)
+        
         else:
             self.show_toast("Please fill in both fields.", is_error=True)
 
