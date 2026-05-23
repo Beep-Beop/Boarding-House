@@ -9,56 +9,53 @@ router = APIRouter(prefix="/boarding-houses", tags=["Boarding Houses"])
 @router.post("/", response_model=schemas.BoardingHouseResponse)
 def create_boarding_house(
     #should be listing: schemas.BoardingHouseCreate
-    boarding_house: schemas.BoardingHouseCreate,
+   listing: schemas.BoardingHouseCreate,
     db: Session = Depends(database.get_db)
 ):
-    boarding_house_crud = crud.BoardingHouseCRUD(db)
+    listing_crud = crud.BoardingHouseCRUD(db)
 
-    return boarding_house_crud.create(**boarding_house.model_dump()) 
+    return listing_crud.create(**listing.model_dump()) 
 
 
 #instead na boarding_house_id listing_id talaga kinukuha mo dyan wala tayong boarding house id you can check sa models.py
-@router.get("/{boarding_house_id}", response_model=schemas.BoardingHouseResponse)
+@router.get("/{listing_id}", response_model=schemas.BoardingHouseResponse)
 
 #same here since listing talaga should be get_listing()
 def read_boarding_house(
-    boarding_house_id: int,
+    listing_id: int,
     db: Session = Depends(database.get_db)
 ):
     #same issue listing_crud 
-    boarding_house = crud.BoardingHouseCRUD(db).get(boarding_house_id)
+    listing = crud.BoardingHouseCRUD(db).get(listing_id)
 
-    if not boarding_house:
+    if not listing:
         raise HTTPException(status_code=404, detail="Boarding House Not Found")
 
-    return boarding_house
+    return listing
 
 
 #Same issue listing_id
-@router.patch("/{boarding_house_id}", response_model=schemas.BoardingHouseResponse)
+@router.patch("/{listing_id}", response_model=schemas.BoardingHouseResponse)
 
 #update_listing_status
 def update_boarding_house(
     #listing_id
-    boarding_house_id: int,
+    listing_id: int,
     #listing_update
     boarding_house: schemas.BoardingHouseUpdate,
     db: Session = Depends(database.get_db)
 ):
     #listing_crud
-    boarding_house_crud = crud.BoardingHouseCRUD(db)
+    listing_crud = crud.BoardingHouseCRUD(db)
 
-    #wala tayon boarding_house_id listing_id lang also this is redundant hindi to importante you can remove this
-    existing_boarding_house = boarding_house_crud.get(boarding_house_id)
-
-    if not existing_boarding_house:
+    if not existing_listing:
         raise HTTPException(status_code=404, detail="Boarding House Not Found")
 
     #actually this mas nauna dapat to sa error handling pero instead na return gawin mo 
     #nalang variable ex updated_listing = listing_crud.update then so on
-    return boarding_house_crud.update(
-        boarding_house_id,
-        **boarding_house.model_dump(exclude_unset=True)
+    updated_listing = listing_crud.update(
+       listing_id,
+        **listing_update.model_dump(exclude_unset=True)
     )
 
     #then return mo nalang ung updtaed listing

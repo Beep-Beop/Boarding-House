@@ -1,75 +1,48 @@
 # bookings.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import date
+from src import crud, schemas, database
 
-from database import get_db
-from models import Booking, Rooms
+router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
-router = APIRouter(prefix="/bookings", tags=["bookings"])
 
-class BookingCreate(BaseModel):
-    booking_id: int
-    user_id: int
-    room_id: int
-    check_in: date
-    check_out: date
-    status: Optional[str] = "pending"
-    total_price: float
-    notes: Optional[str] = None
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+@router.post("/", response_model=schemas.BookingResponse)
+def create_booking(
+    booking: schemas.BookingCreate,
+    db: Session = Depends(database.get_db)
+):
+    booking_crud = crud.BookingCRUD(db)
 
-class BookingUpdate(BaseModel):
-    booking_id: Optional[int] = None
-    user_id: Optional[int] = None
-    room_id: Optional[int] = None
-    check_in: Optional[date] = None
-    check_out: Optional[date] = None
-    status: Optional[str] = None
-    total_price: Optional[float] = None
-    notes: Optional[str] = None
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    return booking_crud.create(**booking.model_dump())
 
-@router.post("/")
-def create_booking(data: BookingCreate, db: Session = Depends(get_db)):
-    room = db.query(Rooms).filter(Rooms.room_id == data.room_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    
-    new_booking = Booking(**data.dict())
-    db.add(new_booking)
-    db.commit()
-    db.refresh(new_booking)
-    return {
-        "message": "Booking created successfully",
-        "booking": new_booking
-    }
 
-@router.get("/")
-def get_bookings(db: Session = Depends(get_db)):
-    bookings = db.query(Booking).all()
-    return bookings
+@router.patch("/{booking_id}", response_model=schemas.BookingResponse)
+def update_booking(
+    booking_id: int,
+    booking: schemas.BookingUpdate,
+    db: Session = Depends(database.get_db)
+):
+    booking_crud = crud.BookingCRUD(db)
 
-@router.patch("/{booking_id}")
-def update_booking(booking_id: int, data: BookingUpdate, db: Session = Depends(get_db)):
-    booking = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+    existing_booking = booking_crud.get(booking_id)
+
+    if not existing_booking:
+        raise HTTPException(status_code=404, detail="Booking Not Found")
+
+    return booking_crud.update(
+        booking_id,
+        **booking.model_dump(exclude_unset=True)
+    )
+
+
+@router.get("/{booking_id}", response_model=schemas.BookingResponse)
+def read_booking(
+    booking_id: int,
+    db: Session = Depends(database.get_db)
+):
+    booking = crud.BookingCRUD(db).get(booking_id)
+
     if not booking:
-        raise HTTPException(status_code=404, detail= "Booking not found")
-    update_data = data.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(booking, key, value)
-    db.commit()
-    db.refresh(booking)
-    return {
-        "message": "Booking updated successfully",
-        "data": booking
-    }
+        raise HTTPException(status_code=404, detail="Booking Not Found")
 
-
-        
-
+    return booking
