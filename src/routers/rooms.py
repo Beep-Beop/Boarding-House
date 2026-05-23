@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, list
 
 from database import get_db
 from models import Room, BoardingHouse
@@ -52,25 +52,24 @@ def create_room(room: RoomCreate, db: Session = Depends(get_db)):
     }
 
 @router.patch("/{room_id}")
-def update_room(room_id: int, room_update: RoomUpdate, db: Session = Depends(get_db)):
-    room = db.query(Room).filter(Room.room_id == room_id).first()
+ def update_room(room_id: int, room_update: RoomUpdate, db: Session = Depends(get_db)):
+    room = (db.query(Room).filter(Room.room_id == room_id).first())
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-
-    # If listing_id is being updated, ensure the boarding house exists
-    if room_update.listing_id is not None:
-        boarding_house = db.query(BoardingHouse).filter(BoardingHouse.listing_id == room_update.listing_id).first()
+    
+    if data.listing_id:
+        boarding_house = (db.query(BoardingHouse).filter(BoardingHouse.listing_id == data.listing_id).first())
         if not boarding_house:
             raise HTTPException(status_code=404, detail="Boarding house not found")
+        
+        update_data = data.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(room, key, value)
 
-    update_data = room_update.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(room, key, value)
+            db.commit()
+            db.refresh(room)
 
-    db.commit()
-    db.refresh(room)
-
-    return {
-        "message": "Room updated successfully",
-        "data": room
-    }
+            return {
+                "message": "Room updated successfully",
+                "data": room
+            }
