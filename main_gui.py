@@ -354,6 +354,7 @@ class BoardingHouseApp(ctk.CTk):
                     self.show_toast(error_msg, is_error=True)
                 
                 else:
+                    print("BACKEND ERROR:", response.json()) 
                     self.show_toast("Server error. Try again Later.", is_error=True)
 
             except requests.exceptions.ConnectionError:
@@ -652,6 +653,78 @@ class BoardingHouseApp(ctk.CTk):
                 self.show_toast("Error: Is your backend server running?", is_error=True)
         else:
             self.show_toast("Please fill in all fields.", is_error=True)
+
+    def email_verification_page(self):
+        self.clear_container()
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        self.bk_btn_frame = ctk.CTkFrame(self.form_container,
+                                  fg_color="transparent"
+                                  )
+        self.bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+
+        self.back_btn = ctk.CTkLabel(self.bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+        
+        logo_label = ctk.CTkLabel(self.form_container,
+                                  text=None,
+                                  image=self.logo,
+                                  width=140,
+                                  height=32
+                                  )
+        logo_label.pack(pady=(5, 15))
+
+        title_label = ctk.CTkLabel(self.form_container, 
+                                   text="BOARDING HOUSE FINDER", 
+                                   width=273, 
+                                   height=20,
+                                   font=self.alt_title_font, 
+                                   text_color="#4D4D4D"
+                                   )
+        title_label.pack(pady=(0, 10))
+
+        email_frame = ctk.CTkFrame(self.form_container,
+                                   fg_color="transparent"
+                                   )
+        email_frame.pack(pady=(0, 15))
+
+        self.email_label = ctk.CTkLabel(email_frame,
+                                        text="Email",
+                                        font=self.body_light_font,
+                                        text_color=self.text_color
+                                        )
+        self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 15))
+
+        email_fake_entry = ctk.CTkFrame(email_frame,
+                                        width=400,
+                                        height=40,
+                                        fg_color="#F8F8F8",
+                                        border_color=self.entry_border,
+                                        border_width=1,
+                                        corner_radius=6
+                                        )
+        email_fake_entry.pack()
+        email_fake_entry.pack_propagate(False)
+
+        self.email_entry = ctk.CTkFrame(email_fake_entry,
+                                        placeholder_text="example@gmail.com",
+                                        height=24,
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color
+                                        )
+        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
 
 if __name__ == "__main__":

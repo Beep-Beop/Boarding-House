@@ -4,7 +4,7 @@ from src import crud, schemas, database, security
 
 router = APIRouter(prefix="/auth", tags=["'Authentication"])
 
-@router.post("login")
+@router.post("/login")
 def login(credentials: schemas.UserLogin, db: Session = Depends(database.get_db)):
     user_crud = crud.UserCRUD(db)
 
