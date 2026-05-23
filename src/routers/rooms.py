@@ -1,10 +1,10 @@
-# rooms.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
 
 router = APIRouter(prefix="/rooms", tags=["Rooms"])
 
+#Router.post missing
 
 @router.patch("/{room_id}", response_model=schemas.RoomResponse)
 def update_room(room_id: int, room_update: schemas.RoomUpdate, db: Session = Depends(database.get_db)):
