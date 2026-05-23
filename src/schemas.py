@@ -90,6 +90,16 @@ class BoardingHouseResponse(BoardingHouseBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class BoardingHouseUpdate(BaseModel):
+    location_id: Optional[int] = None
+    bh_name: Optional[str] = None
+    description: Optional[str] = None
+    price_range: Optional[str] = None
+    permit_url: Optional[str] = None
+    rules: Optional[str] = None
+    min_stay_months: Optional[int] = None
+    status: Optional[str] = None
+
 # --- PHOTOS ---
 """ Generic photo storage for both Listings AND Rooms"""
 class PhotoBase(BaseModel):
