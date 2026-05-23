@@ -31,7 +31,7 @@ class UserResponse(UserBase):
 
 class UserLogin(BaseModel):
     email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
-    password = str = Field(..., min_length=6, examples=["beepboop123"])
+    password: str = Field(..., min_length=6, examples=["beepboop123"])
 
 # --- LOCATION ---
 """ Coordinates and addresses for the boarding houses."""
