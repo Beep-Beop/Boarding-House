@@ -201,6 +201,14 @@ class RoomsResponse(RoomsBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class RoomUpdate(BaseModel):
+    listing_id: Optional[int] = None
+    room_type: Optional[str] = None
+    capacity: Optional[int] = None
+    price_per_month: Optional[float] = None
+    availability: Optional[bool] = None
+    Floor_level: Optional[int] = None
+
 # --- LISTING AMENITIES ---
 """ The mapping table connecting a Boarding House to the Global Amenities list."""
 class ListingAmenitiesBase(BaseModel):
@@ -259,6 +267,11 @@ class BookingsResponse(BookingsBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class BookingUpdate(BookingsBase):
+    status: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    payment_status: Optional[str] = None
 
 # FOURTH-LEVEL DEPENDENT TABLES
 
