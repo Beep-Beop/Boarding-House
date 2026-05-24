@@ -1,64 +1,57 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from src import crud, schemas, database, security
+from typing import List
+from src import crud, schemas, database
 
-router = APIRouter(prefix="/social", tags=["Social"])
+router = APIRouter(prefix="/social", tags=["Social & Interactions"])
 
-# In-memory storage
-reviews_db = []
-favorites_db = []
+@router.post("/reviews", response_model=schemas.ReviewsResponse)
+def create_review(review: schemas.ReviewsCreate, db: Session = Depends(database.get_db)):
+    review_crud = crud.ReviewCRUD(db)
+    return review_crud.create(**review.model_dump)
 
-@router.post("/reviews")
-async def add_review(
-    boardinghouse_id: int,
-    user_name: str,
-    rating: float,
-    comment: str = ""
-):
-    """Submit a new review for a boarding house"""
-    if not (1 <= rating <= 5):
-        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+@router.get("/reviews/listing/{listing_id}", response_model=List[schemas.ReportsResponse])
+def get_listing_reviews(listing_id: int, db: Session = Depends(database.get_db)):
+    review_crud = crud.ReviewCRUD(db)
+    return review_crud.get_reviews_by_listing(listing_id)
+
+@router.get("/reviews/user/{user_id}", response_model=List[schemas.ReviewsResponse])
+def get_user_reviews(user_id: int, db: Session = Depends(database.get_db)):
+    review_crud = crud.ReviewCRUD(db)
+    return review_crud.get_review_by_user(user_id)
+
+@router.delete("/reviews/{review_id}")
+def delete_review(review_id: int, db: Session = Depends(database.get_db)):
+    review_crud = crud.ReportsCRUD(db)
+
+    success = review_crud.delete_review(review_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Review not found")
     
-    new_review = {
-        "id": len(reviews_db) + 1,
-        "boardinghouse_id": boardinghouse_id,
-        "user_name": user_name,
-        "rating": rating,
-        "comment": comment
-    }
-    reviews_db.append(new_review)
-    return {"message": "Review added successfully", "data": new_review}
+    return {"message": "Review deleted successfully"}
 
-@router.get("/reviews/{boardinghouse_id}")
-async def get_reviews(boardinghouse_id: int):
-    """Get all reviews for a specific boarding house"""
-    result = [r for r in reviews_db if r["boardinghouse_id"] == boardinghouse_id]
-    return {"boardinghouse_id": boardinghouse_id, "reviews": result}
+# Favorites
+@router.post("/favorites", response_model=schemas.FavoritesResponse)
+def add_favorite(favorite: schemas.FavoritesCreate, db: Session = Depends(database.get_db)):
+    fav_crud = crud.FavoritesCRUD(db)
 
-@router.post("/favorites")
-async def add_favorite(
-    boardinghouse_id: int,
-    user_name: str
-):
-    """Add a boarding house to user's favorites"""
-    # Check if already favorited
-    exists = any(
-        f["user_name"] == user_name and f["boardinghouse_id"] == boardinghouse_id
-        for f in favorites_db
-    )
-    if exists:
-        raise HTTPException(status_code=400, detail="Already in favorites")
+    try:
+        new_fav = fav_crud.add_favorite(user_id=favorite.user_id, listing_id=favorite.listing_id)
+        return new_fav
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Could not add favorite. Have you already favorited this listing?")
     
-    new_fav = {
-        "id": len(favorites_db) + 1,
-        "boardinghouse_id": boardinghouse_id,
-        "user_name": user_name
-    }
-    favorites_db.append(new_fav)
-    return {"message": "Added to favorites", "data": new_fav}
+@router.get("/favorites/user/{user_id}", response_model=List[schemas.FavoritesResponse])
+def get_user_favorites(user_id: int, db: Session = Depends(database.get_db)):
+    fav_crud = crud.FavoritesCRUD(db)
+    return fav_crud.get_user_favorites(user_id)
 
-@router.get("/favorites/{user_name}")
-async def get_user_favorites(user_name: str):
-    """Get all favorites for a specific user"""
-    result = [f for f in favorites_db if f["user_name"] == user_name]
-    return {"user_name": user_name, "favorites": result}
+@router.delete("/favorites/{favorite_id}")
+def remove_favorite(favorite_id: int, db: Session = Depends(database.get_db)):
+    fav_crud = crud.FavoritesCRUD(db)
+
+    success = fav_crud.remove_favorite(favorite_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    
+    return {"message": "Favorite removed successfully"}
