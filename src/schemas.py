@@ -155,6 +155,11 @@ class ReportsCreate(ReportsBase):
     reporter_id: int # The person complaining
     reviewed_id: Optional[int] = None # The admin who takes the ticket (starts empty)
 
+class ReportsUpdate(BaseModel):
+    status: Literal['resolved', 'dismissed']
+    resolved_by: int
+
+
 class ReportsResponse(ReportsBase):
     reporter_id: int
     report_id: int
@@ -162,6 +167,8 @@ class ReportsResponse(ReportsBase):
     status: Literal['pending', 'reviewed', 'resolved', 'dismissed']
     reviewed_id: Optional[int]
     created_at: datetime
+    resolved_by: Optional[int] = None
+    resolved_at: Optional[date] = None
 
     model_config = ConfigDict(from_attributes=True)
 
