@@ -636,10 +636,3 @@ class BoardingHouseApp(ctk.CTk):
 if __name__ == "__main__":
     app = BoardingHouseApp()
     app.mainloop()
-    
-
-
-
-
-
-    #123

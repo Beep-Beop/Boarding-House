@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from src.routers import users, photos, social, notifications
+from src.routers import users, photos, social, notifications, auth, search
 
 app = FastAPI(title="Boarding House API")
 
@@ -7,7 +7,8 @@ app.include_router(users.router)
 app.include_router(photos.router)
 app.include_router(social.router)
 app.include_router(notifications.router)
-
+app.include_router(auth.router)
+app.include_router(search.router)
 
 @app.get("/")
 def root():

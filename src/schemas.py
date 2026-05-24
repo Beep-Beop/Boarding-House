@@ -29,6 +29,10 @@ class UserResponse(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class UserLogin(BaseModel):
+    email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
+    password = str = Field(..., min_length=6, examples=["beepboop123"])
+
 # --- LOCATION ---
 """ Coordinates and addresses for the boarding houses."""
 class LocationBase(BaseModel):
