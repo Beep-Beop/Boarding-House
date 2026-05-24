@@ -175,6 +175,9 @@ class NotificationsResponse(NotificationsBase):
 
     model_config = ConfigDict(from_attributes=True)  
 
+class NotificationsUpdate(BaseModel):
+    is_read: Optional[bool] = None
+
 # SECOND-LEVEL DEPENDENT TABLES
 
 # --- ROOMS ---
