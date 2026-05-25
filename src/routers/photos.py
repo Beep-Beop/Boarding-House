@@ -49,7 +49,7 @@ async def upload_photo(
     return db_photo
 
 @router.get("/{entity_type}/{entity_id}", response_model=List[schemas.PhotoResponse])
-def get_photo(entity_type: str, entity_id: int, db: Session = Depends(database.get_db())):
+def get_photo(entity_type: str, entity_id: int, db: Session = Depends(database.get_db)):
     if entity_type not in ['listing', 'room']:
         raise HTTPException(status_code=422, detail="entity_type must be 'listing', or 'room'")
     
