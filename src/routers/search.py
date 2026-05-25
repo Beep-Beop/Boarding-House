@@ -1,23 +1,21 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from src import schemas, database, models
+from typing import List
+from src import crud, schemas, database
 
-router = APIRouter(prefix="/search", tags=['Search'])
+router = APIRouter(prefix="/search", tags=["Search"])
 
 @router.get("/", response_model=List[schemas.BoardingHouseResponse])
-def search_boarding_houses(
-    location: Optional[str] = Query(None, description="Search by city or barangay"),
-    db: Session = Depends(database.get_db)
-):
-    
-    query = db.query(models.BoardingHouse).filter(models.BoardingHouse.status == 'active')
+def get_search_results(search_filters: schemas.ListingSearchQuery = Depends(), db: Session = Depends(database.get_db)):
+    listing_crud = crud.BoardingHouseCRUD(db)
 
-    if location:
-        query = query.join(models.Location).filter(
-            (models.Location.city.ilike(f"%{location}%")) |
-            (models.Location.barangay.ilike(f"%{location}%"))
-        )
+    if search_filters.min_price and search_filters.max_price:
+        if search_filters.min_price > search_filters.max_price:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Minimum price threshold cannot exceed the maximum price limit"
+            )
 
-    results = query.all()
+    results = listing_crud.search_listings(**search_filters.model_dump(exclude_none=True))
+
     return results

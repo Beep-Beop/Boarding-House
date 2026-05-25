@@ -1,57 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from src import crud, schemas, database
 
-router = APIRouter(prefix="/social", tags=["Social & Interactions"])
+router = APIRouter(prefix="/social", tags=["Social"])
 
-@router.post("/reviews", response_model=schemas.ReviewsResponse)
+@router.post("/reviews", response_model=schemas.ReviewsResponse, status_code=status.HTTP_201_CREATED)
 def create_review(review: schemas.ReviewsCreate, db: Session = Depends(database.get_db)):
     review_crud = crud.ReviewCRUD(db)
-    return review_crud.create(**review.model_dump)
 
-@router.get("/reviews/listing/{listing_id}", response_model=List[schemas.ReportsResponse])
+    return review_crud.create(**review.model_dump())
+
+@router.get("/reviews/listing/{listing_id}", response_model=List[schemas.ReviewsResponse])
 def get_listing_reviews(listing_id: int, db: Session = Depends(database.get_db)):
     review_crud = crud.ReviewCRUD(db)
-    return review_crud.get_reviews_by_listing(listing_id)
 
-@router.get("/reviews/user/{user_id}", response_model=List[schemas.ReviewsResponse])
-def get_user_reviews(user_id: int, db: Session = Depends(database.get_db)):
-    review_crud = crud.ReviewCRUD(db)
-    return review_crud.get_review_by_user(user_id)
+    return review_crud.get_reviews_by_listing(listing_id=listing_id)
 
-@router.delete("/reviews/{review_id}")
+@router.delete("/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_review(review_id: int, db: Session = Depends(database.get_db)):
-    review_crud = crud.ReportsCRUD(db)
+    review_crud = crud.ReviewCRUD(db)
 
-    success = review_crud.delete_review(review_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Review not found")
+    deleted = review_crud.delete(review_id=review_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found"
+        )
     
-    return {"message": "Review deleted successfully"}
-
-# Favorites
-@router.post("/favorites", response_model=schemas.FavoritesResponse)
-def add_favorite(favorite: schemas.FavoritesCreate, db: Session = Depends(database.get_db)):
-    fav_crud = crud.FavoritesCRUD(db)
-
-    try:
-        new_fav = fav_crud.add_favorite(user_id=favorite.user_id, listing_id=favorite.listing_id)
-        return new_fav
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="Could not add favorite. Have you already favorited this listing?")
-    
-@router.get("/favorites/user/{user_id}", response_model=List[schemas.FavoritesResponse])
-def get_user_favorites(user_id: int, db: Session = Depends(database.get_db)):
-    fav_crud = crud.FavoritesCRUD(db)
-    return fav_crud.get_user_favorites(user_id)
-
-@router.delete("/favorites/{favorite_id}")
-def remove_favorite(favorite_id: int, db: Session = Depends(database.get_db)):
-    fav_crud = crud.FavoritesCRUD(db)
-
-    success = fav_crud.remove_favorite(favorite_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Favorite not found")
-    
-    return {"message": "Favorite removed successfully"}
+    return None

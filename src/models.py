@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey, DECIMAL, Text, DateTime, Date, func
+from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey, DECIMAL, Text, DateTime, Date, func, and_
 from sqlalchemy.orm import relationship
 from src.database import Base
 
@@ -72,6 +72,14 @@ class BoardingHouse(Base):
     location = relationship("Location")
     rooms = relationship("Rooms", backref="boarding_house", cascade="all, delete-orphan")
     listing_amenities = relationship("ListingAmenities", backref="boarding_house", cascade="all, delete-orphan")
+    
+    # Polymorphic join mapping listing photo cleanup dynamically 
+    photos = relationship(
+        "Photo",
+        primaryjoin="and_(BoardingHouse.listing_id==Photo.entity_id, Photo.entity_type=='listing')",
+        cascade="all, delete-orphan",
+        viewonly=False
+    )
 
 
 class Photo(Base):
@@ -109,7 +117,11 @@ class Reports(Base):
 
     report_id = Column(Integer, primary_key=True, autoincrement=True)
     reporter_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False) # Who complained?
-    reviewed_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL")) # Admin who handled it
+    reviewed_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True) # Admin who handled it
+    
+    # Added to match schema contracts and eliminate data drop vulnerabilities
+    resolved_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
     
     # Generic Foreign Key: What are they reporting?
     target_type = Column(Enum('listing', 'user', 'review', 'booking'), nullable=False, index=True) 
@@ -119,19 +131,28 @@ class Reports(Base):
     status = Column(Enum('pending', 'reviewed', 'resolved', 'dismissed'), default='pending')
     created_at = Column(DateTime, server_default=func.now())
 
+    # Explicit properties resolving ambiguous target mappings to USERS table
+    reporter = relationship("Users", foreign_keys=[reporter_id], backref="filed_reports")
+    reviewer = relationship("Users", foreign_keys=[reviewed_id], backref="assigned_reports")
+    resolver = relationship("Users", foreign_keys=[resolved_by], backref="resolved_reports")
+
 
 class Notifications(Base):
     __tablename__ = "NOTIFICATIONS"
 
     notif_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False) # Receiver
-    triggered_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL")) # Sender (or None if System)
+    triggered_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True) # Sender (or None if System)
     
     type = Column(Enum('booking', 'review', 'system', 'favorite'), nullable=False) 
     content = Column(Text, nullable=False) # "Your booking was approved!"
     is_read = Column(Boolean, default=False) # For the unread notification badge
     reference_type = Column(String(100)) # Helps frontend create a hyperlink
     created_at = Column(DateTime, server_default=func.now())
+
+    # Explicit non-ambiguous mappings for matching relational tracks
+    recipient = relationship("Users", foreign_keys=[user_id], backref="received_notifications")
+    sender = relationship("Users", foreign_keys=[triggered_by], backref="sent_notifications")
 
 
 #    SECOND-LEVEL DEPENDENT TABLES
@@ -149,6 +170,14 @@ class Rooms(Base):
 
     # Relationships
     bookings = relationship("Bookings", backref="room", cascade="all, delete-orphan")
+    
+    # Polymorphic join mapping room photo cleanup dynamically
+    photos = relationship(
+        "Photo",
+        primaryjoin="and_(Rooms.room_id==Photo.entity_id, Photo.entity_type=='room')",
+        cascade="all, delete-orphan",
+        viewonly=False
+    )
 
 
 class ListingAmenities(Base):
@@ -204,7 +233,7 @@ class Reviews(Base):
     listing_id = Column(Integer, ForeignKey("BOARDING_HOUSE.listing_id", ondelete="CASCADE"), nullable=False)
     
     # SET NULL so if the booking is deleted, the review remains attached to the listing
-    booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="SET NULL")) 
+    booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="SET NULL"), nullable=True) 
     
     rating = Column(Integer, nullable=False) # 1-5
     comment = Column(Text)
@@ -218,7 +247,7 @@ class BookingHistory(Base):
 
     history_id = Column(Integer, primary_key=True, autoincrement=True)
     booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="CASCADE"), nullable=False)
-    old_status = Column(Enum('active', 'pending', 'cancelled'))
+    old_status = Column(Enum('active', 'pending', 'cancelled'), nullable=True)
     new_status = Column(Enum('active', 'pending', 'cancelled'), nullable=False)
     changed_at = Column(DateTime, server_default=func.now())
     
@@ -234,5 +263,5 @@ class Payments(Base):
     amount = Column(DECIMAL(10, 2), nullable=False)
     method = Column(Enum('gcash', 'bank_transfer', 'cash', 'card'), nullable=False)
     status = Column(Enum('pending', 'completed', 'failed', 'refunded'), default='pending')
-    paid_at = Column(DateTime) # Nullable until the payment is confirmed 'completed'
+    paid_at = Column(DateTime, nullable=True) # Nullable until the payment is confirmed 'completed'
     reference_no = Column(String(100)) # e.g., GCash transaction ID
