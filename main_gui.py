@@ -30,8 +30,8 @@ class BoardingHouseApp(ctk.CTk):
                     print(f"Warning: Could not load {file_path}. Error: {e}")
 
         self.design = ctk.CTkImage(Image.open("assets/design.png"), size=(180, 160))
-        self.tenant_icon = ctk.CTkImage(Image.open("assets/icons.png"), size=(10, 10))
-        self.landlord_icon = ctk.CTkImage(Image.open("assets/Frame.png"), size=(10, 10))
+        self.tenant_icon = ctk.CTkImage(Image.open("assets/icons.png"), size=(25, 25))
+        self.landlord_icon = ctk.CTkImage(Image.open("assets/Frame.png"), size=(25, 25))
 
         self.logo = ctk.CTkImage(Image.open("assets/logo.png"), size=(140, 32))
         raw_google = Image.open("assets/google.png")
@@ -439,74 +439,93 @@ class BoardingHouseApp(ctk.CTk):
         card_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
         card_frame.pack(pady=(10, 10))
 
-        self.tenant_card = ctk.CTkFrame(card_frame, border_width=1, 
-                                   fg_color="white", 
-                                   width=340, 
-                                   height=120, 
-                                   corner_radius=10
-                                   )
+        # Tenant
+        self.tenant_card = ctk.CTkFrame(card_frame, 
+                                        border_width=1, 
+                                        border_color=self.entry_border,
+                                        fg_color="white", 
+                                        width=360, 
+                                        height=140, 
+                                        corner_radius=10
+                                        )
         self.tenant_card.pack(side="left", padx=15)
         self.tenant_card.pack_propagate(False)
-        self.tenant_card.grid_columnconfigure(1, weight=5)
+
+        self.tenant_card.grid_columnconfigure(1, weight=1)
+        self.tenant_card.grid_rowconfigure(0, weight=1)
+        self.tenant_card.grid_rowconfigure(1, weight=1)
 
         tenant_icon_lbl = ctk.CTkLabel(self.tenant_card,
-                                   text=None,
-                                   image=self.tenant_icon
-                                   )
-        tenant_icon_lbl.grid(row=0, column=0, rowspan=2, padx=(15, 10), pady=15, sticky="nsew")
+                                       text=None,
+                                       image=self.tenant_icon
+                                       )
+        tenant_icon_lbl.grid(row=0, column=0, rowspan=2, padx=(15, 10), pady=(20, 15), sticky="nw")
 
         tenant_title = ctk.CTkLabel(self.tenant_card, 
                                     text="Tenant", 
                                     font=self.body_bold_paragraph_font, 
                                     text_color=self.text_color
                                     )
-        tenant_title.grid(row=0, column=1, padx=5, pady=(20, 0), sticky="w")
+        tenant_title.grid(row=0, column=1, padx=5, pady=(17, 0), sticky="w")
 
         tenant_desc = ctk.CTkLabel(self.tenant_card, 
                                    text="Find a place & pay rent online.", 
                                    font=self.body_light_font, 
-                                   text_color=self.text_color
+                                   text_color=self.text_color,
+                                   wraplength=210
                                    )
         tenant_desc.grid(row=1, column=1, padx=5, pady=(0, 20), sticky="w")
 
-        self.tenant_dot = ctk.CTkFrame(self.tenant_card, width=16, height=16, corner_radius=8, border_width=1, border_color="#D0D0D0", fg_color="transparent")
+        self.tenant_dot = ctk.CTkFrame(self.tenant_card, 
+                                       width=16, 
+                                       height=16, 
+                                       corner_radius=8, 
+                                       border_width=1, 
+                                       border_color="#D0D0D0", 
+                                       fg_color="transparent"
+                                       )
         self.tenant_dot.grid(row=0, column=2, padx=(0, 15), pady=(15, 0), sticky="ne")
 
         for widget in (self.tenant_card, tenant_icon_lbl, tenant_title, tenant_desc, self.tenant_dot):
             widget.bind("<Button-1>", lambda event: self.select_account_type("tenant"))
             widget.configure(cursor="hand2")
 
+        # Landlord
         self.landlord_card = ctk.CTkFrame(card_frame, 
                                           border_width=1, 
                                           border_color=self.entry_border, 
                                           fg_color="white", 
-                                          width=340, 
-                                          height=120, 
+                                          width=360, 
+                                          height=140, 
                                           corner_radius=10
                                           )
         self.landlord_card.pack(side="left", padx=15)
         self.landlord_card.pack_propagate(False)
+
         self.landlord_card.grid_columnconfigure(1, weight=1)
+        self.landlord_card.grid_rowconfigure(0, weight=1)
+        self.landlord_card.grid_rowconfigure(1, weight=1)
 
         landlord_icon_lbl = ctk.CTkLabel(self.landlord_card, 
                                          text=None, 
                                          image=self.landlord_icon
                                          )
-        landlord_icon_lbl.grid(row=0, column=0, rowspan=2, padx=(15, 10), pady=15, sticky="nsew")
+        landlord_icon_lbl.grid(row=0, column=0, rowspan=2, padx=(15, 10), pady=(20, 15), sticky="nw")
 
         landlord_title = ctk.CTkLabel(self.landlord_card, 
                                       text="Landlord", 
                                       font=self.body_bold_paragraph_font, 
                                       text_color=self.text_color
                                       )
-        landlord_title.grid(row=0, column=1, padx=5, pady=(20, 0), sticky="w")
+        landlord_title.grid(row=0, column=1, padx=5, pady=(17, 0), sticky="w")
 
         landlord_desc = ctk.CTkLabel(self.landlord_card, 
                                      text="Accept rent online & manage rental.", 
                                      font=self.body_light_font, 
-                                     text_color=self.text_color
+                                     text_color=self.text_color,
+                                     wraplength=210
                                      )
-        landlord_desc.grid(row=1, column=1, padx=5, pady=(0, 20), sticky="w")
+        landlord_desc.grid(row=1, column=1, padx=(5, 27), pady=(0, 20), sticky="w")
 
         self.landlord_dot = ctk.CTkFrame(self.landlord_card, 
                                          width=16, 
@@ -538,6 +557,7 @@ class BoardingHouseApp(ctk.CTk):
     def show_register_page(self):
         self.clear_container()
 
+        self.geometry("630x650")
         # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
@@ -780,7 +800,7 @@ class BoardingHouseApp(ctk.CTk):
         self.next_btn.pack(pady=(10, 10))
 
     def select_account_type(self, account_type):
-        self.select_account_type = account_type
+        self.selected_account_type = account_type
 
         active_border = self.primary_color
         inactive_border = self.entry_border
