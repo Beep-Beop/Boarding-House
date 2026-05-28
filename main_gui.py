@@ -67,6 +67,8 @@ class BoardingHouseApp(ctk.CTk):
         self.alt_title_font = ctk.CTkFont(family="Novecento sans wide Normal", size=24, weight="bold")
         self.body_bold_font = ctk.CTkFont(family="Novecento sans wide Normal", size=20, weight="bold")
 
+
+        self.body_paragraph_big_font = ctk.CTkFont(family="Poppins", size=24, weight="normal")
         self.body_bold_paragraph_font = ctk.CTkFont(family="Poppins", size=24, weight="bold")
         self.body_paragraph_font = ctk.CTkFont(family="Poppins", size=16, weight="normal")
         self.body_light_font = ctk.CTkFont(family="Poppins Light", size=16, weight="normal") 
@@ -578,147 +580,131 @@ class BoardingHouseApp(ctk.CTk):
         self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
         self.back_btn.bind("<Leave>", lambda event: self.back_btn.configure(image=self.bk_btn_icon))
 
-        # Logo
-        logo_label = ctk.CTkLabel(self.form_container,
-                                  text=None,
-                                  image=self.logo,
-                                  width=140,
-                                  height=32
-                                  )
-        logo_label.pack(pady=(5, 15))
+        self.create_acc_label = ctk.CTkLabel(self.bk_btn_frame,
+                                             text="Create Account",
+                                             font=self.body_bold_paragraph_font
+                                             )
+        self.create_acc_label.pack(side="left", padx=(15, 0), pady=(10, 0))
 
-        welcome_label = ctk.CTkLabel(self.form_container,
-                                     text="WELCOME TO",
-                                     width=121,
-                                     height=5,
-                                     font=self.body_bold_font,
-                                     text_color="#4D4D4D"
-                                    )
-        welcome_label.pack(pady=(0, 7))
-
-        title_label = ctk.CTkLabel(self.form_container, 
-                                   text="BOARDING HOUSE FINDER", 
-                                   width=273, 
-                                   height=20,
-                                   font=self.alt_title_font, 
-                                   text_color="#4D4D4D"
+        notes_frame = ctk.CTkFrame(self.form_container,
+                                   fg_color="transparent"
                                    )
-        title_label.pack(pady=(0, 10))
+        notes_frame.pack(fill="x")
 
-        notes_label = ctk.CTkLabel(self.form_container, 
-                                   text="Please enter your login details", 
+        notes_label = ctk.CTkLabel(notes_frame, 
+                                   text="Sign up to get started with BHFinder", 
                                    width=213, 
                                    height=5,
                                    font=self.body_paragraph_font, 
                                    text_color="#4D4D4D"
                                    )
-        notes_label.pack(pady=(0, 7))
+        notes_label.pack(side="left", padx=100, pady=(0, 10))
 
-        # Email Row
-        email_frame = ctk.CTkFrame(self.form_container, 
+        # First Name
+        first_name_frame = ctk.CTkFrame(self.form_container, 
                                    fg_color="transparent"
                                    )
-        email_frame.pack(pady=(0, 15))
+        first_name_frame.pack(pady=(0, 15))
 
-        self.email_label = ctk.CTkLabel(email_frame, 
-                                        text="Email", 
+        self.first_name_label = ctk.CTkLabel(first_name_frame, 
+                                        text="First Name", 
                                         font=self.body_light_font, 
                                         text_color=self.text_color
                                         )
-        self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        self.first_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        email_bg_frame = ctk.CTkFrame(email_frame, 
-                                      width=400, 
+        first_name_bg_frame = ctk.CTkFrame(first_name_frame, 
+                                      width=430, 
                                       height=40, 
                                       fg_color="#F8F8F8",
                                       border_color=self.entry_border, 
                                       border_width=1, 
                                       corner_radius=6
                                       )
-        email_bg_frame.pack()
-        email_bg_frame.pack_propagate(False) 
+        first_name_bg_frame.pack()
+        first_name_bg_frame.pack_propagate(False) 
 
-        self.email_entry = ctk.CTkEntry(email_bg_frame, 
-                                        placeholder_text="example@gmail.com", 
+        self.first_name_entry = ctk.CTkEntry(first_name_bg_frame, 
+                                        placeholder_text="Enter your first name", 
                                         height=30,
                                         font=self.body_light_font, 
                                         fg_color="transparent", 
                                         border_width=0,
                                         text_color=self.text_color
                                         )
-        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.first_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
         
-        # =========================================================
-        # 1. NAME ROW (First Name & Last Name)
-        # =========================================================
-        name_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
-        name_frame.pack(pady=(0, 15))
+        # Last Name
+        last_name_frame = ctk.CTkFrame(self.form_container,
+                                       fg_color="transparent"
+                                       )
+        last_name_frame.pack(pady=(0, 15))
 
-        # --- FIRST NAME (Column 0) ---
-        self.f_name_label = ctk.CTkLabel(name_frame,
-                                      text="First name",
-                                      font=self.body_light_font,
-                                      text_color=self.text_color
-                                      )
-        self.f_name_label.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=(0, 5))
+        self.last_name_label = ctk.CTkLabel(last_name_frame,
+                                            text="Last Name",
+                                            font=self.body_light_font,
+                                            text_color=self.text_color
+                                            )
+        self.last_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        # THE "FAKE" ENTRY (Visual box user sees)
-        f_name_fake_entry = ctk.CTkFrame(name_frame,
-                                          width=195, 
+        last_name_bg_frame = ctk.CTkFrame(last_name_frame,
+                                          width=430,
                                           height=40,
                                           fg_color="#F8F8F8",
                                           border_color=self.entry_border,
                                           border_width=1,
                                           corner_radius=6
                                           )
-        f_name_fake_entry.grid(row=1, column=0, padx=(0, 5))
-        f_name_fake_entry.pack_propagate(False)
+        last_name_bg_frame.pack()
+        last_name_bg_frame.pack_propagate(False)
 
-        # THE "REAL" ENTRY (Where user types, tightly wrapped & centered)
-        self.f_name_entry = ctk.CTkEntry(f_name_fake_entry,
-                                       placeholder_text="Juan",
-                                       height=24, # Tight wrap around text
-                                       font=self.body_light_font,
-                                       fg_color="transparent",
-                                       border_width=0,
-                                       text_color=self.text_color
-                                       )
-        self.f_name_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+        self.last_name_entry = ctk.CTkEntry(last_name_bg_frame,
+                                            placeholder_text="Enter your last name",
+                                            height=30,
+                                            font=self.body_light_font,
+                                            fg_color="transparent",
+                                            border_width=0,
+                                            text_color=self.text_color
+                                            )
+        self.last_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
-        # --- LAST NAME (Column 1) ---
-        self.l_name_label = ctk.CTkLabel(name_frame,
-                                      text="Last name",
+        # Date of Birth
+        dob_frame = ctk.CTkFrame(self.form_container,
+                                 fg_color="transparent"
+                                 )
+        dob_frame.pack(pady=(0, 15))
+
+        self.dob_label = ctk.CTkLabel(dob_frame,
+                                      text="Date Of Birth",
                                       font=self.body_light_font,
                                       text_color=self.text_color
                                       )
-        self.l_name_label.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        self.dob_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        # THE "FAKE" ENTRY
-        l_name_fake_entry = ctk.CTkFrame(name_frame,
-                                          width=195, 
-                                          height=40,
-                                          fg_color="#F8F8F8",
-                                          border_color=self.entry_border,
-                                          border_width=1,
-                                          corner_radius=6
-                                          )
-        l_name_fake_entry.grid(row=1, column=1, padx=(5, 0))
-        l_name_fake_entry.pack_propagate(False)
+        dob_bg_frame = ctk.CTkFrame(dob_frame,
+                                    width=430,
+                                    height=40,
+                                    fg_color="#F8F8F8",
+                                    border_color=self.entry_border,
+                                    border_width=1,
+                                    corner_radius=6
+                                    )
+        dob_bg_frame.pack()
+        dob_bg_frame.pack_propagate(False)
 
-        # THE "REAL" ENTRY
-        self.l_name_entry = ctk.CTkEntry(l_name_fake_entry,
-                                       placeholder_text="Dela Cruz",
-                                       height=24,
-                                       font=self.body_light_font,
-                                       fg_color="transparent",
-                                       border_width=0,
-                                       text_color=self.text_color
-                                       )
-        self.l_name_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+        self.dob_entry = ctk.CTkEntry(dob_bg_frame,
+                                      placeholder_text="Select your date of birth",
+                                      height=30,
+                                      font=self.body_light_font,
+                                      fg_color="transparent",
+                                      border_width=0,
+                                      text_color=self.text_color
+                                      )
+        self.dob_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
-        # =========================================================
+
+
         # 2. PASSWORD ROW (Create & Confirm Password)
-        # =========================================================
         pass_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
         pass_frame.pack(pady=(0, 15))
 

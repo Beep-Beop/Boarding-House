@@ -4,10 +4,11 @@ from src.database import Base
 
 #          INDEPENDENT TABLES
 
-
 class Users(Base):
     __tablename__ = "USERS"
 
+
+    #Gonna add date of birth
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
