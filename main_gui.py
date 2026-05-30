@@ -10,7 +10,7 @@ class BoardingHouseApp(ctk.CTk):
         super().__init__()
 
         self.title("Boarding House Finder")
-        self.geometry("630x650")
+        self.geometry("630x700")
         self.resizable(False, False)
 
         # --- Font Setup ---
@@ -79,6 +79,7 @@ class BoardingHouseApp(ctk.CTk):
         self.hover_color_text = "#E2E2E2"
         self.text_color = "#3E362A"
         self.error_red = "#D9534F"
+        self.fg_color = "#F8F8F8"
         
         self.configure(fg_color="#FFFFFF")
 
@@ -89,7 +90,10 @@ class BoardingHouseApp(ctk.CTk):
         self.current_toast = None
         self.toast_timer = None
 
-        self.show_login_page()
+
+        #Debugg
+        #self.show_login_page()
+        self.next_regiter_page()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -147,7 +151,7 @@ class BoardingHouseApp(ctk.CTk):
     def show_login_page(self):
         self.clear_container()
 
-        self.geometry("630x650")
+        self.geometry("630x700")
         
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=40, fill="both", expand=True)
@@ -272,7 +276,8 @@ class BoardingHouseApp(ctk.CTk):
                                                 border_color=self.entry_border,
                                                 border_width=2,
                                                 checkbox_height=20,
-                                                checkbox_width=20)
+                                                checkbox_width=20
+                                                )
         self.remember_checkbox.pack(side="left")
 
         self.forgot_pwd_btn = ctk.CTkButton(actions_frame,
@@ -381,7 +386,7 @@ class BoardingHouseApp(ctk.CTk):
     def show_account_type(self):
         self.clear_container()
 
-        self.geometry("1200x650")
+        self.geometry("1200x700")
 
         if not hasattr(self, "selected_account_type"):
             self.selected_account_type = None
@@ -559,7 +564,7 @@ class BoardingHouseApp(ctk.CTk):
     def show_register_page(self):
         self.clear_container()
 
-        self.geometry("630x650")
+        self.geometry("630x700")
         # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
@@ -702,88 +707,371 @@ class BoardingHouseApp(ctk.CTk):
                                       )
         self.dob_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
+        # Email
+        email_frame = ctk.CTkFrame(self.form_container,
+                                   
+                                   fg_color="transparent"
+                                   )
+        email_frame.pack(pady=(0, 15))
 
-
-        # 2. PASSWORD ROW (Create & Confirm Password)
-        pass_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
-        pass_frame.pack(pady=(0, 15))
-
-        # --- CREATE PASSWORD (Column 0) ---
-        self.c_pass_label = ctk.CTkLabel(pass_frame,
-                                        text="Create Password",
+        self.email_label = ctk.CTkLabel(email_frame,
+                                        text="Email",
                                         font=self.body_light_font,
                                         text_color=self.text_color
+                                        )
+        self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        email_bg_frame = ctk.CTkFrame(email_frame,
+                                      width=430,
+                                      height=40,
+                                      fg_color=self.fg_color,
+                                      border_color=self.entry_border,
+                                      border_width=1,
+                                      corner_radius=6
                                       )
-        self.c_pass_label.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=(0, 5))
+        email_bg_frame.pack()
+        email_bg_frame.pack_propagate(False)
 
-        # THE "FAKE" ENTRY
-        c_pass_fake_entry = ctk.CTkFrame(pass_frame,
-                                    width=195,
-                                    height=40,
-                                    fg_color="#F8F8F8",
-                                    border_color=self.entry_border,
-                                    border_width=1,
-                                    corner_radius=6
+        self.email_entry = ctk.CTkEntry(email_bg_frame,
+                                        placeholder_text="Enter email",
+                                        height=30,
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color
+                                        )
+        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        # Phone number
+        phone_frame = ctk.CTkFrame(self.form_container,
+                                   fg_color="transparent"
+                                   )
+        phone_frame.pack(pady=(0, 15))
+
+        self.phone_label = ctk.CTkLabel(phone_frame,
+                                        text="Phone Number",
+                                        font=self.body_light_font,
+                                        text_color=self.text_color
+                                        )
+        self.phone_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        phone_bg_frame = ctk.CTkFrame(phone_frame,
+                                      width=430,
+                                      height=40,
+                                      fg_color=self.fg_color,
+                                      border_color=self.entry_border,
+                                      border_width=1,
+                                      corner_radius=6
+                                      )
+        phone_bg_frame.pack()
+        phone_bg_frame.pack_propagate(False)
+
+        self.phone_entry = ctk.CTkEntry(phone_bg_frame,
+                                        placeholder_text="Enter your mobile number",
+                                        height=30,
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color
+                                        )
+        self.phone_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="NEXT",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.next_regiter_page
+                                           )
+        self.next_step_btn.pack(pady=(20, 10))
+
+    def next_regiter_page(self):
+        self.clear_container()
+
+        self.geometry("630x700")
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        self.bk_btn_frame = ctk.CTkFrame(self.form_container,
+                                  fg_color="transparent"
+                                  )
+        self.bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+
+        self.back_btn = ctk.CTkLabel(self.bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+        self.back_btn.bind("<Leave>", lambda event: self.back_btn.configure(image=self.bk_btn_icon))
+
+        self.create_acc_label = ctk.CTkLabel(self.bk_btn_frame,
+                                             text="Create Account",
+                                             font=self.body_bold_paragraph_font
+                                             )
+        self.create_acc_label.pack(side="left", padx=(15, 0), pady=(10, 0))
+
+        notes_frame = ctk.CTkFrame(self.form_container,
+                                   fg_color="transparent"
+                                   )
+        notes_frame.pack(fill="x")
+
+        notes_label = ctk.CTkLabel(notes_frame, 
+                                   text="Sign up to get started with BHFinder", 
+                                   width=213, 
+                                   height=5,
+                                   font=self.body_paragraph_font, 
+                                   text_color="#4D4D4D"
+                                   )
+        notes_label.pack(side="left", padx=100, pady=(0, 10))
+
+        # Street
+        street_frame = ctk.CTkFrame(self.form_container,
+                                    fg_color="transparent"
                                     )
-        c_pass_fake_entry.grid(row=1, column=0, padx=(0, 5))
-        c_pass_fake_entry.pack_propagate(False)
+        street_frame.pack(pady=(0, 15))
 
-        # THE "REAL" ENTRY
-        self.create_pass_entry = ctk.CTkEntry(c_pass_fake_entry,
-                                         placeholder_text="••••••••",
-                                         height=24,
-                                         show="•",
+        self.street_label = ctk.CTkLabel(street_frame,
+                                        text="Street",
+                                        font=self.body_light_font,
+                                        text_color=self.text_color
+                                        )
+        self.street_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        street_bg_frame = ctk.CTkFrame(street_frame,
+                                       width=430,
+                                       height=40,
+                                       fg_color=self.fg_color,
+                                       border_color=self.entry_border,
+                                       border_width=1,
+                                       corner_radius=6
+                                       )
+        street_bg_frame.pack()
+        street_bg_frame.pack_propagate(False)
+
+        self.street_entry = ctk.CTkEntry(street_bg_frame,
+                                         placeholder_text="e.g 123 Sitio Maagay 3",
+                                         height=30,
                                          font=self.body_light_font,
                                          fg_color="transparent",
                                          border_width=0,
                                          text_color=self.text_color
                                          )
-        self.create_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+        self.street_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        # Barangay
+        barangay_frame = ctk.CTkFrame(self.form_container,
+                                      fg_color="transparent"
+                                      )
+        barangay_frame.pack(pady=(0, 15))
+
+        self.barangay_label = ctk.CTkLabel(barangay_frame,
+                                           text="Barangay",
+                                           font=self.body_light_font,
+                                           text_color=self.text_color
+                                           )
+        self.barangay_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        barangay_bg_frame = ctk.CTkFrame(barangay_frame,
+                                         width=430,
+                                         height=40,
+                                         fg_color=self.fg_color,
+                                         border_color=self.entry_border,
+                                         border_width=1,
+                                         corner_radius=6
+                                         )
+        barangay_bg_frame.pack()
+        barangay_bg_frame.pack_propagate(False)
+
+        self.barangay_entry = ctk.CTkEntry(barangay_bg_frame,
+                                           placeholder_text="e.g Barangay Inarawan",
+                                           height=30,
+                                           font=self.body_light_font,
+                                           fg_color="transparent",
+                                           border_width=0,
+                                           text_color=self.text_color
+                                           )
+        self.barangay_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        # Province
+        province_frame = ctk.CTkFrame(self.form_container,
+                                      fg_color="transparent"
+                                      )
+        province_frame.pack(pady=(0, 15))
+
+        self.province_label = ctk.CTkLabel(province_frame,
+                                           text="Province",
+                                           font=self.body_light_font,
+                                           text_color=self.text_color
+                                           )
+        self.province_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        province_bg_frame = ctk.CTkFrame(province_frame,
+                                         width=430,
+                                         height=40,
+                                         fg_color=self.fg_color,
+                                         border_color=self.entry_border,
+                                         border_width=1,
+                                         corner_radius=6
+                                         )
+        province_bg_frame.pack()
+        province_bg_frame.pack_propagate(False)
+
+        self.province_entry = ctk.CTkEntry(province_bg_frame,
+                                           placeholder_text="e.g Antipolo",
+                                           height=30,
+                                           font=self.body_light_font,
+                                           fg_color="transparent",
+                                           border_width=0,
+                                           text_color=self.text_color
+                                           )
+        self.province_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        # Create Password
+        create_pass_frame = ctk.CTkFrame(self.form_container,
+                                         fg_color="transparent"
+                                         )
+        create_pass_frame.pack(pady=(0, 15))
+
+        self.create_pass_label = ctk.CTkLabel(create_pass_frame,
+                                              text="Password",
+                                              font=self.body_light_font,
+                                              text_color=self.text_color
+                                              )
+        self.create_pass_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
         
-        # --- CONFIRM PASSWORD (Column 1) ---
-        self.confirm_pass_label = ctk.CTkLabel(pass_frame,
+        create_pass_bg_frame = ctk.CTkFrame(create_pass_frame,
+                                            width=430,
+                                            height=40,
+                                            fg_color=self.fg_color,
+                                            border_color=self.entry_border,
+                                            border_width=1,
+                                            corner_radius=6
+                                            )
+        create_pass_bg_frame.pack()
+        create_pass_bg_frame.pack_propagate(False)
+
+        self.create_pass_entry = ctk.CTkEntry(create_pass_bg_frame,
+                                              placeholder_text="Min of 8 Characters",
+                                              height=30,
+                                              show="•",
+                                              font=self.body_light_font,
+                                              fg_color="transparent",
+                                              border_width=0,
+                                              text_color=self.text_color
+                                              )
+        self.create_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        confirm_pass_frame = ctk.CTkFrame(self.form_container,
+                                          fg_color="transparent"
+                                          )
+        confirm_pass_frame.pack(pady=(0, 15))
+
+        self.confirm_pass_label = ctk.CTkLabel(confirm_pass_frame,
                                                text="Confirm Password",
                                                font=self.body_light_font,
                                                text_color=self.text_color
                                                )
-        self.confirm_pass_label.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        self.confirm_pass_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        # THE "FAKE" ENTRY
-        confirm_pass_fake_entry = ctk.CTkFrame(pass_frame,
-                                          width=195,
-                                          height=40,
-                                          fg_color="#F8F8F8",
-                                          border_color=self.entry_border,
-                                          border_width=1,
-                                          corner_radius=6
-                                          )
-        confirm_pass_fake_entry.grid(row=1, column=1, padx=(5, 0))
-        confirm_pass_fake_entry.pack_propagate(False)
+        confirm_bg_frame = ctk.CTkFrame(confirm_pass_frame,
+                                        width=430,
+                                        height=40,
+                                        fg_color=self.fg_color,
+                                        border_color=self.entry_border,
+                                        border_width=1,
+                                        corner_radius=6
+                                        )
+        confirm_bg_frame.pack()
+        confirm_bg_frame.pack_propagate(False)
 
-        # THE "REAL" ENTRY
-        self.confirm_pass_entry = ctk.CTkEntry(confirm_pass_fake_entry,
-                                               placeholder_text="••••••••",
-                                               height=24,
+        self.confirm_pass_entry = ctk.CTkEntry(confirm_bg_frame,
+                                               placeholder_text="Re-rnter your password",
+                                               height=30,
                                                show="•",
                                                font=self.body_light_font,
                                                fg_color="transparent",
                                                border_width=0,
                                                text_color=self.text_color
                                                )
-        self.confirm_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.9, anchor="center")
+        self.confirm_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
-        self.next_btn = ctk.CTkButton(self.form_container,
-                                      text="REGISTER",
-                                      width=350,
-                                      height=45,
-                                      corner_radius=6,
-                                      font=self.body_bold_font,
-                                      fg_color=self.primary_color,
-                                      hover_color=self.hover_color,
-                                      text_color="#FFFFFF",
-                                      command=self.show_email_verification_page # Update to Email Verification
-                                      )
-        self.next_btn.pack(pady=(10, 10))
+        # Terms of Service and Privacy Policy
+        tos_and_pp_frame = ctk.CTkFrame(self.form_container,
+                                        fg_color="transparent"
+                                        )
+        tos_and_pp_frame.pack(anchor="w", pady=(5, 0))
+
+        self.tos_and_pp_checkbox = ctk.CTkCheckBox(tos_and_pp_frame,
+                                                   text="I agree to BHFinder’s",
+                                                   font=self.body_paragraph_font,
+                                                   fg_color=self.primary_color,
+                                                   hover_color=self.hover_color,
+                                                   border_color=self.entry_border,
+                                                   border_width=2,
+                                                   checkbox_height=20,
+                                                   checkbox_width=20
+                                                   )
+        self.tos_and_pp_checkbox.grid(row=0, column=0, padx=(70, 0), sticky="w")
+
+        self.tos_link_btn = ctk.CTkButton(tos_and_pp_frame,
+                                          text="Terms of Service",
+                                          font=self.body_paragraph_font,
+                                          text_color=self.primary_color,
+                                          fg_color="transparent",
+                                          hover=False, # Gonna change this ro underline 
+                                          width=0,
+                                          height=20,
+                                          command=self.open_terms_of_service
+                                          )
+        self.tos_link_btn.grid(row=0, column=2, padx=(0, 0), sticky="w")
+
+        self.tos_and_lbl = ctk.CTkLabel(tos_and_pp_frame,
+                                        text="and",
+                                        font=self.body_paragraph_font,
+                                        text_color=self.text_color
+                                        )
+        self.tos_and_lbl.grid(row=0, column=3, padx=(0, 0), sticky="w")
+
+        self.pp_link_btn = ctk.CTkButton(tos_and_pp_frame,
+                                         text="Privacy Policy",
+                                         font=self.body_paragraph_font,
+                                         text_color=self.primary_color,
+                                         fg_color="transparent",
+                                         hover=False, # Gonna change this ro underline 
+                                         width=0,
+                                         height=20,
+                                         command=self.open_privacy_policy
+                                         )
+        self.pp_link_btn.grid(row=0, column=4, padx=0, sticky="w")
+
+        # Create Account Button
+        create_acc_btn = ctk.CTkButton(self.form_container, 
+                                  text="CREATE ACCOUNT", 
+                                  width=430, 
+                                  height=45, 
+                                  corner_radius=6,
+                                  font=self.body_bold_font, 
+                                  fg_color="#AC7F5E", 
+                                  hover_color=self.hover_color,
+                                  text_color="#FFFFFF", 
+                                  command=self.show_email_verification_page
+                                  )
+        create_acc_btn.pack(pady=(20, 10))
+
+    def open_terms_of_service(self):
+        self.show_toast("Opening Terms of Service layout or web link...", is_error=False)
+
+    def open_privacy_policy(self):
+        self.show_toast("Opening Privacy Policy layout or web link...", is_error=False)
 
     def select_account_type(self, account_type):
         self.selected_account_type = account_type
@@ -812,8 +1100,8 @@ class BoardingHouseApp(ctk.CTk):
         self.show_register_page()
 
     def attempt_register(self):
-        f_name = self.f_name_entry.get().strip()
-        l_name = self.l_name_entry.get().strip()
+        f_name = self.first_name_entry.get().strip()
+        l_name = self.last_name_entry.get().strip()
         email = self.email_entry.get()
         password = self.create_pass_entry.get()
         confirm_password = self.confirm_pass_entry.get()
@@ -854,6 +1142,8 @@ class BoardingHouseApp(ctk.CTk):
 
     def show_email_verification_page(self):
         self.clear_container()
+
+        self.geometry("630x700")
 
         # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
@@ -936,6 +1226,8 @@ class BoardingHouseApp(ctk.CTk):
                                         command=self.attempt_verify_email
                                         )
         self.verify_btn.pack(pady=(10, 10))
+
+        
 
     def attempt_verify_email(self):
         self.show_toast("Verify Email", is_error=False)
