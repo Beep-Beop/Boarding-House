@@ -55,7 +55,23 @@ class LocationsCRUD:
     def get(self, location_id: int) -> Location:
         return self.db.query(Location).filter(Location.location_id == location_id).first()
     
+    def get_distinct_provinces(self) -> list[str]:
+        results = self.db.query(Location.province).filter(Location.province.isnot(None)).distinct.all()
+        return [r[0] for r in results]
+    
+    def get_distinct_cities(self, province_name: str) -> list[str]:
+        results = self.db.query(Location.city).filter(
+            Location.province == province_name,
+            Location.city.isnot(None)
+        ).distinct().all()
+        return [r[0] for r in results]
 
+    def get_distinct_barangays(self, city_name: str) -> list[str]:
+        results = self.db.query(Location.barangay).filter(
+            Location.city == city_name,
+            Location.barangay.isnot(None)
+        ).distinct().all()
+        return [r[0] for r in results]
 class AmenitiesCRUD:
     def __init__(self, db: Session):
         self.db = db

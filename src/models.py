@@ -7,7 +7,6 @@ from src.database import Base
 class Users(Base):
     __tablename__ = "USERS"
 
-
     #Gonna add date of birth
     #Location Mapping
     user_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -15,6 +14,7 @@ class Users(Base):
     email = Column(String(255), nullable=False, unique=True)
     password = Column(String(255), nullable=False) # Hashed password
     role = Column(Enum('student', 'owner', 'admin'), nullable=False)
+    location_id = Column(Integer, ForeignKey("LOCATION.location_id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, server_default=func.now()) 
     phone = Column(String(20))
     profile_photo = Column(String(255)) # URL to R2 Bucket
@@ -23,21 +23,23 @@ class Users(Base):
     status = Column(Enum('active', 'banned', 'suspended'), default='active')
 
     # Relationships: If a user is deleted, delete their houses, bookings, and reviews.
+    location = relationship("Location", backref="users")
     boarding_houses = relationship("BoardingHouse", backref="owner", cascade="all, delete-orphan")
     bookings = relationship("Bookings", backref="user", cascade="all, delete-orphan")
     reviews = relationship("Reviews", backref="reviewer", cascade="all, delete-orphan")
 
 
 class Location(Base):
+    """Stores a single, specific address for a user or boarding house listing"""
     __tablename__ = "LOCATION"
 
     location_id = Column(Integer, primary_key=True, autoincrement=True)
-    street = Column(String(255))
-    barangay = Column(String(100))
-    city = Column(String(100))
-    province = Column(String(100))
-    latitude = Column(DECIMAL(10, 8))  # For Google Maps integration
-    longitude = Column(DECIMAL(11, 8)) # For Google Maps integration
+    province = Column(String(100), nullable=False)
+    city = Column(String(100), nullable=False)
+    barangay = Column(String(100), nullable=False)
+    street = Column(String(255), nullable=True) # e.g., "123 Sumulong Highway"
+    latitude = Column(DECIMAL(10, 8), nullable=True)  
+    longitude = Column(DECIMAL(11, 8), nullable=True) 
 
 
 class Amenities(Base):
@@ -78,7 +80,7 @@ class BoardingHouse(Base):
     # Polymorphic join mapping listing photo cleanup dynamically 
     photos = relationship(
         "Photo",
-        primaryjoin="and_(BoardingHouse.listing_id==Photo.entity_id, Photo.entity_type=='listing')",
+        primaryjoin="BoardingHouse.listing_id == Photo.entity_id and Photo.entity_type == 'listing'",
         cascade="all, delete-orphan",
         viewonly=False
     )
@@ -176,7 +178,7 @@ class Rooms(Base):
     # Polymorphic join mapping room photo cleanup dynamically
     photos = relationship(
         "Photo",
-        primaryjoin="and_(Rooms.room_id==Photo.entity_id, Photo.entity_type=='room')",
+        primaryjoin="Rooms.room_id == Photo.entity_id and Photo.entity_type == 'room'",
         cascade="all, delete-orphan",
         viewonly=False
     )

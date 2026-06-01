@@ -47,6 +47,9 @@ class LocationResponse(LocationBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class LocationOptionsResponse(BaseModel):
+    options: List[str]
+
 
 # --- AMENITIES ---
 class AmenitiesBase(BaseModel):
