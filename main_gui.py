@@ -93,7 +93,7 @@ class BoardingHouseApp(ctk.CTk):
 
         #Debugg
         #self.show_login_page()
-        self.show_account_type()
+        self.show_location()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -1321,6 +1321,32 @@ class BoardingHouseApp(ctk.CTk):
         # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+    def show_location(self):
+        self.clear_container()
+
+        self.geometry("1200x700")
+
+    # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container,
+                                  fg_color="transparent"
+                                  )
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+        
+
+    
 
 if __name__ == "__main__":
     app = BoardingHouseApp()
