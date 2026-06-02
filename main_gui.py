@@ -73,6 +73,14 @@ class BoardingHouseApp(ctk.CTk):
         self.body_paragraph_font = ctk.CTkFont(family="Poppins", size=16, weight="normal")
         self.body_light_font = ctk.CTkFont(family="Poppins Light", size=16, weight="normal") 
 
+        self.metro_manila_png = ctk.CTkImage(Image.open("assets/metro_manila.png"), size=(50, 50))
+        self.calabarzon_png = ctk.CTkImage(Image.open("assets/calabarzon.png"), size=(50, 50))
+        self.cebu_png = ctk.CTkImage(Image.open("assets/cebu.png"), size=(50, 50))
+        self.davao_png = ctk.CTkImage(Image.open("assets/davao.png"), size=(50, 50))
+        self.other_areas_png = ctk.CTkImage(Image.open("assets/other_areas.png"), size=(50, 50))
+        
+
+
         self.primary_color = "#AC7F5E"
         self.entry_border = "#E0E0E0" 
         self.hover_color = "#C5A376"
@@ -1325,15 +1333,13 @@ class BoardingHouseApp(ctk.CTk):
     def show_location(self):
         self.clear_container()
 
-        self.geometry("1200x700")
+        self.geometry("1262x666")
 
-    # Main Container
+        # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
 
-        bk_btn_frame = ctk.CTkFrame(self.form_container,
-                                  fg_color="transparent"
-                                  )
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
         bk_btn_frame.pack(fill="x", pady=(15, 0))
 
         self.back_btn = ctk.CTkLabel(bk_btn_frame,
@@ -1344,9 +1350,113 @@ class BoardingHouseApp(ctk.CTk):
         self.back_btn.pack(side="left", padx=(15, 0))
         self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
         self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
-        
 
-    
+        # Top section: design image + title/subtitle
+        top_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        top_frame.pack(fill="x", padx=(60, 0), pady=(5, 5))
+
+        design_label = ctk.CTkLabel(top_frame,
+                                    text=None,
+                                    image=self.design,
+                                    width=180,
+                                    height=160
+                                    )
+        design_label.pack(side="left")
+
+        title_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
+        title_frame.pack(side="left", padx=(20, 0), anchor="center")
+
+        self.where_are_you_looking_label = ctk.CTkLabel(title_frame,
+                                           text="Where Are You Looking?",
+                                           font=self.body_bold_paragraph_font,
+                                           text_color=self.text_color
+                                           )
+        self.where_are_you_looking_label.pack(anchor="w")
+
+        self.yapfest_1 = ctk.CTkLabel(title_frame,
+                                      text="Select regions you're interested in",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.yapfest_1.pack(anchor="w")
+
+        # ── helper to build one card ──────────────────────────────────────────
+        def make_card(parent, icon_image, label_text, location_key):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=270,
+                                height=90,
+                                corner_radius=10)
+            card.pack(side="left", padx=12)
+            card.pack_propagate(False)
+
+            # Radio dot — top-right
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10)
+
+            # Inner frame — icon + text, centered
+            inner = ctk.CTkFrame(card, fg_color="transparent")
+            inner.place(relx=0.5, rely=0.5, anchor="center")
+
+            icon_lbl = ctk.CTkLabel(inner, text=None, image=icon_image)
+            icon_lbl.pack(side="left", padx=(0, 10))
+
+            title_lbl = ctk.CTkLabel(inner,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.pack(side="left")
+
+            for widget in (card, inner, icon_lbl, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_show_location(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # Row 1 — Metro Manila · Calabarzon · Cebu
+        card_frame_row1 = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        card_frame_row1.pack(pady=(10, 5))
+
+        self.metro_manila_card, self.metro_manila_dot = make_card(
+            card_frame_row1, self.metro_manila_png, "Metro Manila", "metro manila")
+
+        self.calabarzon_card, self.calabarzon_dot = make_card(
+            card_frame_row1, self.calabarzon_png, "Calabarzon", "calabarzon")
+
+        self.cebu_card, self.cebu_dot = make_card(
+            card_frame_row1, self.cebu_png, "Cebu", "cebu")
+
+        # Row 2 — Davao · Other Areas
+        card_frame_row2 = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        card_frame_row2.pack(pady=(5, 10))
+
+        self.davao_card, self.davao_dot = make_card(
+            card_frame_row2, self.davao_png, "Davao", "davao")
+
+        self.other_areas_card, self.other_areas_dot = make_card(
+            card_frame_row2, self.other_areas_png, "Other Areas", "other_areas")
+
+        # Next Button
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="NEXT",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(15, 10))
+
 
 if __name__ == "__main__":
     app = BoardingHouseApp()
