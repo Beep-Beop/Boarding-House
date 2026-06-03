@@ -3,6 +3,7 @@ from PIL import Image
 import os
 import requests
 import threading
+import datetime
 
 ctk.set_appearance_mode("Light")
 
@@ -93,8 +94,8 @@ class BoardingHouseApp(ctk.CTk):
 
 
         #Debugg
-        self.show_login_page()
-        #self.next_register_page()
+        #self.show_login_page()
+        self.show_register_page()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -685,36 +686,80 @@ class BoardingHouseApp(ctk.CTk):
         dob_frame = ctk.CTkFrame(self.form_container,
                                  fg_color="transparent"
                                  )
-        dob_frame.pack(pady=(0, 15))
+        dob_frame.pack(pady=(0, 15), fill="x")
 
         self.dob_label = ctk.CTkLabel(dob_frame,
                                       text="Date Of Birth",
                                       font=self.body_light_font,
                                       text_color=self.text_color
                                       )
-        self.dob_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        self.dob_label.pack(anchor="w", padx=(115, 0), pady=(0, 5))
 
-        dob_bg_frame = ctk.CTkFrame(dob_frame,
-                                    width=430,
-                                    height=40,
-                                    fg_color="#F8F8F8",
-                                    border_color=self.entry_border,
-                                    border_width=1,
-                                    corner_radius=6
-                                    )
-        dob_bg_frame.pack()
-        dob_bg_frame.pack_propagate(False)
+        dob_input_container = ctk.CTkFrame(dob_frame,
+                                           fg_color=self.fg_color,
+                                           corner_radius=6,
+                                           border_width=1,
+                                           border_color=self.entry_border
+                                           )
+        dob_input_container.pack(anchor="w", fill="x",  padx=100)
+        
+        # Month dropdown
+        months = [f"{i:02d}" for i in range(1, 13)]
+        self.month_box = ctk.CTkComboBox(dob_input_container,
+                                         values=months,
+                                         width=70,
+                                         fg_color=self.fg_color,
+                                         border_width=0,
+                                         button_color=self.primary_color,
+                                         button_hover_color=self.hover_color,
+                                         dropdown_fg_color=self.fg_color
+                                         )
+        self.month_box.set("MM")
+        self.month_box.pack(side="left", padx=(20, 0), pady=8)
 
-        self.dob_entry = ctk.CTkEntry(dob_bg_frame,
-                                      placeholder_text="Select your date of birth",
-                                      height=30,
-                                      font=self.body_light_font,
-                                      fg_color="transparent",
-                                      border_width=0,
-                                      text_color=self.text_color
-                                      )
-        self.dob_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        ctk.CTkLabel(dob_input_container,
+                     text="/",
+                     text_color=self.text_color,
+                     width=10
+                     ).pack(side="left", padx=20)
 
+        # Days dropdown
+        days = [f"{i:02d}" for i in range(1, 32)]
+        self.day_box = ctk.CTkComboBox(dob_input_container,
+                                       values=days,
+                                       width=70,
+                                       fg_color=self.fg_color,
+                                       border_width=0,
+                                       border_color=self.entry_border,
+                                       button_color=self.primary_color,
+                                       button_hover_color=self.hover_color,
+                                       dropdown_fg_color=self.fg_color
+                                       )
+        self.day_box.set("DD")
+        self.day_box.pack(side="left", pady=8, padx=5)
+        
+        ctk.CTkLabel(dob_input_container,
+                     text="/",
+                     text_color=self.text_color,
+                     width=10
+                     ).pack(side="left")
+
+        # Year Dropdown
+        current_year = datetime.datetime.now().year
+        years = [str(y) for y in range(current_year, 1949, -1)]
+        self.year_box = ctk.CTkComboBox(dob_input_container,
+                                        values=years,
+                                        width=100,
+                                        fg_color=self.fg_color,
+                                        border_width=0,
+                                        border_color=self.entry_border,
+                                        button_color=self.primary_color,
+                                        button_hover_color=self.hover_color,
+                                        dropdown_fg_color=self.fg_color
+                                        )
+        self.year_box.set("YYYY")
+        self.year_box.pack(side="left", pady=8)
+        
         # Email
         email_frame = ctk.CTkFrame(self.form_container,
                                    
@@ -774,13 +819,18 @@ class BoardingHouseApp(ctk.CTk):
         phone_bg_frame.pack()
         phone_bg_frame.pack_propagate(False)
 
+        vcmb = (self.register(self.validate_phone), "%P")
+
+        # Bug Placeholder not showing
         self.phone_entry = ctk.CTkEntry(phone_bg_frame,
                                         placeholder_text="Enter your mobile number",
                                         height=30,
                                         font=self.body_light_font,
                                         fg_color="transparent",
                                         border_width=0,
-                                        text_color=self.text_color
+                                        text_color=self.text_color,
+                                        validate="key",
+                                        validatecommand=vcmb
                                         )
         self.phone_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
 
@@ -796,6 +846,11 @@ class BoardingHouseApp(ctk.CTk):
                                            command=self.handle_register_page_next
                                            )
         self.next_step_btn.pack(pady=(20, 10))
+
+    def validate_phone(self, text):
+        if text == "" or (text.isdigit() and len (text) <= 11):
+            return True
+        return False
 
     def handle_register_page_next(self):
         f_name = self.first_name_entry.get().strip()
@@ -1122,7 +1177,7 @@ class BoardingHouseApp(ctk.CTk):
         # Create Account Button
         create_acc_btn = ctk.CTkButton(self.form_container, 
                                   text="CREATE ACCOUNT", 
-                                  width=430, 
+                                  width=430,
                                   height=45, 
                                   corner_radius=6,
                                   font=self.body_bold_font, 
@@ -1150,7 +1205,6 @@ class BoardingHouseApp(ctk.CTk):
 
         threading.Thread(target=fetch, daemon=True).start()
         
-
     def on_province_selected(self, choice):
         if not choice or choice.lower().startswith("select"):
             return
