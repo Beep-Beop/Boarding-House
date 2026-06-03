@@ -81,6 +81,13 @@ class BoardingHouseApp(ctk.CTk):
         self.other_areas_png = ctk.CTkImage(Image.open("assets/other_areas.png"), size=(100, 70))
 
 
+        self.bedspace_png = ctk.CTkImage(Image.open("assets/bedspace.png"), size=(140, 100))
+        self.room_png = ctk.CTkImage(Image.open("assets/room.png"), size=(150, 90))
+        self.boarding_house_png = ctk.CTkImage(Image.open("assets/boarding_house.png"), size=(150, 80))
+        self.apartment_png = ctk.CTkImage(Image.open("assets/apartment.png"), size=(150, 100))
+        self.condo_png = ctk.CTkImage(Image.open("assets/condo.png"), size=(150, 100))
+
+
         self.primary_color = "#AC7F5E"
         self.entry_border = "#E0E0E0" 
         self.hover_color = "#C5A376"
@@ -101,7 +108,7 @@ class BoardingHouseApp(ctk.CTk):
 
         #Debugg
         #self.show_login_page()
-        self.show_how_many_properties()
+        self.show_what_will_u_list()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -1833,7 +1840,253 @@ class BoardingHouseApp(ctk.CTk):
                                            )
         self.next_step_btn.pack(pady=(120, 10))
 
+    def show_when_are_u_moving(self):
+        self.clear_container()
 
+        self.geometry("1262x666")
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+
+        self.tell_us_label = ctk.CTkLabel(bk_btn_frame,
+                                          text="When Are You Looking To Move?",
+                                          font=self.body_bold_paragraph_font,
+                                          text_color=self.text_color
+                                          )
+        self.tell_us_label.pack(anchor="w", pady=(12, 0), padx=(20, 0))
+
+        # ── helper: text-only card ────────────────────────────────────────────
+        def make_text_card(parent, label_text, location_key, row, col):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=310,
+                                height=70,
+                                corner_radius=10)
+            card.grid(row=row, column=col, padx=12, pady=8)
+            card.grid_propagate(False)
+
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            card.grid_rowconfigure(0, weight=1)
+
+            title_lbl = ctk.CTkLabel(card,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.grid(row=0, column=0, padx=(20, 0), pady=0, sticky="w")
+
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.grid(row=0, column=1, padx=(0, 15), pady=0, sticky="e")
+
+            for widget in (card, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_relationship(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # ── Row 1: 
+        row1_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row1_frame.pack(anchor="center", pady=(80, 0))
+
+        row1_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row1_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.ASAP_card, self.ASAP_dot = make_text_card(
+            row1_frame, "As Soon As Possible", "as soon as possible", row=0, col=0)
+
+        self.within_1month_card, self.within_1month_dot = make_text_card(
+            row1_frame, "Within 1 Month", "winthin_1month", row=0, col=1)
+        
+        # ── Row 2:
+        row2_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row2_frame.pack(anchor="center", pady=(5, 0))
+
+        row2_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.one_to_threemonths_card, self.one_to_threemonths_dot = make_text_card(
+            row2_frame, "1-3 Months", "1-3_months", row=0, col=0)
+
+        self.three_to_sixmonths_card, self.three_to_sixmonths_dot = make_text_card(
+            row2_frame, "3-6 Months", "3-6_months", row=0, col=1)
+
+        # ── Row 3:
+        row3_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row3_frame.pack(anchor="center", pady=(5, 0))
+
+        row3_frame.grid_columnconfigure(0, weight=1)
+
+        self.six_to_12months_card, self.six_to_12months_dot = make_text_card(
+            row3_frame, "6-12 Months", "6-12_months", row=0, col=0)
+
+        # ── Next Button ───────────────────────────────────────────────────────
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="Next",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(120, 10))
+
+    def show_what_will_u_list(self):
+        self.clear_container()
+
+        self.geometry("1262x666")
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+
+        # Top section: design image + title/subtitle
+        top_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        top_frame.pack(fill="x", padx=(60, 0), pady=(5, 5))
+
+        design_label = ctk.CTkLabel(top_frame,
+                                    text=None,
+                                    image=self.design,
+                                    width=200,
+                                    height=180
+                                    )
+        design_label.pack(side="left")
+
+        title_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
+        title_frame.pack(side="left", padx=(20, 0), anchor="center")
+
+        self.where_are_you_looking_label = ctk.CTkLabel(title_frame,
+                                           text="What Will You List?",
+                                           font=self.body_bold_paragraph_font,
+                                           text_color=self.text_color
+                                           )
+        self.where_are_you_looking_label.pack(anchor="w")
+
+        self.yapfest_1 = ctk.CTkLabel(title_frame,
+                                      text="Select property types you'll rent out",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.yapfest_1.pack(anchor="w")
+
+        # ── helper: vertical card (title top, icon bottom, dot top-right) ────
+        def make_card(parent, icon_image, label_text, location_key, row, col):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=370,
+                                height=140,
+                                corner_radius=10)
+            card.grid(row=row, column=col, padx=10, pady=8)
+            card.grid_propagate(False)
+
+            # 3 rows inside card: row0=title+dot, row1=icon
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            card.grid_rowconfigure(0, weight=0)
+            card.grid_rowconfigure(1, weight=1)
+
+            title_lbl = ctk.CTkLabel(card,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.grid(row=0, column=0, padx=(15, 0), pady=(12, 0), sticky="w")
+
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.grid(row=0, column=1, padx=(0, 12), pady=(12, 0), sticky="ne")
+
+            icon_lbl = ctk.CTkLabel(card, text=None, image=icon_image)
+            icon_lbl.grid(row=1, column=0, columnspan=2, padx=0, pady=(0, 10), sticky="s")
+
+            for widget in (card, icon_lbl, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_show_location(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # ── Row 1:
+        row1_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row1_frame.pack(anchor="center", pady=(5, 0))
+
+        row1_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row1_frame.grid_columnconfigure(1, weight=1, uniform="card")
+        row1_frame.grid_columnconfigure(2, weight=1, uniform="card")
+
+        self.bedspace_card, self.bedspace_dot = make_card(
+            row1_frame, self.bedspace_png, "Bedspace", "bedspace", row=0, col=0)
+
+        self.room_card, self.room_dot = make_card(
+            row1_frame, self.room_png, "Room", "room", row=0, col=1)
+
+        self.boarding_house_card, self.boarding_house_dot = make_card(
+            row1_frame, self.boarding_house_png, "Boarding House", "boarding_house", row=0, col=2)
+
+        # ── Row 2:
+        row2_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row2_frame.pack(anchor="center", pady=(0, 5))
+
+        row2_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.apartment_card, self.apartment_dot = make_card(
+            row2_frame, self.apartment_png, "Apartment", "apartment", row=0, col=0)
+
+        self.condo_card, self.condo_dot = make_card(
+            row2_frame, self.condo_png, "Condo", "condo", row=0, col=1)
+
+        # ── Next Button ───────────────────────────────────────────────────────
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="Next",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(10, 10))
 
 
 if __name__ == "__main__":
