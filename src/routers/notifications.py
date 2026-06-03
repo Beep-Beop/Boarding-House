@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from src import crud, schemas, database
 
-router = APIRouter(prefix="/notification", tags=["Notifications"])
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 @router.post("/", response_model=schemas.NotificationsResponse, status_code=status.HTTP_201_CREATED)
 def create_notification(notification: schemas.NotificationsCreate, db: Session = Depends(database.get_db)):

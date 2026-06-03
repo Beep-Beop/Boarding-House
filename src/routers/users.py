@@ -6,7 +6,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("/", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
+def create_user(user: schemas.UserRegister, db: Session = Depends(database.get_db)):
     user_crud = crud.UsersCRUD(db)
 
     if user_crud.get_user_by_email(user.email):
@@ -17,6 +17,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
 
     user_data = user.model_dump()
     user_data["password"] = security.get_password_hash(user_data["password"])
+    role_map = {"tenant": "student", "landlord": "owner"}
+    user_data["role"] = role_map(get_user["role"], user_data["role"])
+    
     return user_crud.create(**user_data)
 
 

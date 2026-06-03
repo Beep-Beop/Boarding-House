@@ -1,2 +1,2 @@
-r_width=0,
-                                               text_
+
+        welcome_label.pack(pady=(0, 7))

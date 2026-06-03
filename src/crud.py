@@ -39,7 +39,32 @@ class UsersCRUD:
             self.db.commit()
             self.db.refresh(user)
         return user
+    
+    def register(self, name: str, email: str, password: str, role: str,
+                 province: str, city: str, barangay: str, phone: str = None,
+                 street: str = None) -> Users:
+        
+        location = Location(
+            province=province,
+            city=city,
+            barangay=barangay,
+            street=street
+        )
+        self.db.add(location)
+        self.db.flush()
 
+        user = Users(
+            name=name,
+            email=email,
+            password=password,
+            role=role,
+            phone=phone,
+            location_id=location.location_id
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
 class LocationsCRUD:
     def __init__(self, db: Session):
@@ -56,7 +81,7 @@ class LocationsCRUD:
         return self.db.query(Location).filter(Location.location_id == location_id).first()
     
     def get_distinct_provinces(self) -> list[str]:
-        results = self.db.query(Location.province).filter(Location.province.isnot(None)).distinct.all()
+        results = self.db.query(Location.province).filter(Location.province.isnot(None)).distinct().all()
         return [r[0] for r in results]
     
     def get_distinct_cities(self, province_name: str) -> list[str]:
@@ -125,6 +150,24 @@ class BoardingHousesCRUD:
             self.db.commit()
             self.db.refresh(bh)
         return bh
+    
+    def search_listings(self, location_id: int = None, min_price: float = None,
+                        max_price: float = None, min_stay_months: int = None):
+        query = self.db.query(BoardingHouse).filter(BoardingHouse.status == 'active')
+
+        if location_id is not None:
+            query = query.filter(BoardingHouse.location_id == location_id)
+
+        if min_stay_months is not None:
+            query = query.filter(BoardingHouse.min_stay_months <= min_stay_months)
+
+        if min_price is not None:
+            query = query.join(Rooms).filter(Rooms.price_per_month >= min_price)
+
+        if max_price is not None:
+            query = query.join(Rooms).filter(Rooms.price_per_month <= max_price)
+
+        return query.distinct().all()
     
 
 class PhotosCRUD:

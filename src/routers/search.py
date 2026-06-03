@@ -7,7 +7,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 
 @router.get("/", response_model=List[schemas.BoardingHouseResponse])
 def get_search_results(search_filters: schemas.ListingSearchQuery = Depends(), db: Session = Depends(database.get_db)):
-    listing_crud = crud.BoardingHouseCRUD(db)
+    listing_crud = crud.BoardingHousesCRUD(db)
 
     if search_filters.min_price and search_filters.max_price:
         if search_filters.min_price > search_filters.max_price:

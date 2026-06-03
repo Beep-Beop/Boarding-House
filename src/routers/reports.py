@@ -29,7 +29,7 @@ def get_report(report_id: int, db: Session = Depends(database.get_db)):
 def update_report(report_id: int, report_update: schemas.ReportsUpdate, db: Session = Depends(database.get_db)):
     reports_crud = crud.ReportsCRUD(db)
 
-    report = reports_crud.update(report_id, **report_update.model_dump(exclude_unset=True))
+    report = reports_crud.update_status(report_id, **report_update.model_dump(exclude_unset=True))
 
     if not report:
         raise HTTPException(

@@ -8,13 +8,13 @@ class Users(Base):
     __tablename__ = "USERS"
 
     #Gonna add date of birth
-    #Location Mapping
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
     password = Column(String(255), nullable=False) # Hashed password
     role = Column(Enum('student', 'owner', 'admin'), nullable=False)
     location_id = Column(Integer, ForeignKey("LOCATION.location_id", ondelete="SET NULL"), nullable=True)
+    date_of_birth = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now()) 
     phone = Column(String(20))
     profile_photo = Column(String(255)) # URL to R2 Bucket
@@ -80,9 +80,10 @@ class BoardingHouse(Base):
     # Polymorphic join mapping listing photo cleanup dynamically 
     photos = relationship(
         "Photo",
-        primaryjoin="BoardingHouse.listing_id == Photo.entity_id and Photo.entity_type == 'listing'",
+        primaryjoin="and_(BoardingHouse.listing_id == foreign(Photo.entity_id), Photo.entity_type == 'listing')",
         cascade="all, delete-orphan",
-        viewonly=False
+        viewonly=False,
+        overlaps="photos"
     )
 
 
@@ -178,9 +179,10 @@ class Rooms(Base):
     # Polymorphic join mapping room photo cleanup dynamically
     photos = relationship(
         "Photo",
-        primaryjoin="Rooms.room_id == Photo.entity_id and Photo.entity_type == 'room'",
+        primaryjoin="and_(Rooms.room_id == foreign(Photo.entity_id), Photo.entity_type == 'room')",
         cascade="all, delete-orphan",
-        viewonly=False
+        viewonly=False,
+        overlaps="photos"
     )
 
 

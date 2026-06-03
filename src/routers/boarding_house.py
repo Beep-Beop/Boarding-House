@@ -3,66 +3,54 @@ from sqlalchemy.orm import Session
 from typing import List
 from src import crud, schemas, database
 
-# 1. Always declare the router at the top
-# prefix = the URL base (/bookings)
-# tags   = groups it in the Swagger docs
-router = APIRouter(prefix="/bookings", tags=["Bookings"])
+# JWT Auth Later
 
+router = APIRouter(prefix="/boarding-houses", tags=["Boarding Houses"])
 
-# POST / → Create a resource
-# - status_code=201 for creation, not the default 200
-# - response_model tells FastAPI what shape to return
-@router.post("/", response_model=schemas.BookingsResponse, status_code=status.HTTP_201_CREATED)
-def create_booking(booking: schemas.BookingsCreate, db: Session = Depends(database.get_db)):
-    # 3. Always instantiate your CRUD class first, passing the db session
-    booking_crud = crud.BookingsCRUD(db)
+@router.post("/", response_model=schemas.BoardingHouseResponse, status_code=status.HTTP_201_CREATED)
+def create_boarding_house(owner_id: int, boarding_house: schemas.BoardingHouseCreate, db: Session = Depends(database.get_db)):
+    bh_crud = crud.BoardingHousesCRUD(db)
+    user_crud = crud.UsersCRUD(db)
 
-    # 4. Guard clauses BEFORE the main operation (None needed for basic creation)
-
-    # 5. One CRUD call. Return directly — FastAPI + Pydantic handles serialization
-    return booking_crud.create(**booking.model_dump())
-
-
-# PATCH /{id}/status → Partial update on a specific field
-# Note the sub-path /status — it's explicit about what's being changed
-@router.patch("/{booking_id}/status", response_model=schemas.BookingsResponse)
-def update_booking_status(
-    booking_id: int, 
-    status_update: schemas.BookingUpdate, 
-    changed_by_user_id: int,  # Required context for database tracking table constraints
-    db: Session = Depends(database.get_db)
-):
-    # 3. Always instantiate your CRUD class first, passing the db session
-    booking_crud = crud.BookingsCRUD(db)
-
-    # 5. Call exactly ONE CRUD method to do the work
-    # Our CRUD update methods return the object or None — not a bool
-    # So we can check and return in one shot, no second DB call needed
-    booking = booking_crud.update_status(
-        booking_id=booking_id, 
-        new_status=status_update.status, 
-        changed_by_user_id=changed_by_user_id
-    )
-
-    # 6. Standard 404 pattern — check result and raise HTTP errors if something went wrong
-    if not booking:
+    if not user_crud.get(owner_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Booking not found"
+            detail="Owner not found"
         )
-    
-    # 7. Return the result directly
-    return booking
+
+    return bh_crud.create(owner_id=owner_id, **boarding_house.model_dump())
 
 
-# GET /user/{user_id} → Fetch a collection of records filtered by user
-@router.get("/user/{user_id}", response_model=List[schemas.BookingsResponse])
-def get_user_bookings(user_id: int, db: Session = Depends(database.get_db)):
-    # 3. Always instantiate your CRUD class first, passing the db session
-    booking_crud = crud.BookingsCRUD(db)
+@router.get("/{listing_id}", response_model=schemas.BoardingHouseResponse)
+def get_boarding_house(listing_id: int, db: Session = Depends(database.get_db)):
+    bh_crud = crud.BoardingHousesCRUD(db)
 
-    # 5. Call exactly ONE CRUD method to do the work
-    bookings = booking_crud.get_user_bookings(user_id=user_id)
+    boarding_house = bh_crud.get(listing_id=listing_id)
+    if not boarding_house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Boarding house not found"
+        )
 
-    # 7. Return the result directly — FastAPI + Pydantic handles list serialization
-    return bookings
+    return boarding_house
+
+
+@router.patch("/{listing_id}", response_model=schemas.BoardingHouseResponse)
+def update_boarding_house(listing_id: int, boarding_house_update: schemas.BoardingHouseUpdate, db: Session = Depends(database.get_db)):
+    bh_crud = crud.BoardingHousesCRUD(db)
+
+    boarding_house = bh_crud.update(listing_id, **boarding_house_update.model_dump(exclude_unset=True))
+    if not boarding_house:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Boarding house not found"
+        )
+
+    return boarding_house
+
+
+@router.get("/owner/{owner_id}", response_model=List[schemas.BoardingHouseResponse])
+def get_owner_boarding_houses(owner_id: int, db: Session = Depends(database.get_db)):
+    bh_crud = crud.BoardingHousesCRUD(db)
+
+    return bh_crud.get_by_owner(owner_id=owner_id)

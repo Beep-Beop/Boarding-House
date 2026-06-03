@@ -2,6 +2,7 @@ import customtkinter as ctk
 from PIL import Image
 import os
 import requests
+import threading
 
 ctk.set_appearance_mode("Light")
 
@@ -92,8 +93,8 @@ class BoardingHouseApp(ctk.CTk):
 
 
         #Debugg
-        #self.show_login_page()
-        self.show_location()
+        self.show_login_page()
+        #self.next_register_page()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -167,7 +168,8 @@ class BoardingHouseApp(ctk.CTk):
 
         welcome_label = ctk.CTkLabel(self.form_container,
                                      text="WELCOME TO",
-                                     weight=5,idth=121,
+                                     height=5,
+                                     width=121,
                                      font=self.body_light_font,
                                      text_color="#4D4D4D"
                                     )
@@ -791,11 +793,30 @@ class BoardingHouseApp(ctk.CTk):
                                            fg_color=self.primary_color,
                                            hover_color=self.hover_color,
                                            text_color="#FFFFFF",
-                                           command=self.next_regiter_page
+                                           command=self.handle_register_page_next
                                            )
         self.next_step_btn.pack(pady=(20, 10))
 
-    def next_regiter_page(self):
+    def handle_register_page_next(self):
+        f_name = self.first_name_entry.get().strip()
+        l_name = self.last_name_entry.get().strip()
+        email  = self.email_entry.get().strip()
+        dob    = self.dob_entry.get().strip()
+        phone  = self.phone_entry.get().strip()
+
+        if not all([f_name, l_name, email, dob, phone]):
+            self.show_toast("Please fill in all fields.", is_error=True)
+            return
+
+        self.reg_first_name = f_name
+        self.reg_last_name  = l_name
+        self.reg_email      = email
+        self.reg_dob        = dob
+        self.reg_phone      = phone
+
+        self.next_register_page()
+
+    def next_register_page(self):
         self.clear_container()
 
         self.geometry("630x700")
@@ -810,7 +831,7 @@ class BoardingHouseApp(ctk.CTk):
 
 
         # Main Container
-        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
 
         self.bk_btn_frame = ctk.CTkFrame(self.form_container,
@@ -853,89 +874,98 @@ class BoardingHouseApp(ctk.CTk):
         province_frame = ctk.CTkFrame(self.form_container,
                                       fg_color="transparent"
                                       )
-        province_frame.pack(pady=(0, 10))
-
-        self.province_label = ctk.CTkLabel(province_frame,
-                                        text="Province",
-                                        font=self.body_light_font,
-                                        text_color=self.text_color
+        province_frame.pack(pady=(0, 5))
+        
+        province_label = ctk.CTkLabel(province_frame,
+                                      text="Province",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
                                       )
-        self.province_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        province_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
-        province_bg_frame = ctk.CTkFrame(province_frame,
+        self.province_menu = ctk.CTkComboBox(province_frame,
+                                             values=self.province_choices,
                                              width=430,
                                              height=40,
+                                             font=self.body_light_font,
+                                             dropdown_font=self.body_light_font,
                                              fg_color=self.fg_color,
                                              border_color=self.entry_border,
                                              border_width=1,
-                                             corner_radius=6
+                                             button_color=self.primary_color,
+                                             button_hover_color=self.hover_color,
+                                             dropdown_fg_color=self.fg_color,
+                                             dropdown_hover_color=self.hover_color,
+                                             text_color=self.text_color,
+                                             command=self.on_province_selected
                                              )
-        province_bg_frame.pack(pady=(0, 10))
-        province_bg_frame.pack_propagate
-        
-
-        self.province_menu = ctk.CTkOptionMenu(province_bg_frame,
-                                               values=self.province_choices,
-                                               font=self.body_light_font,
-                                               dropdown_font=self.body_light_font,
-                                               fg_color=self.fg_color,
-                                               button_color=self.primary_color,
-                                               button_hover_color=self.hover_color,
-                                               dropdown_fg_color=self.fg_color,
-                                               dropdown_hover_color=self.hover_color,
-                                               dropdown_text_color=self.text_color,
-                                               text_color=self.text_color,
-                                               command=self.on_province_selected
-                                               )
-        self.province_menu.pack()
+        self.province_menu.pack(pady=(0, 10))
+        self.province_menu.configure(state="readonly")
 
         # City
         city_frame = ctk.CTkFrame(self.form_container,
                                   fg_color="transparent"
                                   )
-        city_frame.pack(pady=(0, 10))
+        city_frame.pack(pady=(0, 5))
 
-        self.city_label = ctk.CTkLabel(city_frame,
-                                       text="City",
-                                       font=self.body_light_font,
-                                       text_color=self.text_color
-                                       )
-        self.city_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        city_label = ctk.CTkLabel(city_frame,
+                                  text="City",
+                                  font=self.body_light_font,
+                                  text_color=self.text_color
+                                  )
+        city_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
-        self.city_menu = ctk.CTkOptionMenu(city_frame,
-                                           values=self.city_choices,
-                                           width=430,
-                                           height=40,
-                                           fg_color=self.fg_color,
-                                           button_color=self.primary_color,
-                                           text_color=self.text_color,
-                                           command=self.on_city_selected
-                                           )
-        self.city_menu.pack()
+        self.city_menu = ctk.CTkComboBox(city_frame,
+                                         values=self.city_choices,
+                                         width=430,
+                                         height=40,
+                                         font=self.body_light_font,
+                                         dropdown_font=self.body_light_font,
+                                         fg_color=self.fg_color,
+                                         border_color=self.entry_border,
+                                         border_width=1,
+                                         button_color=self.primary_color,
+                                         button_hover_color=self.hover_color,
+                                         dropdown_fg_color=self.fg_color,
+                                         dropdown_hover_color=self.hover_color,
+                                         dropdown_text_color=self.text_color,
+                                         command=self.on_city_selected
+                                         )
+        self.city_menu.pack(pady=(0, 10))
+        self.city_menu.configure(state="readonly")
 
         # Barangay
         barangay_frame = ctk.CTkFrame(self.form_container,
                                       fg_color="transparent"
                                       )
-        barangay_frame.pack(pady=(0, 10))
+        barangay_frame.pack(pady=(0, 5))
 
-        self.barangay_label = ctk.CTkLabel(barangay_frame,
-                                           text="Barangay",
-                                           font=self.body_light_font,
-                                           text_color=self.text_color
-                                           )
-        self.barangay_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+        barangay_label = ctk.CTkLabel(barangay_frame,
+                                      text="Barangay",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        barangay_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
-        self.barangay_menu = ctk.CTkOptionMenu(barangay_frame,
-                                               values=self.barangay_choices,
-                                               width=430,
-                                               height=40,
-                                               fg_color=self.fg_color,
-                                               button_color=self.primary_color,
-                                               text_color=self.text_color,
-                                               command=lambda choice: setattr(self, 'selected baranagay', choice)
-                                               )
-        self.barangay_menu.pack()
+        self.barangay_menu = ctk.CTkComboBox(barangay_frame,
+                                             values=self.barangay_choices,
+                                             width=430,
+                                             height=40,
+                                             font=self.body_light_font,
+                                             dropdown_font=self.body_light_font,
+                                             fg_color=self.fg_color,
+                                             border_color=self.entry_border,
+                                             border_width=1,
+                                             button_color=self.primary_color,
+                                             button_hover_color=self.hover_color,
+                                             dropdown_fg_color=self.fg_color,
+                                             dropdown_hover_color=self.hover_color,
+                                             dropdown_text_color=self.text_color,
+                                             text_color=self.text_color,
+                                             command=lambda choice: setattr(self, 'selected_barangay', choice)
+                                             )
+        self.barangay_menu.pack(pady=(0, 10))
+        self.barangay_menu.configure(state="readonly")
 
         # Street
         street_frame = ctk.CTkFrame(self.form_container,
@@ -1099,28 +1129,37 @@ class BoardingHouseApp(ctk.CTk):
                                   fg_color="#AC7F5E", 
                                   hover_color=self.hover_color,
                                   text_color="#FFFFFF", 
-                                  command=self.show_email_verification_page
+                                  command=self.attempt_register
                                   )
-        create_acc_btn.pack(pady=(20, 10))
+        create_acc_btn.pack(pady=(20, 20))
+
+        self.after(100, self.load_provinces)
 
     def load_provinces(self):
-        try:
-            response = requests.get("http://127.0.0.1:8000/locations/provinces")
-            if response.status_code == 200:
-                options = response.json().get("options", [])
-                if options:
-                    self.province_menu.configure(values=options)
-                    self.province_menu.set(options[0])
-                    self.on_province_selected(options[0])
-        except Exception as e:
-            print(f"Network error loading provinces: {e}")
+        def fetch():
+            try:
+                response = requests.get("http://127.0.0.1:8000/locations/provinces")
+                if response.status_code == 200:
+                    options = response.json().get("options", [])
+                    if options:
+                        self.province_menu.configure(values=options)
+                        self.province_menu.set("Select Province...")
+                        self.update_idletasks()
+            except Exception as e:
+                print(f"Network error loading provinces: {e}")
+
+        threading.Thread(target=fetch, daemon=True).start()
+        
 
     def on_province_selected(self, choice):
+        if not choice or choice.lower().startswith("select"):
+            return
+        
         self.selected_province = choice
 
         self.city_menu.configure(values=["Loading..."])
         self.city_menu.set("Loading...")
-        self.barangay_menu.configure["Select Baranagay..."]
+        self.barangay_menu.configure(values=["Select Baranagay..."])
         self.barangay_menu.set("Select Barangay...")
 
         try:
@@ -1135,9 +1174,12 @@ class BoardingHouseApp(ctk.CTk):
             print(f"Network error loading cities: {e}")
 
     def on_city_selected(self, choice):
+        if not choice or choice.lower().startswith("select"):
+            return
+        
         self.selected_city = choice
 
-        self.barangay_menu.configure(valus=["Loading..."])
+        self.barangay_menu.configure(values=["Loading..."])
         self.barangay_menu.set("Loading...")
 
         try:
@@ -1184,13 +1226,19 @@ class BoardingHouseApp(ctk.CTk):
         self.show_register_page()
 
     def attempt_register(self):
-        f_name = self.first_name_entry.get().strip()
-        l_name = self.last_name_entry.get().strip()
-        email = self.email_entry.get()
+        f_name = getattr(self, "reg_first_name", "").strip()
+        l_name = getattr(self, "reg_last_name", "").strip()
+        phone = getattr(self, "reg_phone", "").strip()
+        email = getattr(self, "reg_email", "").strip()
         password = self.create_pass_entry.get()
         confirm_password = self.confirm_pass_entry.get()
+        province = self.province_menu.get()
+        city = self.city_menu.get()
+        barangay = self.barangay_menu.get()
+        street = self.street_entry.get()
 
-        if f_name and l_name and email and password and confirm_password:
+
+        if f_name and l_name and email and password and confirm_password and phone and province and city and barangay and street:
 
             if password != confirm_password:
                 self.show_toast("Password Do Not Match!", is_error=True)
@@ -1203,7 +1251,12 @@ class BoardingHouseApp(ctk.CTk):
                     "name": full_name,
                     "email": email,
                     "password": password,
-                    "role": "student"
+                    "role": self.selected_account_type,
+                    "phone": phone,
+                    "province": province,
+                    "city": city,
+                    "barangay": barangay,
+                    "street": street
                 }
                 
                 response = requests.post("http://127.0.0.1:8000/users/", json=user_data)

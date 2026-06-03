@@ -44,6 +44,6 @@ def update_room(room_id: int, room_update: schemas.RoomUpdate, db: Session = Dep
 def get_listing_rooms(listing_id: int, db: Session = Depends(database.get_db)):
     rooms_crud = crud.RoomsCRUD(db)
 
-    rooms = rooms_crud.get_rooms_by_listing(listing_id=listing_id)
+    rooms = rooms_crud.get_room_by_listing(listing_id=listing_id)
 
     return rooms

@@ -20,7 +20,7 @@ async def create_photo(file: UploadFile = File(...), metadata: schemas.PhotoUplo
         )
     
     if metadata.entity_type == "listing":
-        if not crud.BoardingHouseCRUD(db).get(metadata.entity_id):
+        if not crud.BoardingHousesCRUD(db).get(metadata.entity_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
                 detail="Boarding house not found"

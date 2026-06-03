@@ -16,6 +16,19 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, examples=["beepboop123"])
+    role: Literal['student', 'owner', 'admin', 'tenant', 'landlord']
+
+class UserRegister(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    role: Literal['tenant', 'landlord']
+    phone: Optional[str] = Field(None, max_length=20)
+    province: str
+    city: str
+    barangay: str
+    street: Optional[str] = None
+
 
 class UserResponse(UserBase):
     user_id: int
