@@ -101,7 +101,7 @@ class BoardingHouseApp(ctk.CTk):
 
         #Debugg
         #self.show_login_page()
-        self.show_location()
+        self.show_how_many_properties()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -1464,6 +1464,375 @@ class BoardingHouseApp(ctk.CTk):
                                            command=self.handle_account_type_submit
                                            )
         self.next_step_btn.pack(pady=(10, 10))
+
+    def show_relationship_to_property(self):
+        self.clear_container()
+
+        self.geometry("1262x666")
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+
+        self.tell_us_label = ctk.CTkLabel(bk_btn_frame,
+                                          text="Tell Us More About You?",
+                                          font=self.body_bold_paragraph_font,
+                                          text_color=self.text_color
+                                          )
+        self.tell_us_label.pack(anchor="w", pady=(12, 0), padx=(20, 0))
+
+        # Top section: title/subtitle (top-left)
+        top_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        top_frame.pack(fill="x", padx=(90, 0), pady=(0, 0))
+
+        self.yapfest_1 = ctk.CTkLabel(top_frame,
+                                      text="Help Us To Personalize Your Experience",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.yapfest_1.pack(anchor="w", padx=(20, 0))
+
+        # Centered question label
+        self.relationship_label = ctk.CTkLabel(self.form_container,
+                                               text="What Is Your Relationship To The Property?",
+                                               font=self.body_bold_paragraph_font,
+                                               text_color=self.text_color,
+                                               justify="center"
+                                               )
+        self.relationship_label.pack(anchor="center", pady=(70, 0))
+
+        # ── helper: text-only card ────────────────────────────────────────────
+        def make_text_card(parent, label_text, location_key, row, col):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=310,
+                                height=70,
+                                corner_radius=10)
+            card.grid(row=row, column=col, padx=12, pady=8)
+            card.grid_propagate(False)
+
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            card.grid_rowconfigure(0, weight=1)
+
+            title_lbl = ctk.CTkLabel(card,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.grid(row=0, column=0, padx=(20, 0), pady=0, sticky="w")
+
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.grid(row=0, column=1, padx=(0, 15), pady=0, sticky="e")
+
+            for widget in (card, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_relationship(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # ── Row 1: Property Owner · Property Manager ──────────────────────────
+        row1_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row1_frame.pack(anchor="center", pady=(35, 0))
+
+        row1_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row1_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.property_owner_card, self.property_owner_dot = make_text_card(
+            row1_frame, "Property Owner", "property_owner", row=0, col=0)
+
+        self.property_manager_card, self.property_manager_dot = make_text_card(
+            row1_frame, "Property Manager", "property_manager", row=0, col=1)
+
+        # ── Row 2: Authorized Agent (centered) ───────────────────────────────
+        row2_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row2_frame.pack(anchor="center", pady=(20, 0))
+
+        row2_frame.grid_columnconfigure(0, weight=1)
+
+        self.authorized_agent_card, self.authorized_agent_dot = make_text_card(
+            row2_frame, "Authorized Agent", "authorized_agent", row=0, col=0)
+
+        # ── Next Button ───────────────────────────────────────────────────────
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="Next",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(120, 10))
+
+    def show_tell_us_more_about_you(self):
+        self.clear_container()
+
+        self.geometry("1262x666")
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+
+        self.tell_us_label = ctk.CTkLabel(bk_btn_frame,
+                                          text="Tell Us More About You",
+                                          font=self.body_bold_paragraph_font,
+                                          text_color=self.text_color
+                                          )
+        self.tell_us_label.pack(anchor="w", pady=(12, 0), padx=(20, 0))
+
+        # Top section: title/subtitle (top-left)
+        top_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        top_frame.pack(fill="x", padx=(90, 0), pady=(0, 0))
+
+        self.yapfest_1 = ctk.CTkLabel(top_frame,
+                                      text="Help us find the perfect rental for you?",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.yapfest_1.pack(anchor="w", padx=(20, 0))
+
+        # ── helper: text-only card ────────────────────────────────────────────
+        def make_text_card(parent, label_text, location_key, row, col):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=310,
+                                height=70,
+                                corner_radius=10)
+            card.grid(row=row, column=col, padx=12, pady=8)
+            card.grid_propagate(False)
+
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            card.grid_rowconfigure(0, weight=1)
+
+            title_lbl = ctk.CTkLabel(card,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.grid(row=0, column=0, padx=(20, 0), pady=0, sticky="w")
+
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.grid(row=0, column=1, padx=(0, 15), pady=0, sticky="e")
+
+            for widget in (card, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_relationship(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # ── Row 1: Property Owner · Property Manager ──────────────────────────
+        row1_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row1_frame.pack(anchor="center", pady=(80, 0))
+
+        row1_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row1_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.employed_card, self.employed_dot = make_text_card(
+            row1_frame, "Employed", "employed", row=0, col=0)
+
+        self.self_employed, self.self_employed_dot = make_text_card(
+            row1_frame, "Self-Employed", "self-_employed", row=0, col=1)
+        
+        # ── Row 2:
+        row2_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row2_frame.pack(anchor="center", pady=(5, 0))
+
+        row2_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.student_card, self.student_dot = make_text_card(
+            row2_frame, "Student", "student", row=0, col=0)
+
+        self.unemployed_card, self.unemployed_dot = make_text_card(
+            row2_frame, "Unemployed", "unemployed", row=0, col=1)
+
+        # ── Row 3:
+        row3_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row3_frame.pack(anchor="center", pady=(5, 0))
+
+        row3_frame.grid_columnconfigure(0, weight=1)
+
+        self.prefer_not_to_say_card, self.prefer_not_to_say_dot = make_text_card(
+            row3_frame, "Prefer Not To Say", "prefer_not_to_say", row=0, col=0)
+
+        # ── Next Button ───────────────────────────────────────────────────────
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="Next",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(120, 10))
+
+    def show_how_many_properties(self):
+        self.clear_container()
+
+        self.geometry("1262x666")
+
+        # Main Container
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+
+        bk_btn_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        bk_btn_frame.pack(fill="x", pady=(15, 0))
+
+        self.back_btn = ctk.CTkLabel(bk_btn_frame,
+                                     text="",
+                                     image=self.bk_btn_icon,
+                                     cursor="hand2"
+                                     )
+        self.back_btn.pack(side="left", padx=(15, 0))
+        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
+        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
+
+        self.tell_us_label = ctk.CTkLabel(bk_btn_frame,
+                                          text="Tell Us More About You",
+                                          font=self.body_bold_paragraph_font,
+                                          text_color=self.text_color
+                                          )
+        self.tell_us_label.pack(anchor="w", pady=(12, 0), padx=(20, 0))
+
+        # Top section: title/subtitle (top-left)
+        top_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        top_frame.pack(fill="x", padx=(90, 0), pady=(0, 0))
+
+        self.yapfest_1 = ctk.CTkLabel(top_frame,
+                                      text="Help us to personalize your experience",
+                                      font=self.body_light_font,
+                                      text_color=self.text_color
+                                      )
+        self.yapfest_1.pack(anchor="w", padx=(20, 0))
+
+        # ── helper: text-only card ────────────────────────────────────────────
+        def make_text_card(parent, label_text, location_key, row, col):
+            card = ctk.CTkFrame(parent,
+                                border_width=1,
+                                border_color=self.entry_border,
+                                fg_color="white",
+                                width=310,
+                                height=70,
+                                corner_radius=10)
+            card.grid(row=row, column=col, padx=12, pady=8)
+            card.grid_propagate(False)
+
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            card.grid_rowconfigure(0, weight=1)
+
+            title_lbl = ctk.CTkLabel(card,
+                                     text=label_text,
+                                     font=self.body_bold_paragraph_font,
+                                     text_color=self.text_color)
+            title_lbl.grid(row=0, column=0, padx=(20, 0), pady=0, sticky="w")
+
+            dot = ctk.CTkFrame(card,
+                               width=16, height=16,
+                               corner_radius=8,
+                               border_width=1,
+                               border_color="#D0D0D0",
+                               fg_color="transparent")
+            dot.grid(row=0, column=1, padx=(0, 15), pady=0, sticky="e")
+
+            for widget in (card, title_lbl, dot):
+                widget.bind("<Button-1>", lambda event, k=location_key: self.select_relationship(k))
+                widget.configure(cursor="hand2")
+
+            return card, dot
+
+        # ── Row 1: Centered question label
+        self.how_many_properties_label = ctk.CTkLabel(self.form_container,
+                                               text="How Many Properties Do You Manage?",
+                                               font=self.body_bold_paragraph_font,
+                                               text_color=self.text_color,
+                                               justify="center"
+                                               )
+        self.how_many_properties_label.pack(anchor="center", pady=(85, 40))
+        
+        # ── Row 2:
+        row2_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row2_frame.pack(anchor="center", pady=(5, 0))
+
+        row2_frame.grid_columnconfigure(0, weight=1, uniform="card")
+        row2_frame.grid_columnconfigure(1, weight=1, uniform="card")
+
+        self.one_property_card, self.one_property_dot = make_text_card(
+            row2_frame, "1 Property", "1_property", row=0, col=0)
+
+        self.two_to_five_properties_card, self.two_to_five_properties_dot = make_text_card(
+            row2_frame, "2-5 Properties", "2-5_properties", row=0, col=1)
+
+        # ── Row 3:
+        row3_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        row3_frame.pack(anchor="center", pady=(5, 0))
+
+        row3_frame.grid_columnconfigure(0, weight=1)
+        row3_frame.grid_columnconfigure(1, weight=1)
+
+        self.six_to_ten_properties_card, self.six_to_ten_properties_dot = make_text_card(
+            row3_frame, "6-10 Properties", "6-10_properties", row=0, col=0)
+        
+        self.plus10_properties_card, self.plus10_properties_dot = make_text_card(
+            row3_frame, "+10 Properties", "+10_properties", row=0, col=1)
+
+        # ── Next Button ───────────────────────────────────────────────────────
+        self.next_step_btn = ctk.CTkButton(self.form_container,
+                                           text="Next",
+                                           width=180,
+                                           height=45,
+                                           corner_radius=6,
+                                           font=self.body_bold_font,
+                                           fg_color=self.primary_color,
+                                           hover_color=self.hover_color,
+                                           text_color="#FFFFFF",
+                                           command=self.handle_account_type_submit
+                                           )
+        self.next_step_btn.pack(pady=(120, 10))
+
 
 
 
