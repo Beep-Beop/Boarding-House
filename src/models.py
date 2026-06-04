@@ -108,7 +108,7 @@ class AdminLogs(Base):
     admin_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False)
     action = Column(String(255), nullable=False) # e.g., "APPROVED_LISTING", "BANNED_USER"
     
-    # Generic Foreign Key: Identifies what the admin modified
+    # Foreign Key: Identifies what the admin modified
     target_type = Column(Enum('listing', 'user', 'report', 'booking'), nullable=False, index=True)
     target_id = Column(Integer, nullable=False, index=True) 
     

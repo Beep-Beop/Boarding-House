@@ -1,4 +1,6 @@
 import customtkinter as ctk
+from tkinter import messagebox
+from CTkScrollableDropdown import CTkScrollableDropdown
 from PIL import Image
 import os
 import requests
@@ -8,7 +10,10 @@ import datetime
 ctk.set_appearance_mode("Light")
 
 # Bug: Not checking email in shor register page if someone already used their email
-# Bug: confirm password must check if the password is the same while typing in confirm password entry
+# Bug: Add realtime confirmation on confirm password to match the password
+# Bug: Add validation in dob only numbers
+# Bug: Add Realtime confirmation if the email is correct like if no @gmail.com its not valid email
+# Bug: Add Realtime confirmation on phone to have 11 numbers
 
 class BoardingHouseApp(ctk.CTk):
     def __init__(self):
@@ -950,7 +955,7 @@ class BoardingHouseApp(ctk.CTk):
         province_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
         self.province_menu = ctk.CTkComboBox(province_frame,
-                                             values=self.province_choices,
+                                             values=[],
                                              width=430,
                                              height=40,
                                              font=self.body_light_font,
@@ -966,7 +971,20 @@ class BoardingHouseApp(ctk.CTk):
                                              command=self.on_province_selected
                                              )
         self.province_menu.pack(pady=(0, 10))
-        self.province_menu.configure(state="readonly")
+        self.province_menu.configure(state="normal")
+        self.province_menu.set("Select Province...")
+
+        self.province_menu._entry.bind("<FocusIn>", lambda e: self.province_menu.set("") 
+                                if self.province_menu.get() == "Select Province..." else None)
+
+        self.province_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.province_menu, "Select Province..."))
+
+        self.province_dropdown = CTkScrollableDropdown(self.province_menu,
+                                                       values=["Select Province..."],
+                                                       autocomplete=True,
+                                                       command=self.on_province_selected
+                                                       )
+        
 
         # City
         city_frame = ctk.CTkFrame(self.form_container,
@@ -982,7 +1000,7 @@ class BoardingHouseApp(ctk.CTk):
         city_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
         self.city_menu = ctk.CTkComboBox(city_frame,
-                                         values=self.city_choices,
+                                         values=[],
                                          width=430,
                                          height=40,
                                          font=self.body_light_font,
@@ -998,7 +1016,18 @@ class BoardingHouseApp(ctk.CTk):
                                          command=self.on_city_selected
                                          )
         self.city_menu.pack(pady=(0, 10))
-        self.city_menu.configure(state="readonly")
+        self.city_menu.configure(state="normal")
+        self.city_menu.set("Select City...")
+
+        self.city_menu._entry.bind("<FocusIn>", lambda e: self.city_menu.set("") 
+                            if self.city_menu.get() == "Select City..." else None)
+        self.city_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.city_menu, "Select City..."))
+
+        self.city_dropdown = CTkScrollableDropdown(self.city_menu,
+                                                   values=["Select City..."],
+                                                   autocomplete=True,
+                                                   command=self.on_city_selected
+                                                   )
 
         # Barangay
         barangay_frame = ctk.CTkFrame(self.form_container,
@@ -1014,7 +1043,7 @@ class BoardingHouseApp(ctk.CTk):
         barangay_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
 
         self.barangay_menu = ctk.CTkComboBox(barangay_frame,
-                                             values=self.barangay_choices,
+                                             values=[],
                                              width=430,
                                              height=40,
                                              font=self.body_light_font,
@@ -1031,7 +1060,18 @@ class BoardingHouseApp(ctk.CTk):
                                              command=lambda choice: setattr(self, 'selected_barangay', choice)
                                              )
         self.barangay_menu.pack(pady=(0, 10))
-        self.barangay_menu.configure(state="readonly")
+        self.barangay_menu.configure(state="normal")
+        self.barangay_menu.set("Select Barangay...")
+
+        self.barangay_menu._entry.bind("<FocusIn>", lambda e: self.barangay_menu.set("") 
+                                if self.barangay_menu.get() == "Select Barangay..." else None)
+        self.barangay_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.barangay_menu, "Select Barangay..."))
+
+        self.barangay_dropdown = CTkScrollableDropdown(self.barangay_menu,
+                                                       values=["Select Barangay..."],
+                                                       autocomplete=True,
+                                                       command=lambda choice: [self.barangay_menu.set(choice), setattr(self, 'selected_barangay', choice)]
+                                                       )
 
         # Street
         street_frame = ctk.CTkFrame(self.form_container,
@@ -1208,8 +1248,7 @@ class BoardingHouseApp(ctk.CTk):
                 if response.status_code == 200:
                     options = response.json().get("options", [])
                     if options:
-                        self.province_menu.configure(values=options)
-                        self.province_menu.set("Select Province...")
+                        self.province_dropdown.configure(values=options)
                         self.update_idletasks()
             except Exception as e:
                 print(f"Network error loading provinces: {e}")
@@ -1217,44 +1256,48 @@ class BoardingHouseApp(ctk.CTk):
         threading.Thread(target=fetch, daemon=True).start()
         
     def on_province_selected(self, choice):
-        if not choice or choice.lower().startswith("select"):
+        if not choice or not choice.strip() or choice.startswith("Select"):
             return
         
         self.selected_province = choice
+        self.province_menu.set(choice)
 
-        self.city_menu.configure(values=["Loading..."])
-        self.city_menu.set("Loading...")
-        self.barangay_menu.configure(values=["Select Baranagay..."])
-        self.barangay_menu.set("Select Barangay...")
+        self.city_menu.set("Loading cities...")
+        self.barangay_menu.set("Selected Barangay...")
+        self.city_dropdown.configure(values=["Loading..."])
+        self.barangay_dropdown.configure(values=["Loading..."])
 
         try:
             response = requests.get(f"http://127.0.0.1:8000/locations/cities?province={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
-                self.city_menu.configure(values=options)
-                if options:
-                    self.city_menu.set(options[0])
-                    self.on_city_selected(options[0])
+                self.city_dropdown.configure(values=options)
+                if options and len(options) > 0:
+                    self.city_menu.set("")
+                else:
+                    self.city_menu.set("No Cities Found")
         except Exception as e:
             print(f"Network error loading cities: {e}")
 
     def on_city_selected(self, choice):
-        if not choice or choice.lower().startswith("select"):
+        if not choice or not choice.strip() or choice.startswith("Select") or choice.startswith("Loading"):
             return
         
         self.selected_city = choice
+        self.city_menu.set(choice)
 
-        self.barangay_menu.configure(values=["Loading..."])
-        self.barangay_menu.set("Loading...")
+        self.barangay_menu.set("Loading Barangays...")
+        self.barangay_dropdown.configure(values=["Loading..."])
 
         try:
             response = requests.get(f"http://127.0.0.1:8000/locations/barangays?city={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
-                self.barangay_menu.configure(values=options)
-                if options:
-                    self.barangay_menu.set(options[0])
-                    self.selected_barangay = options[0]
+                self.barangay_dropdown.configure(values=options)
+                if options and len(options) > 0:
+                    self.barangay_menu.set("")
+                else:
+                    self.barangay_menu.set("No Barangay Found")
         except Exception as e:
             print(f"Network error loading barangay: {e}")
 
@@ -1463,9 +1506,14 @@ class BoardingHouseApp(ctk.CTk):
         self.back_btn.pack(side="left", padx=(15, 0))
         self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
         self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
-        
-
     
+    def clear_placeholder(self, event, combobox, placeholder_text):
+        if combobox.get() == placeholder_text:
+            combobox.set("")
+    
+    def restore_placeholder(self, event, combobox, placeholder_text):
+        if not combobox.get().strip():
+            combobox.set(placeholder_text)
 
 if __name__ == "__main__":
     app = BoardingHouseApp()
