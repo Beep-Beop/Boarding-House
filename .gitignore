@@ -14,5 +14,3 @@ __pycache__/
 htmlcov/
 
 test.py
-
-seed_locations.py
