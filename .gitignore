@@ -13,5 +13,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+alembic
+alembic.ini
+
+
 
 test.py

@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
     role: Literal['student', 'owner', 'admin'] = Field(..., examples=["student"])
     phone: Optional[str] = Field(None, max_length=20, examples=["09491698858"])
+    street: Optional[str] = None
     profile_photo: Optional[str] = None
     id_document_url: Optional[str] = None
 
@@ -28,6 +29,7 @@ class UserRegister(BaseModel):
     city: str
     barangay: str
     street: Optional[str] = None
+    date_of_birth: Optional[str] = None
 
 
 class UserResponse(UserBase):

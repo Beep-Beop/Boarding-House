@@ -14,6 +14,7 @@ class Users(Base):
     password = Column(String(255), nullable=False) # Hashed password
     role = Column(Enum('student', 'owner', 'admin'), nullable=False)
     location_id = Column(Integer, ForeignKey("LOCATION.location_id", ondelete="SET NULL"), nullable=True)
+    street = Column(String(255), nullable=True)
     date_of_birth = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now()) 
     phone = Column(String(20))

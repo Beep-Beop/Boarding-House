@@ -7,6 +7,9 @@ import datetime
 
 ctk.set_appearance_mode("Light")
 
+# Bug: Not checking email in shor register page if someone already used their email
+# Bug: confirm password must check if the password is the same while typing in confirm password entry
+
 class BoardingHouseApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -94,8 +97,8 @@ class BoardingHouseApp(ctk.CTk):
 
 
         #Debugg
-        #self.show_login_page()
-        self.show_register_page()
+        self.show_login_page()
+        #self.show_register_page()
 
     def clear_container(self):
         for widget in self.container.winfo_children():
@@ -856,8 +859,16 @@ class BoardingHouseApp(ctk.CTk):
         f_name = self.first_name_entry.get().strip()
         l_name = self.last_name_entry.get().strip()
         email  = self.email_entry.get().strip()
-        dob    = self.dob_entry.get().strip()
         phone  = self.phone_entry.get().strip()
+
+        month = self.month_box.get()
+        day = self.day_box.get()
+        year = self.year_box.get()
+        
+        if month == "MM" or day == "DD" or year == "YYYY":
+            self.show_toast("Please select  your date of birth", is_error=True)
+            return
+        dob = f"{year}-{month}-{day}"
 
         if not all([f_name, l_name, email, dob, phone]):
             self.show_toast("Please fill in all fields.", is_error=True)
@@ -1314,8 +1325,9 @@ class BoardingHouseApp(ctk.CTk):
                 }
                 
                 response = requests.post("http://127.0.0.1:8000/users/", json=user_data)
-                
-                if response.status_code == 200:
+                print("STATUS:", response.status_code)
+                print("RESPONSE:", response.text)
+                if response.status_code == 201:
                     self.show_toast("Success! Account created.", is_error=False)
                     self.after(2000, self.show_login_page) 
                     

@@ -42,16 +42,22 @@ class UsersCRUD:
     
     def register(self, name: str, email: str, password: str, role: str,
                  province: str, city: str, barangay: str, phone: str = None,
-                 street: str = None) -> Users:
+                 street: str = None, **kwargs) -> Users:
         
-        location = Location(
-            province=province,
-            city=city,
-            barangay=barangay,
-            street=street
-        )
-        self.db.add(location)
-        self.db.flush()
+        location = self.db.query(Location).filter(
+            Location.province == province,
+            Location.city == city,
+            Location.barangay == barangay
+        ).first()
+
+        if not location:
+            location = Location(
+                province=province,
+                city=city,
+                barangay=barangay
+            )
+            self.db.add(location)
+            self.db.flush()
 
         user = Users(
             name=name,
@@ -59,7 +65,9 @@ class UsersCRUD:
             password=password,
             role=role,
             phone=phone,
-            location_id=location.location_id
+            location_id=location.location_id,
+            street=street,
+            **kwargs
         )
         self.db.add(user)
         self.db.commit()

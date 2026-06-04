@@ -1,2 +1,2 @@
 
-        welcome_label.pack(pady=(0, 7))
+    def show_login_page(self):
