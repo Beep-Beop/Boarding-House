@@ -9,11 +9,14 @@ import datetime
 
 ctk.set_appearance_mode("Light")
 
+# Bug: Fix dob padding (aaron)
 # Bug: Not checking email in shor register page if someone already used their email
 # Bug: Add realtime confirmation on confirm password to match the password
 # Bug: Add validation in dob only numbers
-# Bug: Add Realtime confirmation if the email is correct like if no @gmail.com its not valid email
+# Bug: Add Realtime confirmation if the email is correct like if no @gmail.com its not valid email like incorrect format
+# Bug: Add Realtime confirmation for password icorrect format
 # Bug: Add Realtime confirmation on phone to have 11 numbers
+# Bug: Don't let User Enter their typo if they type the location
 
 class BoardingHouseApp(ctk.CTk):
     def __init__(self):
