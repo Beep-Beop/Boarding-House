@@ -952,6 +952,10 @@ class BoardingHouseApp(ctk.CTk):
         self.selected_city = ""
         self.selected_barangay = ""
 
+        self.province_options = []
+        self.city_options = []
+        self.barangay_options = []
+
 
         # Main Container
         self.form_container = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
@@ -1299,6 +1303,7 @@ class BoardingHouseApp(ctk.CTk):
                 response = requests.get("http://127.0.0.1:8000/locations/provinces")
                 if response.status_code == 200:
                     options = response.json().get("options", [])
+                    self.province_options = options
                     if options and hasattr(self, "province_dropdown") and self.province_menu.winfo_exists():
                         self.province_dropdown.configure(values=options)
                         self.update_idletasks()
@@ -1319,10 +1324,14 @@ class BoardingHouseApp(ctk.CTk):
         self.city_dropdown.configure(values=["Loading..."])
         self.barangay_dropdown.configure(values=["Loading..."])
 
+        self.city_options = []
+        self.barangay_options = []
+
         try:
             response = requests.get(f"http://127.0.0.1:8000/locations/cities?province={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
+                self.city_options = options
                 if hasattr(self, "city_dropdown") and self.city_menu.winfo_exists():
                     self.city_dropdown.configure(values=options)
                     if options and len(options) > 0:
@@ -1346,6 +1355,7 @@ class BoardingHouseApp(ctk.CTk):
             response = requests.get(f"http://127.0.0.1:8000/locations/barangays?city={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
+                self.barangay_options = options
                 if hasattr(self, "barangay_dropdown") and self.barangay_menu.winfo_exists():
                     self.barangay_dropdown.configure(values=options)
                     if options and len(options) > 0:
@@ -1399,6 +1409,26 @@ class BoardingHouseApp(ctk.CTk):
         barangay = self.barangay_menu.get()
         street = self.street_entry.get()
 
+        matched_province = [p for p in getattr(self, "province_options", []) if p.lower() == province.lower()]
+        if not matched_province:
+            self.show_toast("Please select a valid Province from the dropdown list", is_error=True)
+            return
+        province = matched_province[0]
+        self.province_menu.set(province)
+
+        matched_city = [c for c in getattr(self, "city_options", []) if c.lower() == city.lower()]
+        if not matched_city:
+            self.show_toast("Please select a valid City from the dropdown list", is_error=True)
+            return
+        city = matched_city[0]
+        self.city_menu.set(city)
+
+        matched_barangay = [b for b in getattr(self, "barangay_options", []) if b.lower() == barangay.lower()]
+        if not matched_barangay:
+            self.show_toast("Please select a valid Barangay from the dropdown list.", is_error=True)
+            return
+        barangay = matched_barangay[0]
+        self.barangay_menu.set(barangay)
 
         if f_name and l_name and email and password and confirm_password and phone and province and city and barangay and street:
 
