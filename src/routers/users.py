@@ -71,3 +71,12 @@ def update_user_status(user_id: int, new_status: str, db: Session = Depends(data
         )
 
     return user
+
+@router.get("/check-email")
+def check_email(email: str, db: Session = Depends(database.get_db)):
+    user_crud = crud.UsersCRUD(db)
+
+    if user_crud.get_user_by_email(email):
+        return {"exist": True, "detail": "Email already registered"}
+    
+    return {"exists": False, "detail": "Email is available"}

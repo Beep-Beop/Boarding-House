@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from CTkScrollableDropdown import CTkScrollableDropdown
 from PIL import Image
+import re
 import os
 import requests
 import threading
@@ -17,6 +18,8 @@ ctk.set_appearance_mode("Light")
 # Bug: Add Realtime confirmation for password icorrect format
 # Bug: Add Realtime confirmation on phone to have 11 numbers
 # Bug: Don't let User Enter their typo if they type the location
+# Bug: date not imputing in database
+
 
 class BoardingHouseApp(ctk.CTk):
     def __init__(self):
@@ -109,8 +112,21 @@ class BoardingHouseApp(ctk.CTk):
         #self.show_register_page()
 
     def clear_container(self):
+        for dropdown_attr in ["province_dropdown", "city_dropdown", "barangay_dropdown"]:
+            if hasattr(self, dropdown_attr):
+                try:
+                    dropdown = getattr(self, dropdown_attr)
+                    if dropdown:
+                        dropdown.destroy()
+                except Exception:
+                    pass
+                delattr(self, dropdown_attr)
         for widget in self.container.winfo_children():
-            widget.destroy()
+            try:
+                if widget.winfo_exists():
+                    widget.destroy()
+            except Exception:
+                pass
     
     def show_toast(self, message, is_error=True):
         
@@ -772,20 +788,20 @@ class BoardingHouseApp(ctk.CTk):
         self.year_box.pack(side="left", pady=8)
         
         # Email
-        email_frame = ctk.CTkFrame(self.form_container,
+        self.email_frame = ctk.CTkFrame(self.form_container,
                                    
                                    fg_color="transparent"
                                    )
-        email_frame.pack(pady=(0, 15))
+        self.email_frame.pack(pady=(0, 15))
 
-        self.email_label = ctk.CTkLabel(email_frame,
+        self.email_label = ctk.CTkLabel(self.email_frame,
                                         text="Email",
                                         font=self.body_light_font,
                                         text_color=self.text_color
                                         )
         self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        email_bg_frame = ctk.CTkFrame(email_frame,
+        self.email_bg_frame = ctk.CTkFrame(self.email_frame,
                                       width=430,
                                       height=40,
                                       fg_color=self.fg_color,
@@ -793,10 +809,10 @@ class BoardingHouseApp(ctk.CTk):
                                       border_width=1,
                                       corner_radius=6
                                       )
-        email_bg_frame.pack()
-        email_bg_frame.pack_propagate(False)
+        self.email_bg_frame.pack()
+        self.email_bg_frame.pack_propagate(False)
 
-        self.email_entry = ctk.CTkEntry(email_bg_frame,
+        self.email_entry = ctk.CTkEntry(self.email_bg_frame,
                                         placeholder_text="Enter email",
                                         height=30,
                                         font=self.body_light_font,
@@ -805,6 +821,7 @@ class BoardingHouseApp(ctk.CTk):
                                         text_color=self.text_color
                                         )
         self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.email_entry.bind("<KeyRelease>", self.validate_email_realtime)
 
         # Phone number
         phone_frame = ctk.CTkFrame(self.form_container,
@@ -857,6 +874,17 @@ class BoardingHouseApp(ctk.CTk):
                                            command=self.handle_register_page_next
                                            )
         self.next_step_btn.pack(pady=(20, 10))
+    
+    def validate_email_realtime(self, event=None):
+        email = self.email_entry.get().strip()
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+
+        if not email:
+            self.email_bg_frame.configure(border_color=self.entry_border)
+        elif re.match(pattern, email):
+            self.email_bg_frame.configure(border_color="green")
+        else:
+            self.email_bg_frame.configure(border_color=self.error_red)
 
     def validate_phone(self, text):
         if text == "" or (text.isdigit() and len (text) <= 11):
@@ -881,6 +909,27 @@ class BoardingHouseApp(ctk.CTk):
         if not all([f_name, l_name, email, dob, phone]):
             self.show_toast("Please fill in all fields.", is_error=True)
             return
+        
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        if not re.match(pattern, email):
+            self.show_toast("Incorrect email format!", is_error=True)
+            self.email_bg_frame.configure(border_color=self.error_red)
+
+        try:
+            response = requests.get(f"http://127.0.0.1:8000/users/check-email?email={email}", timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("exists") or data.get("taken"):
+                    self.show_toast("This email is already in use!", is_error=True)
+                    self.email_bg_frame.configure(border_color=self.error_red)
+                    return
+            elif response.status_code == 400:
+                error_msg = response.json().get("detail", "Email already registered.")
+                self.show_toast(error_msg, is_error=True)
+                self.email_bg_frame.configure(border_color=self.error_red)
+                return
+        except requests.exceptions.ConnectionError:
+            print("Warning: Backend offline, skipped database duplicate check.")
 
         self.reg_first_name = f_name
         self.reg_last_name  = l_name
@@ -1250,7 +1299,7 @@ class BoardingHouseApp(ctk.CTk):
                 response = requests.get("http://127.0.0.1:8000/locations/provinces")
                 if response.status_code == 200:
                     options = response.json().get("options", [])
-                    if options:
+                    if options and hasattr(self, "province_dropdown") and self.province_menu.winfo_exists():
                         self.province_dropdown.configure(values=options)
                         self.update_idletasks()
             except Exception as e:
@@ -1274,11 +1323,12 @@ class BoardingHouseApp(ctk.CTk):
             response = requests.get(f"http://127.0.0.1:8000/locations/cities?province={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
-                self.city_dropdown.configure(values=options)
-                if options and len(options) > 0:
-                    self.city_menu.set("")
-                else:
-                    self.city_menu.set("No Cities Found")
+                if hasattr(self, "city_dropdown") and self.city_menu.winfo_exists():
+                    self.city_dropdown.configure(values=options)
+                    if options and len(options) > 0:
+                        self.city_menu.set("")
+                    else:
+                        self.city_menu.set("No Cities Found")
         except Exception as e:
             print(f"Network error loading cities: {e}")
 
@@ -1296,11 +1346,12 @@ class BoardingHouseApp(ctk.CTk):
             response = requests.get(f"http://127.0.0.1:8000/locations/barangays?city={choice}")
             if response.status_code == 200:
                 options = response.json().get("options", [])
-                self.barangay_dropdown.configure(values=options)
-                if options and len(options) > 0:
-                    self.barangay_menu.set("")
-                else:
-                    self.barangay_menu.set("No Barangay Found")
+                if hasattr(self, "barangay_dropdown") and self.barangay_menu.winfo_exists():
+                    self.barangay_dropdown.configure(values=options)
+                    if options and len(options) > 0:
+                        self.barangay_menu.set("")
+                    else:
+                        self.barangay_menu.set("No Barangay Found")
         except Exception as e:
             print(f"Network error loading barangay: {e}")
 
