@@ -69,7 +69,7 @@ def update_user_status(user_id: int, new_status: str, db: Session = Depends(data
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-
+    
     return user
 
 @router.get("/check-email")

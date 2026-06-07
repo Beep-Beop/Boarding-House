@@ -14,6 +14,7 @@ class UserBase(BaseModel):
     street: Optional[str] = None
     profile_photo: Optional[str] = None
     id_document_url: Optional[str] = None
+    date_of_birth: Optional[date] = None
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, examples=["beepboop123"])
@@ -29,7 +30,7 @@ class UserRegister(BaseModel):
     city: str
     barangay: str
     street: Optional[str] = None
-    date_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
 
 
 class UserResponse(UserBase):

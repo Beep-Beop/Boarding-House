@@ -10,16 +10,13 @@ import datetime
 
 ctk.set_appearance_mode("Light")
 
-# Bug: Fix dob padding (aaron)
-# Bug: Not checking email in shor register page if someone already used their email
-# Bug: Add realtime confirmation on confirm password to match the password
 # Bug: Add validation in dob only numbers
-# Bug: Add Realtime confirmation if the email is correct like if no @gmail.com its not valid email like incorrect format
-# Bug: Add Realtime confirmation for password icorrect format
-# Bug: Add Realtime confirmation on phone to have 11 numbers
 # Bug: Don't let User Enter their typo if they type the location
-# Bug: date not imputing in database
+# Bug: Change combo box of dob to scrollable drop down
+# Bug: When province scrollabledrop down is open whe i use scroll wheel the whole page gets scrolled instead of the scrollable dropdown
+# Bug: While users typing their email it should detetct if their email is already used and use an inline error 
 
+# Add: Add in password the thing they need for example their password must have special charackter number and Capital letter
 
 class BoardingHouseApp(ctk.CTk):
     def __init__(self):
@@ -89,6 +86,8 @@ class BoardingHouseApp(ctk.CTk):
         self.body_paragraph_font = ctk.CTkFont(family="Poppins", size=16, weight="normal")
         self.body_light_font = ctk.CTkFont(family="Poppins Light", size=16, weight="normal") 
 
+        self.inline_error_font = ctk.CTkFont(family="Poppins", size=12, weight="normal") 
+
         self.primary_color = "#AC7F5E"
         self.entry_border = "#E0E0E0" 
         self.hover_color = "#C5A376"
@@ -112,22 +111,19 @@ class BoardingHouseApp(ctk.CTk):
         #self.show_register_page()
 
     def clear_container(self):
-        for dropdown_attr in ["province_dropdown", "city_dropdown", "barangay_dropdown"]:
-            if hasattr(self, dropdown_attr):
+        for widget in self.winfo_children():
+            if "!ctkscrollabledropdown" in str(widget).lower():
                 try:
-                    dropdown = getattr(self, dropdown_attr)
-                    if dropdown:
-                        dropdown.destroy()
+                    widget.destroy()
                 except Exception:
                     pass
-                delattr(self, dropdown_attr)
-        for widget in self.container.winfo_children():
-            try:
-                if widget.winfo_exists():
+
+        if hasattr(self, 'container'):
+            for widget in self.container.winfo_children():
+                try:
                     widget.destroy()
-            except Exception:
-                pass
-    
+                except Exception:
+                    pass
     def show_toast(self, message, is_error=True):
         
         if self.toast_timer is not None:
@@ -235,7 +231,7 @@ class BoardingHouseApp(ctk.CTk):
         self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
         # THE "FAKE" ENTRY (Visual box user sees)
-        email_fake_entry = ctk.CTkFrame(email_frame, 
+        self.email_fake_entry = ctk.CTkFrame(email_frame, 
                                       width=400, 
                                       height=40, 
                                       fg_color="#F8F8F8",
@@ -243,11 +239,10 @@ class BoardingHouseApp(ctk.CTk):
                                       border_width=1, 
                                       corner_radius=6
                                       )
-        email_fake_entry.pack()
-        email_fake_entry.pack_propagate(False) 
+        self.email_fake_entry.pack()
+        self.email_fake_entry.pack_propagate(False) 
 
-        # THE "REAL" ENTRY (Where user types, tightly wrapped & centered)
-        self.email_entry = ctk.CTkEntry(email_fake_entry, 
+        self.email_entry = ctk.CTkEntry(self.email_fake_entry, 
                                         placeholder_text="example@gmail.com", 
                                         height=24, # Tight wrap around text
                                         font=self.body_light_font, 
@@ -256,6 +251,13 @@ class BoardingHouseApp(ctk.CTk):
                                         text_color=self.text_color
                                         )
         self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        self.login_email_error = ctk.CTkLabel(email_frame,
+                                              text="",
+                                              text_color=self.error_red,
+                                              font=self.inline_error_font
+                                              )
+        self.login_email_error.pack(anchor="w", padx=(15, 0))
         
         # Password Row
         password_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
@@ -268,8 +270,7 @@ class BoardingHouseApp(ctk.CTk):
                                            )
         self.password_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        # THE "FAKE" ENTRY
-        password_fake_entry = ctk.CTkFrame(password_frame, 
+        self.password_fake_entry = ctk.CTkFrame(password_frame, 
                                          width=400, 
                                          height=40, 
                                          fg_color="#F8F8F8",
@@ -277,13 +278,12 @@ class BoardingHouseApp(ctk.CTk):
                                          border_width=1, 
                                          corner_radius=6
                                          )
-        password_fake_entry.pack()
-        password_fake_entry.pack_propagate(False)
+        self.password_fake_entry.pack()
+        self.password_fake_entry.pack_propagate(False)
 
-        # THE "REAL" ENTRY
-        self.password_entry = ctk.CTkEntry(password_fake_entry, 
+        self.password_entry = ctk.CTkEntry(self.password_fake_entry, 
                                            placeholder_text="Password", 
-                                           height=24, # Tight wrap around text
+                                           height=24,
                                            show="•", 
                                            font=self.body_light_font, 
                                            fg_color="transparent",
@@ -291,6 +291,13 @@ class BoardingHouseApp(ctk.CTk):
                                            text_color=self.text_color
                                            )
         self.password_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        self.login_password_error = ctk.CTkLabel(password_frame,
+                                                 text="",
+                                                 text_color=self.error_red,
+                                                 font=self.inline_error_font
+                                                 )
+        self.login_password_error.pack(anchor="w", padx=(15, 0))
 
         actions_frame = ctk.CTkFrame(password_frame, fg_color="transparent", width=400, height=30)
         actions_frame.pack(fill="x", pady=(10, 0))
@@ -379,32 +386,50 @@ class BoardingHouseApp(ctk.CTk):
         email = self.email_entry.get().strip()
         password = self.password_entry.get()
 
-        if email and password:
-            try:
-                login_data = {
-                    "email": email,
-                    "password": password
-                }
+        self.login_email_error.configure(text="")
+        self.login_password_error.configure(text="")
+        self.email_fake_entry.configure(border_color=self.entry_border)
+        self.password_fake_entry.configure(border_color=self.entry_border)
 
-                response = requests.post("http://127.0.0.1:8000/auth/login", json=login_data)
-
-                if response.status_code == 200:
-                    user_info = response.json()
-                    self.show_toast(f"Welcome Back, {user_info['name']}", is_error=False)
-                
-                elif response.status_code in [401, 403]:
-                    error_msg = response.json().get("detail", "Login failed.")
-                    self.show_toast(error_msg, is_error=True)
-                
-                else:
-                    print("BACKEND ERROR:", response.json()) 
-                    self.show_toast("Server error. Try again Later.", is_error=True)
-
-            except requests.exceptions.ConnectionError:
-                self.show_toast("Error: Backend Error", is_error=True)
+        has_error = False
         
-        else:
-            self.show_toast("Please fill in both fields.", is_error=True)
+        if not email:
+            self.login_email_error.configure(text="Please enter your email.")
+            self.email_fake_entry.configure(border_color=self.error_red)
+            has_error = True
+        
+        if not password:
+            self.login_password_error.configure(text="Please enter your password.")
+            self.password_fake_entry.configure(border_color=self.error_red)
+            has_error = True
+        
+        if has_error:
+            return
+        
+        try:
+            login_data = {
+                "email": email,
+                "password": password
+            }
+
+            response = requests.post("http://127.0.0.1:8000/auth/login", json=login_data)
+
+            if response.status_code == 200:
+                user_info = response.json()
+                self.show_toast(f"Welcom Back, {user_info['name']}", is_error=False)
+
+            elif response.status_code in [401, 403]:
+                error_msg = response.json().get("detail", "Login Failed.")
+                self.login_email_error.configure(text=error_msg)
+                self.login_password_error.configure(text=error_msg)
+                self.email_fake_entry.configure(border_color=self.error_red)
+                self.password_fake_entry.configure(border_color=self.error_red)
+            
+            else:
+                self.login_email_error.configure(text="Server error, Try again Later.")
+        except requests.exceptions.ConnectionError:
+            self.login_email_error.configure(text="Error: Cannot connect to backend server")
+            self.email_fake_entry.configure(border_color=self.error_red)
 
     def forgot_password(self):
         self.show_toast("BOOOOOOOOP", is_error=False)
@@ -594,12 +619,24 @@ class BoardingHouseApp(ctk.CTk):
 
     def show_register_page(self):
         self.clear_container()
-
         self.geometry("630x700")
-        # Main Container
-        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
-        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
 
+
+        # Tracking arrays
+        self.province_options = []
+        self.city_options = []
+        self.barangay_options = []
+        self.selected_province = ""
+        self.selected_city = ""
+        self.selected_barangay = ""
+
+        # Main Container
+        self.form_container = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
+        self.form_container.bind_all("<Button-4>", lambda e: self.form_container._parent_canvas.yview("scroll", -1, "units"))
+        self.form_container.bind_all("<Button-5>", lambda e: self.form_container._parent_canvas.yview("scroll", 1, "units"))
+
+        # Top Navigation: Back Button
         self.bk_btn_frame = ctk.CTkFrame(self.form_container,
                                   fg_color="transparent"
                                   )
@@ -616,30 +653,29 @@ class BoardingHouseApp(ctk.CTk):
         self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
         self.back_btn.bind("<Leave>", lambda event: self.back_btn.configure(image=self.bk_btn_icon))
 
-        create_acc_frame = ctk.CTkFrame(self.form_container,
-                                        fg_color="transparent"
-                                        )
-        create_acc_frame.pack(fill="x")
-
-        self.create_acc_label = ctk.CTkLabel(create_acc_frame,
+        self.create_acc_label = ctk.CTkLabel(self.bk_btn_frame,
                                              text="Create Account",
                                              font=self.body_bold_paragraph_font
                                              )
-        self.create_acc_label.pack(side="left", padx=100, pady=(0, 10))
+        self.create_acc_label.pack(side="left", padx=5, pady=(15, 10))
 
-        notes_frame = ctk.CTkFrame(self.form_container,
-                                   fg_color="transparent"
-                                   )
-        notes_frame.pack(fill="x")
-
-        notes_label = ctk.CTkLabel(notes_frame, 
+        notes_label = ctk.CTkLabel(self.form_container, 
                                    text="Sign up to get started with BHFinder", 
                                    width=213, 
                                    height=5,
                                    font=self.body_paragraph_font, 
                                    text_color="#4D4D4D"
                                    )
-        notes_label.pack(side="left", padx=100, pady=(0, 10))
+        notes_label.pack(anchor="w", padx=90)
+
+
+        # Section 1: Personal Details
+        section_1_label = ctk.CTkLabel(self.form_container,
+                                       text="Personal Details",
+                                       font=self.body_bold_paragraph_font,
+                                       text_color=self.primary_color
+                                       )
+        section_1_label.pack(anchor="w", padx=90, pady=(10, 10))
 
         # First Name
         first_name_frame = ctk.CTkFrame(self.form_container, 
@@ -654,7 +690,7 @@ class BoardingHouseApp(ctk.CTk):
                                         )
         self.first_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        first_name_bg_frame = ctk.CTkFrame(first_name_frame, 
+        self.first_name_bg_frame = ctk.CTkFrame(first_name_frame, 
                                       width=430, 
                                       height=40, 
                                       fg_color="#F8F8F8",
@@ -662,10 +698,12 @@ class BoardingHouseApp(ctk.CTk):
                                       border_width=1, 
                                       corner_radius=6
                                       )
-        first_name_bg_frame.pack()
-        first_name_bg_frame.pack_propagate(False) 
+        self.first_name_bg_frame.pack()
+        self.first_name_bg_frame.pack_propagate(False) 
+        self.first_name_error_lbl = ctk.CTkLabel(first_name_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.first_name_error_lbl.pack(anchor="w", padx=15)
 
-        self.first_name_entry = ctk.CTkEntry(first_name_bg_frame, 
+        self.first_name_entry = ctk.CTkEntry(self.first_name_bg_frame, 
                                         placeholder_text="Enter your first name", 
                                         height=30,
                                         font=self.body_light_font, 
@@ -688,7 +726,7 @@ class BoardingHouseApp(ctk.CTk):
                                             )
         self.last_name_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        last_name_bg_frame = ctk.CTkFrame(last_name_frame,
+        self.last_name_bg_frame = ctk.CTkFrame(last_name_frame,
                                           width=430,
                                           height=40,
                                           fg_color="#F8F8F8",
@@ -696,10 +734,12 @@ class BoardingHouseApp(ctk.CTk):
                                           border_width=1,
                                           corner_radius=6
                                           )
-        last_name_bg_frame.pack()
-        last_name_bg_frame.pack_propagate(False)
+        self.last_name_bg_frame.pack()
+        self.last_name_bg_frame.pack_propagate(False)
+        self.last_name_error_lbl = ctk.CTkLabel(last_name_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.last_name_error_lbl.pack(anchor="w", padx=15)
 
-        self.last_name_entry = ctk.CTkEntry(last_name_bg_frame,
+        self.last_name_entry = ctk.CTkEntry(self.last_name_bg_frame,
                                             placeholder_text="Enter your last name",
                                             height=30,
                                             font=self.body_light_font,
@@ -713,26 +753,27 @@ class BoardingHouseApp(ctk.CTk):
         dob_frame = ctk.CTkFrame(self.form_container,
                                  fg_color="transparent"
                                  )
-        dob_frame.pack(pady=(0, 15), fill="x")
+        dob_frame.pack(anchor="w", fill="x",  pady=(0, 15))
 
         self.dob_label = ctk.CTkLabel(dob_frame,
                                       text="Date Of Birth",
                                       font=self.body_light_font,
                                       text_color=self.text_color
                                       )
-        self.dob_label.pack(anchor="w", padx=(115, 0), pady=(0, 5))
+        self.dob_label.pack(anchor="w", padx=(100, 0), pady=(0, 5))
 
-        dob_input_container = ctk.CTkFrame(dob_frame,
+        self.dob_bg_frame = ctk.CTkFrame(dob_frame,
                                            fg_color=self.fg_color,
                                            corner_radius=6,
                                            border_width=1,
-                                           border_color=self.entry_border
+                                           border_color=self.entry_border,
+                                           width=430
                                            )
-        dob_input_container.pack(anchor="w", fill="x",  padx=100)
-        
-        # Month dropdown
+        self.dob_bg_frame.pack()
+        self.dob_error_lbl = ctk.CTkLabel(dob_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.dob_error_lbl.pack(anchor="w", padx=100)
         months = [f"{i:02d}" for i in range(1, 13)]
-        self.month_box = ctk.CTkComboBox(dob_input_container,
+        self.month_box = ctk.CTkComboBox(self.dob_bg_frame,
                                          values=months,
                                          width=70,
                                          fg_color=self.fg_color,
@@ -742,19 +783,19 @@ class BoardingHouseApp(ctk.CTk):
                                          dropdown_fg_color=self.fg_color
                                          )
         self.month_box.set("MM")
-        self.month_box.pack(side="left", padx=(20, 0), pady=8)
+        self.month_box.pack(side="left", padx=(35, 10), pady=8)
 
-        ctk.CTkLabel(dob_input_container,
+        ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
                      text_color=self.text_color,
                      width=10
-                     ).pack(side="left", padx=20)
+                     ).pack(side="left", padx=(25, 20))
 
         # Days dropdown
         days = [f"{i:02d}" for i in range(1, 32)]
-        self.day_box = ctk.CTkComboBox(dob_input_container,
+        self.day_box = ctk.CTkComboBox(self.dob_bg_frame,
                                        values=days,
-                                       width=70,
+                                       width=65,
                                        fg_color=self.fg_color,
                                        border_width=0,
                                        border_color=self.entry_border,
@@ -763,20 +804,20 @@ class BoardingHouseApp(ctk.CTk):
                                        dropdown_fg_color=self.fg_color
                                        )
         self.day_box.set("DD")
-        self.day_box.pack(side="left", pady=8, padx=5)
+        self.day_box.pack(side="left", pady=8, padx=(0, 5))
         
-        ctk.CTkLabel(dob_input_container,
+        ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
                      text_color=self.text_color,
                      width=10
-                     ).pack(side="left")
+                     ).pack(side="left", padx=(30, 25))
 
         # Year Dropdown
         current_year = datetime.datetime.now().year
         years = [str(y) for y in range(current_year, 1949, -1)]
-        self.year_box = ctk.CTkComboBox(dob_input_container,
+        self.year_box = ctk.CTkComboBox(self.dob_bg_frame,
                                         values=years,
-                                        width=100,
+                                        width=75,
                                         fg_color=self.fg_color,
                                         border_width=0,
                                         border_color=self.entry_border,
@@ -785,7 +826,7 @@ class BoardingHouseApp(ctk.CTk):
                                         dropdown_fg_color=self.fg_color
                                         )
         self.year_box.set("YYYY")
-        self.year_box.pack(side="left", pady=8)
+        self.year_box.pack(side="left", pady=8, padx=(0, 45))
         
         # Email
         self.email_frame = ctk.CTkFrame(self.form_container,
@@ -811,6 +852,8 @@ class BoardingHouseApp(ctk.CTk):
                                       )
         self.email_bg_frame.pack()
         self.email_bg_frame.pack_propagate(False)
+        self.email_error_lbl = ctk.CTkLabel(self.email_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.email_error_lbl.pack(anchor="w", padx=15)
 
         self.email_entry = ctk.CTkEntry(self.email_bg_frame,
                                         placeholder_text="Enter email",
@@ -836,7 +879,7 @@ class BoardingHouseApp(ctk.CTk):
                                         )
         self.phone_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        phone_bg_frame = ctk.CTkFrame(phone_frame,
+        self.phone_bg_frame = ctk.CTkFrame(phone_frame,
                                       width=430,
                                       height=40,
                                       fg_color=self.fg_color,
@@ -844,171 +887,64 @@ class BoardingHouseApp(ctk.CTk):
                                       border_width=1,
                                       corner_radius=6
                                       )
-        phone_bg_frame.pack()
-        phone_bg_frame.pack_propagate(False)
+        self.phone_bg_frame.pack()
+        self.phone_bg_frame.pack_propagate(False)
+        self.phone_error_lbl = ctk.CTkLabel(phone_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.phone_error_lbl.pack(anchor="w", padx=15)
 
-        vcmb = (self.register(self.validate_phone), "%P")
 
-        # Bug Placeholder not showing
-        self.phone_entry = ctk.CTkEntry(phone_bg_frame,
-                                        placeholder_text="Enter your mobile number",
+
+        self.phone_entry = ctk.CTkEntry(self.phone_bg_frame,
                                         height=30,
                                         font=self.body_light_font,
                                         fg_color="transparent",
                                         border_width=0,
-                                        text_color=self.text_color,
+                                        text_color="#aaaaaa",
                                         validate="key",
-                                        validatecommand=vcmb
+                                        validatecommand=(self.register(self.validate_phone), "%P")
                                         )
         self.phone_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
-
-        self.next_step_btn = ctk.CTkButton(self.form_container,
-                                           text="NEXT",
-                                           width=180,
-                                           height=45,
-                                           corner_radius=6,
-                                           font=self.body_bold_font,
-                                           fg_color=self.primary_color,
-                                           hover_color=self.hover_color,
-                                           text_color="#FFFFFF",
-                                           command=self.handle_register_page_next
-                                           )
-        self.next_step_btn.pack(pady=(20, 10))
-    
-    def validate_email_realtime(self, event=None):
-        email = self.email_entry.get().strip()
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-
-        if not email:
-            self.email_bg_frame.configure(border_color=self.entry_border)
-        elif re.match(pattern, email):
-            self.email_bg_frame.configure(border_color="green")
-        else:
-            self.email_bg_frame.configure(border_color=self.error_red)
-
-    def validate_phone(self, text):
-        if text == "" or (text.isdigit() and len (text) <= 11):
-            return True
-        return False
-
-    def handle_register_page_next(self):
-        f_name = self.first_name_entry.get().strip()
-        l_name = self.last_name_entry.get().strip()
-        email  = self.email_entry.get().strip()
-        phone  = self.phone_entry.get().strip()
-
-        month = self.month_box.get()
-        day = self.day_box.get()
-        year = self.year_box.get()
+        self.phone_entry.configure(validate="none")
+        self.phone_entry.insert(0, "Enter your mobile number")
+        self.phone_entry.configure(validate="key")
+        def phone_focus_in(e):
+            if self.phone_entry.get() == "Enter your mobile number":
+                self.phone_entry.delete(0, "end")
+                self.phone_entry.configure(text_color=self.text_color)
         
-        if month == "MM" or day == "DD" or year == "YYYY":
-            self.show_toast("Please select  your date of birth", is_error=True)
-            return
-        dob = f"{year}-{month}-{day}"
-
-        if not all([f_name, l_name, email, dob, phone]):
-            self.show_toast("Please fill in all fields.", is_error=True)
-            return
+        def phone_focus_out(e):
+            if not self.phone_entry.get():
+                self.phone_entry.configure(validate="none")
+                self.phone_entry.insert(0, "Enter your mobile number")
+                self.phone_entry.configure(validate="key")
+                self.phone_entry.configure(text_color="#aaaaaa")
+        self.phone_entry.bind("<FocusIn>", phone_focus_in)
+        self.phone_entry.bind("<FocusOut>", phone_focus_out)
+        self.phone_entry.bind("<KeyRelease>", self.validate_phone_realtime)
         
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        if not re.match(pattern, email):
-            self.show_toast("Incorrect email format!", is_error=True)
-            self.email_bg_frame.configure(border_color=self.error_red)
-
-        try:
-            response = requests.get(f"http://127.0.0.1:8000/users/check-email?email={email}", timeout=3)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("exists") or data.get("taken"):
-                    self.show_toast("This email is already in use!", is_error=True)
-                    self.email_bg_frame.configure(border_color=self.error_red)
-                    return
-            elif response.status_code == 400:
-                error_msg = response.json().get("detail", "Email already registered.")
-                self.show_toast(error_msg, is_error=True)
-                self.email_bg_frame.configure(border_color=self.error_red)
-                return
-        except requests.exceptions.ConnectionError:
-            print("Warning: Backend offline, skipped database duplicate check.")
-
-        self.reg_first_name = f_name
-        self.reg_last_name  = l_name
-        self.reg_email      = email
-        self.reg_dob        = dob
-        self.reg_phone      = phone
-
-        self.next_register_page()
-
-    def next_register_page(self):
-        self.clear_container()
-
-        self.geometry("630x700")
-
-        self.province_choices = ["select Province..."]
-        self.city_choices = ["Select City..."]
-        self.barangay_choices = ["Select Barangay..."]
-
-        self.selected_province = ""
-        self.selected_city = ""
-        self.selected_barangay = ""
-
-        self.province_options = []
-        self.city_options = []
-        self.barangay_options = []
 
 
-        # Main Container
-        self.form_container = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
-        self.form_container.pack(pady=(0, 0), fill="both", expand=True)
-
-        self.bk_btn_frame = ctk.CTkFrame(self.form_container,
-                                  fg_color="transparent"
-                                  )
-        self.bk_btn_frame.pack(fill="x", pady=(15, 0))
-
-
-        self.back_btn = ctk.CTkLabel(self.bk_btn_frame,
-                                     text="",
-                                     image=self.bk_btn_icon,
-                                     cursor="hand2"
-                                     )
-        self.back_btn.pack(side="left", padx=(15, 0))
-        self.back_btn.bind("<Button-1>", lambda event: self.show_login_page())
-        self.back_btn.bind("<Enter>", lambda event: self.back_btn.configure(image=self.bk_btn_hvr_icon))
-        self.back_btn.bind("<Leave>", lambda event: self.back_btn.configure(image=self.bk_btn_icon))
-
-        self.create_acc_label = ctk.CTkLabel(self.bk_btn_frame,
-                                             text="Create Account",
-                                             font=self.body_bold_paragraph_font
-                                             )
-        self.create_acc_label.pack(side="left", padx=(15, 0), pady=(10, 0))
-
-        notes_frame = ctk.CTkFrame(self.form_container,
-                                   fg_color="transparent"
-                                   )
-        notes_frame.pack(fill="x")
-
-        notes_label = ctk.CTkLabel(notes_frame, 
-                                   text="Sign up to get started with BHFinder", 
-                                   width=213, 
-                                   height=5,
-                                   font=self.body_paragraph_font, 
-                                   text_color="#4D4D4D"
-                                   )
-        notes_label.pack(side="left", padx=100, pady=(0, 10))
+        # Section 2: Location Details
+        self.section_2_label = ctk.CTkLabel(self.form_container,
+                                            text="Location Details",
+                                            font=self.body_bold_paragraph_font,
+                                            text_color=self.primary_color
+                                            )
+        self.section_2_label.pack(anchor="w", padx=90, pady=(15, 10))
 
         # Province
         province_frame = ctk.CTkFrame(self.form_container,
                                       fg_color="transparent"
                                       )
         province_frame.pack(pady=(0, 5))
-        
-        province_label = ctk.CTkLabel(province_frame,
-                                      text="Province",
-                                      font=self.body_light_font,
-                                      text_color=self.text_color
-                                      )
-        province_label.pack(anchor="w", padx=(15, 0), pady=(5, 2))
+
+        self.province_label = ctk.CTkLabel(province_frame,
+                                           
+                                           text="Province",
+                                           font=self.body_light_font,
+                                           text_color=self.text_color
+                                           )
+        self.province_label.pack(anchor="w", padx=(15, 0), pady=(0, 2))
 
         self.province_menu = ctk.CTkComboBox(province_frame,
                                              values=[],
@@ -1040,8 +976,9 @@ class BoardingHouseApp(ctk.CTk):
                                                        autocomplete=True,
                                                        command=self.on_province_selected
                                                        )
+        self.province_error_lbl = ctk.CTkLabel(province_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.province_error_lbl.pack(anchor="w", padx=15)
         
-
         # City
         city_frame = ctk.CTkFrame(self.form_container,
                                   fg_color="transparent"
@@ -1084,6 +1021,8 @@ class BoardingHouseApp(ctk.CTk):
                                                    autocomplete=True,
                                                    command=self.on_city_selected
                                                    )
+        self.city_error_lbl = ctk.CTkLabel(city_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.city_error_lbl.pack(anchor="w", padx=15)
 
         # Barangay
         barangay_frame = ctk.CTkFrame(self.form_container,
@@ -1128,6 +1067,8 @@ class BoardingHouseApp(ctk.CTk):
                                                        autocomplete=True,
                                                        command=lambda choice: [self.barangay_menu.set(choice), setattr(self, 'selected_barangay', choice)]
                                                        )
+        self.barangay_error_lbl = ctk.CTkLabel(barangay_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.barangay_error_lbl.pack(anchor="w", padx=15)
 
         # Street
         street_frame = ctk.CTkFrame(self.form_container,
@@ -1142,7 +1083,7 @@ class BoardingHouseApp(ctk.CTk):
                                         )
         self.street_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        street_bg_frame = ctk.CTkFrame(street_frame,
+        self.street_bg_frame = ctk.CTkFrame(street_frame,
                                        width=430,
                                        height=40,
                                        fg_color=self.fg_color,
@@ -1150,10 +1091,12 @@ class BoardingHouseApp(ctk.CTk):
                                        border_width=1,
                                        corner_radius=6
                                        )
-        street_bg_frame.pack()
-        street_bg_frame.pack_propagate(False)
+        self.street_bg_frame.pack()
+        self.street_bg_frame.pack_propagate(False)
+        self.street_error_lbl = ctk.CTkLabel(street_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.street_error_lbl.pack(anchor="w", padx=15)
 
-        self.street_entry = ctk.CTkEntry(street_bg_frame,
+        self.street_entry = ctk.CTkEntry(self.street_bg_frame,
                                          placeholder_text="e.g 123 Sitio Maagay 3",
                                          height=30,
                                          font=self.body_light_font,
@@ -1162,6 +1105,14 @@ class BoardingHouseApp(ctk.CTk):
                                          text_color=self.text_color
                                          )
         self.street_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        
+        # Section 3: Accpunt Security
+        self.section_3_label = ctk.CTkLabel(self.form_container,
+                                            text="Account Security",
+                                            font=self.body_bold_paragraph_font,
+                                            text_color=self.primary_color
+                                            )
+        self.section_3_label.pack(anchor="w", padx=90, pady=(15, 10))
 
         # Create Password
         create_pass_frame = ctk.CTkFrame(self.form_container,
@@ -1176,7 +1127,7 @@ class BoardingHouseApp(ctk.CTk):
                                               )
         self.create_pass_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
         
-        create_pass_bg_frame = ctk.CTkFrame(create_pass_frame,
+        self.create_pass_bg_frame = ctk.CTkFrame(create_pass_frame,
                                             width=430,
                                             height=40,
                                             fg_color=self.fg_color,
@@ -1184,10 +1135,12 @@ class BoardingHouseApp(ctk.CTk):
                                             border_width=1,
                                             corner_radius=6
                                             )
-        create_pass_bg_frame.pack()
-        create_pass_bg_frame.pack_propagate(False)
+        self.create_pass_bg_frame.pack()
+        self.create_pass_bg_frame.pack_propagate(False)
+        self.create_pass_error_lbl = ctk.CTkLabel(create_pass_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.create_pass_error_lbl.pack(anchor="w", padx=15)
 
-        self.create_pass_entry = ctk.CTkEntry(create_pass_bg_frame,
+        self.create_pass_entry = ctk.CTkEntry(self.create_pass_bg_frame,
                                               placeholder_text="Min of 8 Characters",
                                               height=30,
                                               show="•",
@@ -1197,6 +1150,7 @@ class BoardingHouseApp(ctk.CTk):
                                               text_color=self.text_color
                                               )
         self.create_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.create_pass_entry.bind("<KeyRelease>", self.validate_password_match_realtime)
 
         confirm_pass_frame = ctk.CTkFrame(self.form_container,
                                           fg_color="transparent"
@@ -1210,7 +1164,7 @@ class BoardingHouseApp(ctk.CTk):
                                                )
         self.confirm_pass_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        confirm_bg_frame = ctk.CTkFrame(confirm_pass_frame,
+        self.confirm_pass_bg_frame = ctk.CTkFrame(confirm_pass_frame,
                                         width=430,
                                         height=40,
                                         fg_color=self.fg_color,
@@ -1218,10 +1172,12 @@ class BoardingHouseApp(ctk.CTk):
                                         border_width=1,
                                         corner_radius=6
                                         )
-        confirm_bg_frame.pack()
-        confirm_bg_frame.pack_propagate(False)
+        self.confirm_pass_bg_frame.pack()
+        self.confirm_pass_bg_frame.pack_propagate(False)
+        self.confirm_pass_error_lbl = ctk.CTkLabel(confirm_pass_frame, text="", font=ctk.CTkFont(size=12), text_color=self.error_red)
+        self.confirm_pass_error_lbl.pack(anchor="w", padx=15)
 
-        self.confirm_pass_entry = ctk.CTkEntry(confirm_bg_frame,
+        self.confirm_pass_entry = ctk.CTkEntry(self.confirm_pass_bg_frame,
                                                placeholder_text="Re-rnter your password",
                                                height=30,
                                                show="•",
@@ -1231,71 +1187,131 @@ class BoardingHouseApp(ctk.CTk):
                                                text_color=self.text_color
                                                )
         self.confirm_pass_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.confirm_pass_entry.bind("<KeyRelease>", self.validate_password_match_realtime)
 
-        # Terms of Service and Privacy Policy
-        tos_and_pp_frame = ctk.CTkFrame(self.form_container,
-                                        fg_color="transparent"
-                                        )
-        tos_and_pp_frame.pack(anchor="w", pady=(5, 0))
+        self.tos_frame = ctk.CTkFrame(self.form_container,
+                                      fg_color="transparent"
+                                      )
+        self.tos_frame.pack(anchor="w", pady=(5, 0), padx=100)
 
-        self.tos_and_pp_checkbox = ctk.CTkCheckBox(tos_and_pp_frame,
-                                                   text="I agree to BHFinder’s",
-                                                   font=self.body_paragraph_font,
-                                                   fg_color=self.primary_color,
-                                                   hover_color=self.hover_color,
-                                                   border_color=self.entry_border,
-                                                   border_width=2,
-                                                   checkbox_height=20,
+        self.tos_and_pp_checkbox = ctk.CTkCheckBox(self.tos_frame, 
+                                                   text="I agree to BHFinder’s", 
+                                                   font=self.body_paragraph_font, 
+                                                   fg_color=self.primary_color, 
+                                                   border_width=2, 
+                                                   checkbox_height=20, 
                                                    checkbox_width=20
                                                    )
-        self.tos_and_pp_checkbox.grid(row=0, column=0, padx=(70, 0), sticky="w")
+        self.tos_and_pp_checkbox.grid(row=0, column=0, sticky="w")
 
-        self.tos_link_btn = ctk.CTkButton(tos_and_pp_frame,
-                                          text="Terms of Service",
-                                          font=self.body_paragraph_font,
-                                          text_color=self.primary_color,
-                                          fg_color="transparent",
-                                          hover=False, # Gonna change this ro underline 
-                                          width=0,
+        self.tos_link_btn = ctk.CTkButton(self.tos_frame, 
+                                          text="Terms of Service", 
+                                          font=self.body_paragraph_font, 
+                                          text_color=self.primary_color, 
+                                          fg_color="transparent", 
+                                          hover=False, 
+                                          width=0, 
                                           height=20,
                                           command=self.open_terms_of_service
                                           )
-        self.tos_link_btn.grid(row=0, column=2, padx=(0, 0), sticky="w")
-
-        self.tos_and_lbl = ctk.CTkLabel(tos_and_pp_frame,
-                                        text="and",
-                                        font=self.body_paragraph_font,
+        self.tos_link_btn.grid(row=0, column=1, padx=2, sticky="w")
+ 
+        self.tos_and_lbl = ctk.CTkLabel(self.tos_frame, 
+                                        text="and", 
+                                        font=self.body_paragraph_font, 
                                         text_color=self.text_color
                                         )
-        self.tos_and_lbl.grid(row=0, column=3, padx=(0, 0), sticky="w")
+        self.tos_and_lbl.grid(row=0, column=2, padx=2, sticky="w")
 
-        self.pp_link_btn = ctk.CTkButton(tos_and_pp_frame,
-                                         text="Privacy Policy",
-                                         font=self.body_paragraph_font,
-                                         text_color=self.primary_color,
-                                         fg_color="transparent",
-                                         hover=False, # Gonna change this ro underline 
-                                         width=0,
+        self.pp_link_btn = ctk.CTkButton( self.tos_frame, 
+                                         text="Privacy Policy", 
+                                         font=self.body_paragraph_font, 
+                                         text_color=self.primary_color, 
+                                         fg_color="transparent", 
+                                         hover=False, 
+                                         width=0, 
                                          height=20,
                                          command=self.open_privacy_policy
                                          )
-        self.pp_link_btn.grid(row=0, column=4, padx=0, sticky="w")
+        self.pp_link_btn.grid(row=0, column=3, padx=2, sticky="w")
 
-        # Create Account Button
-        create_acc_btn = ctk.CTkButton(self.form_container, 
-                                  text="CREATE ACCOUNT", 
-                                  width=430,
-                                  height=45, 
-                                  corner_radius=6,
-                                  font=self.body_bold_font, 
-                                  fg_color="#AC7F5E", 
-                                  hover_color=self.hover_color,
-                                  text_color="#FFFFFF", 
-                                  command=self.attempt_register
-                                  )
-        create_acc_btn.pack(pady=(20, 20))
+        self.tos_error_lbl = ctk.CTkLabel(self.form_container, 
+                                          text="", 
+                                          font=ctk.CTkFont(size=12), 
+                                          text_color=self.error_red
+                                          )
+        self.tos_error_lbl.pack(anchor="w", padx=120, pady=(2, 10))
+
+        self.create_acc_btn = ctk.CTkButton(self.form_container, 
+                                            text="CREATE ACCOUNT", 
+                                            width=430, 
+                                            height=45, 
+                                            corner_radius=6, 
+                                            font=self.body_bold_font, 
+                                            fg_color="#AC7F5E", 
+                                            hover_color=self.hover_color,
+                                            text_color="#FFFFFF", 
+                                            command=self.attempt_register
+                                            )
+        self.create_acc_btn.pack(pady=(10, 40))
 
         self.after(100, self.load_provinces)
+
+    def validate_email_realtime(self, event=None):
+       email = self.email_entry.get().strip()
+       pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+
+       if not email:
+            self.email_bg_frame.configure(border_color=self.entry_border)
+            self.email_error_lbl.configure(text="")
+       elif re.match(pattern, email):
+            self.email_bg_frame.configure(border_color="green")
+            self.email_error_lbl.configure(text="")
+       else:
+            self.email_bg_frame.configure(border_color=self.error_red)
+            self.email_error_lbl.configure(text="Invalid email format")
+
+    def validate_phone_realtime(self, event=None):
+        phone = self.phone_entry.get().strip()
+        
+        if not phone:
+            self.phone_bg_frame.configure(border_color=self.entry_border)
+            self.phone_error_lbl.configure(text="")
+
+        elif not phone.isdigit() or len(phone) != 11:
+            self.phone_bg_frame.configure(border_color=self.error_red)
+            self.phone_error_lbl.configure(text="Invalid Phone number.")
+        
+        else:
+            self.phone_bg_frame.configure(border_color="green")
+            self.phone_error_lbl.configure(text="")
+    
+    def validate_password_match_realtime(self, event=None):
+        password = self.create_pass_entry.get()
+        confirm = self.confirm_pass_entry.get()
+
+        if not confirm:
+            self.confirm_pass_bg_frame.configure(border_color=self.entry_border)
+            self.confirm_pass_error_lbl.configure(text="")
+        
+        elif password != confirm:
+            self.confirm_pass_bg_frame.configure(border_color=self.error_red)
+            self.confirm_pass_error_lbl.configure(text="Passwords do not match")
+
+        else:
+            self.confirm_pass_bg_frame.configure(border_color="green")
+            self.confirm_pass_error_lbl.configure(text="")
+
+    def validate_phone(self, text):
+        if text == "" or (text.isdigit() and len(text) <= 11):
+            return True
+        return False
+
+    def _filter_phone_input(self, *args):
+        val = self.phone_var.get()
+        filtered = "".join(c for c in val if c.isdigit())[:11]
+        if filtered != val:
+            self.phone_var.set(filtered)
 
     def load_provinces(self):
         def fetch():
@@ -1398,77 +1414,171 @@ class BoardingHouseApp(ctk.CTk):
         self.show_register_page()
 
     def attempt_register(self):
-        f_name = getattr(self, "reg_first_name", "").strip()
-        l_name = getattr(self, "reg_last_name", "").strip()
-        phone = getattr(self, "reg_phone", "").strip()
-        email = getattr(self, "reg_email", "").strip()
+        f_name = self.first_name_entry.get().strip()
+        l_name = self.last_name_entry.get().strip()
+        email = self.email_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+        if phone == "Enter your mobile number":
+            phone = ""
+        
+        month = self.month_box.get()
+        day = self.day_box.get()
+        year = self.year_box.get()
+        
+        province = self.province_menu.get().strip()
+        city = self.city_menu.get().strip()
+        barangay = self.barangay_menu.get().strip()
+        street = self.street_entry.get().strip()
+        
         password = self.create_pass_entry.get()
         confirm_password = self.confirm_pass_entry.get()
-        province = self.province_menu.get()
-        city = self.city_menu.get()
-        barangay = self.barangay_menu.get()
-        street = self.street_entry.get()
 
-        matched_province = [p for p in getattr(self, "province_options", []) if p.lower() == province.lower()]
-        if not matched_province:
-            self.show_toast("Please select a valid Province from the dropdown list", is_error=True)
-            return
-        province = matched_province[0]
-        self.province_menu.set(province)
+        error_labels = [
+            self.first_name_error_lbl, self.last_name_error_lbl, self.dob_error_lbl,
+            self.email_error_lbl, self.phone_error_lbl, self.province_error_lbl,
+            self.city_error_lbl, self.barangay_error_lbl, self.street_error_lbl,
+            self.create_pass_error_lbl, self.confirm_pass_error_lbl, self.tos_error_lbl
+        ]
+        for lbl in error_labels: 
+            lbl.configure(text="")
 
-        matched_city = [c for c in getattr(self, "city_options", []) if c.lower() == city.lower()]
-        if not matched_city:
-            self.show_toast("Please select a valid City from the dropdown list", is_error=True)
-            return
-        city = matched_city[0]
-        self.city_menu.set(city)
+        self.first_name_bg_frame.configure(border_color=self.entry_border)
+        self.last_name_bg_frame.configure(border_color=self.entry_border)
+        self.dob_bg_frame.configure(border_color=self.entry_border)
+        self.email_bg_frame.configure(border_color=self.entry_border)
+        self.phone_bg_frame.configure(border_color=self.entry_border)
+        self.province_menu.configure(border_color=self.entry_border)
+        self.city_menu.configure(border_color=self.entry_border)
+        self.barangay_menu.configure(border_color=self.entry_border)
+        self.street_bg_frame.configure(border_color=self.entry_border)
+        self.create_pass_bg_frame.configure(border_color=self.entry_border)
+        self.confirm_pass_bg_frame.configure(border_color=self.entry_border)
 
-        matched_barangay = [b for b in getattr(self, "barangay_options", []) if b.lower() == barangay.lower()]
-        if not matched_barangay:
-            self.show_toast("Please select a valid Barangay from the dropdown list.", is_error=True)
-            return
-        barangay = matched_barangay[0]
-        self.barangay_menu.set(barangay)
+        has_error = False
 
-        if f_name and l_name and email and password and confirm_password and phone and province and city and barangay and street:
+        # Validate Basic Fields Inline
+        if not f_name:
+            self.first_name_error_lbl.configure(text="⚠ First name is required.")
+            self.first_name_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+        if not l_name: 
+            self.last_name_error_lbl.configure(text="⚠ Last name is required.")
+            self.last_name_bg_frame.configure(border_color=self.error_red)
+            has_error = True
 
-            if password != confirm_password:
-                self.show_toast("Password Do Not Match!", is_error=True)
-                return
+        if month == "MM" or day == "DD" or year == "YYYY":
+            self.dob_error_lbl.configure(text="⚠ Please complete your Date of Birth selection.")
+            self.dob_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+        dob_string = f"{year}-{month}-{day}"
 
-            full_name = f"{f_name} {l_name}"
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        if not email:
+            self.email_error_lbl.configure(text="⚠ Email address is required.")
+            self.email_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+        elif not re.match(email_pattern, email):
+            self.email_error_lbl.configure(text="⚠ Incorrect email format.")
+            self.email_bg_frame.configure(border_color=self.error_red)
+            has_error = True
 
-            try:
-                user_data = {
-                    "name": full_name,
-                    "email": email,
-                    "password": password,
-                    "role": self.selected_account_type,
-                    "phone": phone,
-                    "province": province,
-                    "city": city,
-                    "barangay": barangay,
-                    "street": street
-                }
-                
-                response = requests.post("http://127.0.0.1:8000/users/", json=user_data)
-                print("STATUS:", response.status_code)
-                print("RESPONSE:", response.text)
-                if response.status_code == 201:
-                    self.show_toast("Success! Account created.", is_error=False)
-                    self.after(2000, self.show_login_page) 
-                    
-                elif response.status_code == 400:
-                    error_msg = response.json().get("detail", "Registration failed.")
-                    self.show_toast(error_msg, is_error=True)
-                    
-                else:
-                    self.show_toast("Server error. Try again later.", is_error=True)
-                    
-            except requests.exceptions.ConnectionError:
-                self.show_toast("Error: Is your backend server running?", is_error=True)
+        if not phone:
+            self.phone_error_lbl.configure(text="⚠ Phone number is required.")
+            self.phone_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+        elif len(phone) < 11:
+            self.phone_error_lbl.configure(text="⚠ Mobile number must be exactly 11 digits.")
+            self.phone_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+
+        # Validate Location Options (Typos)
+        matched_prov = [p for p in getattr(self, "province_options", []) if p.lower() == province.lower()]
+        if not matched_prov or province.startswith("Select"):
+            self.province_error_lbl.configure(text="⚠ Select a valid Province from the list.")
+            self.province_menu.configure(border_color=self.error_red)
+            has_error = True
         else:
-            self.show_toast("Please fill in all fields.", is_error=True)
+            province = matched_prov[0]
+            self.province_menu.set(province)
+
+        matched_cit = [c for c in getattr(self, "city_options", []) if c.lower() == city.lower()]
+        if not matched_cit or city.startswith("Select") or city.startswith("Loading"):
+            self.city_error_lbl.configure(text="⚠ Select a valid City from the list.")
+            self.city_menu.configure(border_color=self.error_red)
+            has_error = True
+        else:
+            city = matched_cit[0]
+            self.city_menu.set(city)
+
+        matched_brgy = [b for b in getattr(self, "barangay_options", []) if b.lower() == barangay.lower()]
+        if not matched_brgy or barangay.startswith("Select") or barangay.startswith("Loading"):
+            self.barangay_error_lbl.configure(text="⚠ Select a valid Barangay from the list.")
+            self.barangay_menu.configure(border_color=self.error_red)
+            has_error = True
+        else:
+            barangay = matched_brgy[0]
+            self.barangay_menu.set(barangay)
+
+        if not street:
+            self.street_error_lbl.configure(text="⚠ Street address is required.")
+            self.street_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+
+        if len(password) < 8:
+            self.create_pass_error_lbl.configure(text="⚠ Password must be at least 8 characters.")
+            self.create_pass_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+        if password != confirm_password:
+            self.confirm_pass_error_lbl.configure(text="⚠ Passwords do not match.")
+            self.confirm_pass_bg_frame.configure(border_color=self.error_red)
+            has_error = True
+
+        if not self.tos_and_pp_checkbox.get():
+            self.tos_error_lbl.configure(text="⚠ You must agree to the Terms of Service.")
+            has_error = True
+
+        if has_error:
+            return
+
+        # 3. Live Database Check for Existing Registration
+        try:
+            response = requests.get(f"http://127.0.0.1:8000/users/check-email?email={email}", timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("exists"):
+                    self.email_error_lbl.configure(text="⚠ This email is already registered.")
+                    self.email_bg_frame.configure(border_color=self.error_red)
+                    return
+        except requests.exceptions.ConnectionError:
+            pass
+
+        # 4. Create Account Payload Submission
+        full_name = f"{f_name} {l_name}"
+        try:
+            user_data = {
+                "name": full_name,
+                "email": email,
+                "password": password,
+                "role": self.selected_account_type,
+                "phone": phone,
+                "province": province,
+                "city": city,
+                "barangay": barangay,
+                "street": street,
+                "date_of_birth": dob_string
+            }
+            
+            response = requests.post("http://127.0.0.1:8000/users/", json=user_data)
+            if response.status_code == 201:
+                self.show_toast("Success! Account created.", is_error=False)
+                self.after(2000, self.show_login_page) 
+            elif response.status_code == 400:
+                error_msg = response.json().get("detail", "Registration failed.")
+                self.show_toast(error_msg, is_error=True)
+            else:
+                self.show_toast("Server error. Try again later.", is_error=True)
+        except requests.exceptions.ConnectionError:
+            self.show_toast("Error: Is your backend server running?", is_error=True)
 
     def show_email_verification_page(self):
         self.clear_container()
