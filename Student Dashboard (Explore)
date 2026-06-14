@@ -1,0 +1,299 @@
+import customtkinter as ctk
+from PIL import Image
+import os
+import requests
+from sqlalchemy import false
+
+ctk.set_appearance_mode("Light")
+ctk.set_default_color_theme("blue")
+
+
+class BoardingHouseApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        # ---------------------- MAIN WINDOW ----------------------
+        self.title("Student Dashboard - Boardinghouse System")
+        self.geometry("1900x1000")
+        self.resizable(False, False)
+
+        # ---------------------- COLORS ----------------------
+        self.SIDEBAR_BG = "#F3F0ED"
+        self.SIDEBAR_ACTIVE_BG = "#E8E2DB"
+        self.MAIN_BG = "#FFFFFF"
+        self.PROMO_BG = "#F2C98A"
+        self.TEXT_DARK = "#333333"
+        self.TEXT_WHITE = "#FFFFFF"
+        self.BORDER_COLOR = "#DDDDDD"
+
+        # ---------------------- SIDEBAR ----------------------
+        self.sidebar = ctk.CTkFrame(self, width=180, height=1000, fg_color=self.SIDEBAR_BG, corner_radius=0)
+        self.sidebar.place(x=0, y=0)
+        self.sidebar.pack_propagate(False)
+
+        try:
+            logo_img = ctk.CTkImage(Image.open("assets/logo.png"), size=(140, 32))
+            self.logo_label = ctk.CTkLabel(self.sidebar, text="", image=logo_img, fg_color=self.SIDEBAR_BG)
+            self.logo_label.image = logo_img
+        except Exception:
+            self.logo_label = ctk.CTkLabel(self.sidebar, text="assets/logo.png", font=ctk.CTkFont(size=16), fg_color=self.SIDEBAR_BG, text_color=self.TEXT_DARK)
+        self.logo_label.pack(pady=(30, 40))
+
+        # ---------------------- SIDEBAR BUTTONS ----------------------
+        self.menu_buttons = [
+            ("Explore", self.show_explore, True),
+            ("Viewings", self.go_rooms, False),
+            ("Messages", self.go_messages, False),
+            ("Favorites", self.show_favorites, False),
+        ]
+
+        for txt, cmd, active in self.menu_buttons:
+            btn_bg = self.SIDEBAR_ACTIVE_BG if active else self.SIDEBAR_BG
+            btn = ctk.CTkButton(
+                self.sidebar,
+                text=txt,
+                font=ctk.CTkFont(size=12),
+                fg_color=btn_bg,
+                text_color=self.TEXT_DARK,
+                hover_color=self.SIDEBAR_ACTIVE_BG,
+                corner_radius=100,
+                anchor="w",
+                command=cmd,
+                width=160,
+                height=35,
+            )
+            btn.pack(fill="x", padx=30, pady=5)
+
+        # ---------------------- MAIN CONTENT AREA ----------------------
+        self.main = ctk.CTkFrame(self, width=1720, height=1000, fg_color=self.MAIN_BG, corner_radius=0)
+        self.main.place(x=180, y=0)
+        self.main.pack_propagate(False)
+
+        # ---------------------- TOP RIGHT PROFILE ----------------------
+        self.explore_view = ctk.CTkFrame(self.main, fg_color=self.MAIN_BG)
+        self.favorites_view = ctk.CTkFrame(self.main, fg_color=self.MAIN_BG)
+
+        self.build_explore_view()
+        self.show_explore()
+
+    def build_explore_view(self):
+        self.explore_view.pack(fill="both", expand=True)
+
+        self.header = ctk.CTkFrame(self.explore_view, fg_color=self.MAIN_BG, height=50)
+        self.header.pack(fill="x", padx=20, pady=10)
+        self.header.pack_propagate(False)
+
+        self.profile_frame = ctk.CTkFrame(self.header, fg_color=self.MAIN_BG)
+        self.profile_frame.pack(side="right")
+        ctk.CTkLabel(self.profile_frame, text="kyll", font=ctk.CTkFont(size=12), text_color=self.TEXT_DARK).pack(side="right", padx=5)
+        ctk.CTkLabel(self.profile_frame, text="ID: 12345", font=ctk.CTkFont(size=12), text_color=self.TEXT_DARK).pack(side="right", padx=5)
+
+        try:
+            user_img = ctk.CTkImage(Image.open("assets/icons.png"), size=(30, 30))
+            user_label = ctk.CTkLabel(self.profile_frame, text="", image=user_img)
+            user_label.image = user_img
+        except Exception:
+            user_label = ctk.CTkLabel(self.profile_frame, text="PFP", font=ctk.CTkFont(size=20))
+        user_label.pack(side="left")
+
+        self.promo = ctk.CTkFrame(self.explore_view, fg_color=self.PROMO_BG, height=100, corner_radius=10)
+        self.promo.pack(fill="x", padx=15, pady=(60, 10))
+        self.promo.pack_propagate(False)
+
+        self.promo_left = ctk.CTkFrame(self.promo, fg_color=self.PROMO_BG)
+        self.promo_left.place(x=20, y=10)
+        ctk.CTkLabel(self.promo_left, text="Back-to-School Promo", font=ctk.CTkFont(size=32, weight="bold"), fg_color=self.PROMO_BG, text_color="#000000").pack(anchor="w")
+        ctk.CTkLabel(self.promo_left, text="Exclusive discount for enrolled students this semester", font=ctk.CTkFont(size=12, weight="bold"), fg_color=self.PROMO_BG, text_color="#000000").pack(anchor="w")
+
+        self.search_bar = ctk.CTkFrame(self.explore_view, fg_color=self.MAIN_BG)
+        self.search_bar.pack(fill="x", padx=20, pady=(0, 15))
+
+        self.search_entry = ctk.CTkEntry(self.search_bar, font=ctk.CTkFont(size=12), width=1000, height=36, corner_radius=18)
+        self.search_entry.pack(side="left", pady=5)
+
+        try:
+            search_img = ctk.CTkImage(Image.open("assets/search.png"), size=(20, 20))
+            self.search_btn = ctk.CTkButton(
+                self.search_bar,
+                text="search",
+                image=search_img,
+                width=40,
+                height=38,
+                fg_color=self.MAIN_BG,
+                hover_color=self.SIDEBAR_ACTIVE_BG,
+                command=self.do_search,
+            )
+            self.search_btn.image = search_img
+            self.search_btn.place(relx=0.78, rely=0.12, width=12, height=12)
+        except Exception:
+            self.search_btn = ctk.CTkButton(
+                self.search_bar,
+                text="🔍",
+                font=ctk.CTkFont(size=16),
+                fg_color=self.MAIN_BG,
+                text_color=self.TEXT_DARK,
+                hover_color=self.SIDEBAR_ACTIVE_BG,
+                width=40,
+                height=36,
+                corner_radius=18,
+                command=self.do_search,
+            )
+            self.search_btn.pack(side="left", padx=(5, 0))
+
+        self.filter_bar = ctk.CTkFrame(self.explore_view, fg_color=self.MAIN_BG)
+        self.filter_bar.pack(fill="x", padx=20, pady=(0, 10))
+
+        self.tabs_frame = ctk.CTkFrame(self.filter_bar, fg_color=self.MAIN_BG)
+        self.tabs_frame.pack(side="left")
+
+        self.tabs = {}
+        self.tabs["Apartment"] = ctk.CTkButton(
+            self.tabs_frame,
+            text="Apartment",
+            font=ctk.CTkFont(size=12),
+            fg_color="#E8E2DB",
+            text_color=self.TEXT_DARK,
+            hover_color=self.SIDEBAR_ACTIVE_BG,
+            width=90,
+            height=32,
+            corner_radius=16,
+            command=lambda: self.switch_tab("Apartment"),
+        )
+        self.tabs["Condo"] = ctk.CTkButton(
+            self.tabs_frame,
+            text="Condo",
+            font=ctk.CTkFont(size=12),
+            fg_color=self.MAIN_BG,
+            text_color=self.TEXT_DARK,
+            hover_color=self.SIDEBAR_ACTIVE_BG,
+            width=90,
+            height=32,
+            corner_radius=16,
+            command=lambda: self.switch_tab("Condo"),
+        )
+        self.tabs["Apartment"].pack(side="left", padx=3)
+        self.tabs["Condo"].pack(side="left", padx=3)
+
+        self.nearby_frame = ctk.CTkFrame(self.explore_view, fg_color=self.MAIN_BG)
+        self.nearby_frame.pack(fill="x", padx=25, pady=(8, 8))
+        self.nearby_label = ctk.CTkLabel(self.nearby_frame, text="Near by:", font=ctk.CTkFont(size=12), fg_color=self.MAIN_BG, text_color=self.TEXT_DARK)
+        self.nearby_label.pack(side="left", padx=(6, 12))
+
+        self.cards_container = ctk.CTkFrame(self.explore_view, fg_color=self.MAIN_BG)
+        self.cards_container.pack(fill="both", expand=True, padx=20, pady=0)
+
+        self.properties = [
+            {"title": "Oceanview Retreat", "loc": "4 Units · 20 Rooms", "context": "Beachfront property with stunning views.", "img": "assets/Frame.png"},
+            {"title": "Hillcrest Mansion", "loc": "6 Units · 30 Rooms", "context": "Historic mansion with gardens.", "img": "assets/Frame.png"},
+            {"title": "Lakeside Villa", "loc": "3 Units · 10 Rooms", "context": "Serene villa by the lake.", "img": "assets/Frame.png"},
+        ]
+
+        for col, item in enumerate(self.properties):
+            card = ctk.CTkFrame(
+                self.cards_container,
+                fg_color=self.MAIN_BG,
+                border_width=1,
+                border_color=self.BORDER_COLOR,
+                width=500,
+                height=210,
+                corner_radius=4,
+            )
+            card.grid(row=0, column=col, padx=15, pady=10, sticky="nw")
+            card.pack_propagate(False)
+
+            try:
+                thumb = ctk.CTkImage(Image.open(item["img"]), size=(480, 120))
+                thumb_label = ctk.CTkLabel(card, text="", image=thumb, fg_color=self.MAIN_BG)
+                thumb_label.image = thumb
+            except Exception:
+                thumb_label = ctk.CTkLabel(card, text="[Image]", fg_color="#EFEBE6", width=480, height=120)
+            thumb_label.pack(padx=10, pady=10)
+
+            ctk.CTkLabel(card, text=item["title"], font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(fill="x", padx=15)
+            ctk.CTkLabel(card, text=f"📍 {item['loc']}", font=ctk.CTkFont(size=10), text_color="#777777", anchor="w").pack(fill="x", padx=15, pady=2)
+            ctk.CTkLabel(card, text=item["context"], font=ctk.CTkFont(size=11), text_color=self.TEXT_DARK, wraplength=450, justify="left", anchor="w").pack(fill="x", padx=15, pady=5)
+
+    def show_explore(self):
+        self.favorites_view.pack_forget()
+        self.explore_view.pack(fill="both", expand=True)
+
+        for btn in self.sidebar.winfo_children():
+            if isinstance(btn, ctk.CTkButton):
+                btn.configure(fg_color=self.SIDEBAR_ACTIVE_BG if btn.cget("text") == "Explore" else self.SIDEBAR_BG)
+
+    def show_favorites(self):
+        self.explore_view.pack_forget()
+        self.favorites_view.pack(fill="both", expand=True)
+
+        for widget in self.favorites_view.winfo_children():
+            widget.destroy()
+
+        ctk.CTkLabel(self.favorites_view, text="FAVORITES", font=ctk.CTkFont(size=16, weight="bold"), anchor="w").pack(fill="x", padx=20, pady=15)
+
+        fav_container = ctk.CTkFrame(self.favorites_view, fg_color=self.MAIN_BG)
+        fav_container.pack(fill="both", expand=True, padx=20)
+
+        fav_properties = [
+            {"title": "Oceanview Retreat", "loc": "₱4,000 · 20 sqm", "context": "Full details here...", "img": "assets/Frame.png"},
+            {"title": "Hillcrest Mansion", "loc": "₱5,500 · 35 sqm", "context": "Full details here...", "img": "assets/Frame.png"},
+        ]
+
+        for col, item in enumerate(fav_properties):
+            card = ctk.CTkFrame(
+                fav_container,
+                fg_color=self.MAIN_BG,
+                border_width=1,
+                border_color=self.BORDER_COLOR,
+                width=700,
+                height=120,
+                corner_radius=4,
+            )
+            card.grid(row=0, column=col, padx=15, pady=10, sticky="nw")
+            card.pack_propagate(False)
+
+            row_frame = ctk.CTkFrame(card, fg_color=self.MAIN_BG)
+            row_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            try:
+                thumb = ctk.CTkImage(Image.open(item["img"]), size=(120, 80))
+                thumb_label = ctk.CTkLabel(row_frame, text="", image=thumb)
+                thumb_label.image = thumb
+            except Exception:
+                thumb_label = ctk.CTkLabel(row_frame, text="[Img]", fg_color="#EFEBE6", width=120, height=80)
+            thumb_label.pack(side="left", padx=10)
+
+            details = ctk.CTkFrame(row_frame, fg_color=self.MAIN_BG)
+            details.pack(side="left", fill="both", expand=True)
+            ctk.CTkLabel(details, text=item["title"], font=ctk.CTkFont(size=13, weight="bold"), anchor="w").pack(fill="x")
+            ctk.CTkLabel(details, text=item["loc"], font=ctk.CTkFont(size=10), text_color="#777777", anchor="w").pack(fill="x")
+            ctk.CTkLabel(details, text=item["context"], font=ctk.CTkFont(size=10), wraplength=500, justify="left", anchor="w").pack(fill="x")
+
+        for btn in self.sidebar.winfo_children():
+            if isinstance(btn, ctk.CTkButton):
+                btn.configure(fg_color=self.SIDEBAR_ACTIVE_BG if btn.cget("text") == "Favorites" else self.SIDEBAR_BG)
+
+    # ---------------------- FUNCTIONS ----------------------
+    def go_home(self):
+        self.show_explore()
+
+    def go_rooms(self):
+        print("Rooms clicked")
+
+    def go_messages(self):
+        print("Messages clicked")
+
+    def go_bookings(self):
+        self.show_favorites()
+
+    def do_search(self):
+        print(f"Search: {self.search_entry.get()}")
+
+    def switch_tab(self, name):
+        print(f"Selected: {name}")
+        for t, b in self.tabs.items():
+            b.configure(fg_color="#E8E2DB" if t == name else self.MAIN_BG)
+
+
+if __name__ == "__main__":
+    app = BoardingHouseApp()
+    app.mainloop()

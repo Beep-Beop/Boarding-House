@@ -1,0 +1,217 @@
+import customtkinter as ctk
+from PIL import Image
+
+ctk.set_appearance_mode("Light")
+ctk.set_default_color_theme("blue")
+
+
+class ExplorePage(ctk.CTkFrame):
+    def __init__(self, master, controller):
+        super().__init__(master, fg_color=controller.MAIN_BG)
+        ctk.CTkLabel(self, text="Explore", font=ctk.CTkFont(size=20, weight="bold"), anchor="w").pack(padx=20, pady=20)
+        ctk.CTkLabel(self, text="This is the Explore page.", font=ctk.CTkFont(size=14), wraplength=800, justify="left").pack(padx=20)
+
+
+class FavoritesPage(ctk.CTkFrame):
+    def __init__(self, master, controller):
+        super().__init__(master, fg_color=controller.MAIN_BG)
+        ctk.CTkLabel(self, text="Favorites", font=ctk.CTkFont(size=20, weight="bold"), anchor="w").pack(padx=20, pady=20)
+        ctk.CTkLabel(self, text="This is the Favorites page.", font=ctk.CTkFont(size=14), wraplength=800, justify="left").pack(padx=20)
+
+
+class BoardingHouseApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        # ---------------------- MAIN WINDOW ----------------------
+        self.title("Student Dashboard - Boardinghouse System")
+        self.geometry("1900x1000")
+        self.resizable(False, False)
+
+        # ---------------------- COLORS ----------------------
+        self.SIDEBAR_BG = "#F3F0ED"
+        self.SIDEBAR_ACTIVE_BG = "#E8E2DB"
+        self.MAIN_BG = "#FFFFFF"
+        self.MESSAGES_BG = "#F8F8F8"
+        self.PROMO_BG = "#F2C98A"
+        self.TEXT_DARK = "#333333"
+        self.TEXT_MUTED = "#777777"
+        self.TEXT_WHITE = "#FFFFFF"
+        self.BORDER_COLOR = "#DDDDDD"
+
+        # ---------------------- SIDEBAR ----------------------
+        self.sidebar = ctk.CTkFrame(self, width=180, height=1000, fg_color=self.SIDEBAR_BG, corner_radius=0)
+        self.sidebar.place(x=0, y=0)
+        self.sidebar.pack_propagate(False)
+
+        # Logo
+        try:
+            logo_img = ctk.CTkImage(Image.open("assets/logo.png"), size=(140, 32))
+            self.logo_label = ctk.CTkLabel(self.sidebar, text="", image=logo_img, fg_color=self.SIDEBAR_BG)
+            self.logo_label.image = logo_img
+        except Exception:
+            self.logo_label = ctk.CTkLabel(self.sidebar, text="BHS", font=ctk.CTkFont(size=16, weight="bold"), fg_color=self.SIDEBAR_BG, text_color=self.TEXT_DARK)
+        self.logo_label.pack(pady=(30, 40))
+
+        # ---------------------- SIDEBAR BUTTONS ----------------------
+        self.sidebar_btns = {}
+        self.menu_buttons = [
+            ("Explore", self.show_explore, False),
+            ("Viewings", self.show_viewings, False),
+            ("Messages", self.show_messages, False),
+            ("Favorites", self.show_favorites, True),
+        ]
+
+        for txt, cmd, active in self.menu_buttons:
+            btn_bg = self.SIDEBAR_ACTIVE_BG if active else self.SIDEBAR_BG
+            btn = ctk.CTkButton(
+                self.sidebar,
+                text=txt,
+                font=ctk.CTkFont(size=12),
+                fg_color=btn_bg,
+                text_color=self.TEXT_DARK,
+                hover_color=self.SIDEBAR_ACTIVE_BG,
+                corner_radius=100,
+                anchor="w",
+                command=cmd if cmd else lambda: None,
+                width=160,
+                height=35,
+            )
+            btn.pack(fill="x", padx=30, pady=5)
+            self.sidebar_btns[txt] = btn
+
+        # ---------------------- MAIN CONTENT AREA ----------------------
+        self.main = ctk.CTkFrame(self, width=1720, height=1000, fg_color=self.MAIN_BG, corner_radius=0)
+        self.main.place(x=180, y=0)
+        self.main.pack_propagate(False)
+
+        # ---------------------- TOP HEADER (same for all pages) ----------------------
+        self.header = ctk.CTkFrame(self.main, fg_color=self.MAIN_BG, height=50)
+        self.header.pack(fill="x", padx=20, pady=10)
+        self.header.pack_propagate(False)
+
+        # Left title
+        ctk.CTkLabel(self.header, text="Student Dashboard", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(side="left")
+
+        # Right profile
+        self.profile_frame = ctk.CTkFrame(self.header, fg_color=self.MAIN_BG)
+        self.profile_frame.pack(side="right")
+        ctk.CTkLabel(self.profile_frame, text="kyll", font=ctk.CTkFont(size=12), text_color=self.TEXT_DARK).pack(side="right", padx=5)
+        ctk.CTkLabel(self.profile_frame, text="ID: 12345", font=ctk.CTkFont(size=12), text_color=self.TEXT_DARK).pack(side="right", padx=5)
+        try:
+            user_img = ctk.CTkImage(Image.open("assets/icons.png"), size=(30, 30))
+            user_label = ctk.CTkLabel(self.profile_frame, text="", image=user_img)
+            user_label.image = user_img
+        except Exception:
+            user_label = ctk.CTkLabel(self.profile_frame, text="PFP", font=ctk.CTkFont(size=20))
+        user_label.pack(side="left")
+
+        # ---------------------- PAGES (SEPARATE FILES) ----------------------
+        self.explore_page = ExplorePage(self.main, self)
+        self.favorites_page = FavoritesPage(self.main, self)
+        self.viewings_page = ctk.CTkFrame(self.main, fg_color=self.MAIN_BG)
+        self.messages_view = ctk.CTkFrame(self.main, fg_color=self.MESSAGES_BG)
+
+        # Start with Explore page
+        self.show_explore()
+
+    # ---------------------- SWITCH VIEWS ----------------------
+    def _hide_all_views(self):
+        self.explore_page.pack_forget()
+        self.favorites_page.pack_forget()
+        self.viewings_page.pack_forget()
+        self.messages_view.pack_forget()
+
+    def _set_active_sidebar(self, active_name):
+        for name, btn in self.sidebar_btns.items():
+            btn.configure(fg_color=self.SIDEBAR_ACTIVE_BG if name == active_name else self.SIDEBAR_BG)
+
+    def show_explore(self):
+        self._hide_all_views()
+        self.explore_page.pack(fill="both", expand=True)
+        self._set_active_sidebar("Explore")
+
+    def show_favorites(self):
+        self._hide_all_views()
+        self.favorites_page.pack(fill="both", expand=True)
+        self._set_active_sidebar("Favorites")
+
+    def show_viewings(self):
+        self._hide_all_views()
+        self.viewings_page.pack(fill="both", expand=True)
+        self._set_active_sidebar("Viewings")
+
+    def show_messages(self):
+        self._hide_all_views()
+        self.messages_view.pack(fill="both", expand=True)
+        self._set_active_sidebar("Messages")
+        self._build_messages_ui()
+
+    # ---------------------- MESSAGES UI ----------------------
+    def _build_messages_ui(self):
+        for w in self.messages_view.winfo_children(): w.destroy()
+
+        msg_header = ctk.CTkFrame(self.messages_view, fg_color=self.MESSAGES_BG, height=40)
+        msg_header.pack(fill="x", padx=20, pady=(10, 5))
+        msg_header.pack_propagate(False)
+        ctk.CTkLabel(msg_header, text="MESSAGES", font=ctk.CTkFont(size=13, weight="bold"), anchor="w").pack(side="left")
+
+        main_msg = ctk.CTkFrame(self.messages_view, fg_color=self.MESSAGES_BG)
+        main_msg.pack(fill="both", expand=True, padx=20, pady=0)
+
+        # Left contact list
+        left_col = ctk.CTkFrame(main_msg, fg_color=self.MESSAGES_BG, width=400)
+        left_col.pack(side="left", fill="y", padx=(0,10))
+        left_col.pack_propagate(False)
+
+        # Contact 1
+        contact1 = ctk.CTkFrame(left_col, fg_color=self.MESSAGES_BG, height=60)
+        contact1.pack(fill="x", pady=2)
+        contact1.pack_propagate(False)
+        ctk.CTkLabel(contact1, text="K", font=ctk.CTkFont(size=14, weight="bold"), width=32, height=32, fg_color="#D6A86B", corner_radius=16, text_color="black").pack(side="left", padx=10, pady=14)
+        info1 = ctk.CTkFrame(contact1, fg_color=self.MESSAGES_BG)
+        info1.pack(side="left", fill="both", expand=True)
+        ctk.CTkLabel(info1, text="Kyll Kouichi P. Hanrabe", font=ctk.CTkFont(size=12, weight="bold"), anchor="w").pack(fill="x")
+        ctk.CTkLabel(info1, text="Owner", font=ctk.CTkFont(size=10), text_color=self.TEXT_MUTED, anchor="w").pack(fill="x")
+        ctk.CTkLabel(contact1, text="•••", font=ctk.CTkFont(size=16)).pack(side="right", padx=15)
+
+        # Contact 2
+        contact2 = ctk.CTkFrame(left_col, fg_color=self.MESSAGES_BG, height=60)
+        contact2.pack(fill="x", pady=2)
+        contact2.pack_propagate(False)
+        ctk.CTkLabel(contact2, text="M", font=ctk.CTkFont(size=14, weight="bold"), width=32, height=32, fg_color="#C4C4C4", corner_radius=16, text_color="black").pack(side="left", padx=10, pady=14)
+        info2 = ctk.CTkFrame(contact2, fg_color=self.MESSAGES_BG)
+        info2.pack(side="left", fill="both", expand=True)
+        ctk.CTkLabel(info2, text="Mike", font=ctk.CTkFont(size=12, weight="bold"), anchor="w").pack(fill="x")
+        ctk.CTkLabel(info2, text="Owner", font=ctk.CTkFont(size=10), text_color=self.TEXT_MUTED, anchor="w").pack(fill="x")
+        ctk.CTkLabel(contact2, text="•••", font=ctk.CTkFont(size=16)).pack(side="right", padx=15)
+
+        # Right chat area
+        right_col = ctk.CTkFrame(main_msg, fg_color=self.MESSAGES_BG)
+        right_col.pack(side="left", fill="both", expand=True)
+
+        chat_head = ctk.CTkFrame(right_col, fg_color=self.MESSAGES_BG, height=50)
+        chat_head.pack(fill="x")
+        chat_head.pack_propagate(False)
+        ctk.CTkLabel(chat_head, text="K", font=ctk.CTkFont(size=12, weight="bold"), width=26, height=26, fg_color="#D6A86B", corner_radius=13, text_color="black").pack(side="left", padx=10, pady=12)
+        ctk.CTkLabel(chat_head, text="Kyll Kouichi...", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", pady=12)
+        ctk.CTkLabel(chat_head, text="📞", font=ctk.CTkFont(size=16)).pack(side="right", padx=20, pady=12)
+
+        chat_bubble = ctk.CTkFrame(right_col, fg_color="#E8E8E8", width=300, height=40, corner_radius=6)
+        chat_bubble.pack(anchor="n", padx=20, pady=10)
+        chat_bubble.pack_propagate(False)
+
+        input_frame = ctk.CTkFrame(right_col, fg_color=self.MESSAGES_BG, height=50)
+        input_frame.pack(fill="x", side="bottom", padx=10, pady=10)
+        msg_input = ctk.CTkEntry(input_frame, placeholder_text="Type a message...", height=32, corner_radius=16)
+        msg_input.pack(side="left", fill="x", expand=True, padx=10)
+        send_btn = ctk.CTkButton(input_frame, text="➜", width=32, height=32, corner_radius=16, fg_color="#D6A86B")
+        send_btn.pack(side="left")
+
+        add_btn = ctk.CTkButton(right_col, text="+", width=40, height=40, corner_radius=20, fg_color="#D6A86B", font=ctk.CTkFont(size=18, weight="bold"))
+        add_btn.place(relx=0.92, rely=0.88)
+
+
+if __name__ == "__main__":
+    app = BoardingHouseApp()
+    app.mainloop()
