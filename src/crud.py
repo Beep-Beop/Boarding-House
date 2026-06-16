@@ -1,9 +1,10 @@
-from sqlalchemy.orm import Session
+import secrets
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from src.models import (Users, Photo, BoardingHouse, Location, 
                         Amenities, Bookings, Reviews, AdminLogs, 
                         Reports, Notifications, Rooms, ListingAmenities,
-                        Favorites, Payments, BookingHistory)
+                        Favorites, Payments, BookingHistory, MaintenanceRequest)
 
 # INDEPENDENT TABLES
 
@@ -40,6 +41,16 @@ class UsersCRUD:
             self.db.refresh(user)
         return user
     
+    def update(self, user_id: int, **kwargs) -> Users:
+        user = self.get(user_id)
+        if user:
+            for key, value in kwargs.items():
+                if hasattr(user, key) and value is not None:
+                    setattr(user, key, value)
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
     def register(self, name: str, email: str, password: str, role: str,
                  province: str, city: str, barangay: str, phone: str = None,
                  street: str = None, **kwargs) -> Users:
@@ -74,6 +85,79 @@ class UsersCRUD:
         self.db.refresh(user)
         return user
 
+    def set_reset_code(self, email: str, code: str, expires) -> Users:
+        import hashlib
+        user = self.get_user_by_email(email)
+        if user:
+            user.reset_code_hash = hashlib.sha256(code.encode()).hexdigest()
+            user.reset_code_expires = expires
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
+    def verify_reset_code(self, email: str, code: str) -> Users:
+        import hashlib
+        from datetime import datetime, timezone
+        user = self.get_user_by_email(email)
+        if user and user.reset_code_hash and secrets.compare_digest(hashlib.sha256(code.encode()).hexdigest(), user.reset_code_hash) and user.reset_code_expires:
+            if user.reset_code_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+                return user
+        return None
+
+    def update_password(self, email: str, new_hashed_password: str) -> Users:
+        user = self.get_user_by_email(email)
+        if user:
+            user.password = new_hashed_password
+            user.reset_code_hash = None
+            user.reset_code_expires = None
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
+    def set_verification_token(self, user_id: int, token: str, expires) -> Users:
+        user = self.get(user_id)
+        if user:
+            user.verification_token = token
+            user.verification_token_expires = expires
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
+    def set_verification_code(self, user_id: int, code: str, expires) -> Users:
+        user = self.get(user_id)
+        if user:
+            user.verification_code = code
+            user.verification_code_expires = expires
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
+    def verify_email_code(self, email: str, code: str) -> Users:
+        from datetime import datetime, timezone
+        user = self.get_user_by_email(email)
+        if user and user.verification_code and secrets.compare_digest(str(code), str(user.verification_code)) and user.verification_code_expires:
+            if user.verification_code_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+                user.email_verified = True
+                user.verification_code = None
+                user.verification_code_expires = None
+                self.db.commit()
+                self.db.refresh(user)
+                return user
+        return None
+
+    def verify_email_token(self, token: str) -> Users:
+        from datetime import datetime, timezone
+        user = self.db.query(Users).filter(Users.verification_token == token).first()
+        if user and user.verification_token_expires:
+            if user.verification_token_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+                user.email_verified = True
+                user.verification_token = None
+                user.verification_token_expires = None
+                self.db.commit()
+                self.db.refresh(user)
+                return user
+        return None
+
 class LocationsCRUD:
     def __init__(self, db: Session):
         self.db = db
@@ -105,6 +189,11 @@ class LocationsCRUD:
             Location.barangay.isnot(None)
         ).distinct().all()
         return [r[0] for r in results]
+
+    def city_exists(self, city: str) -> bool:
+        return self.db.query(Location).filter(
+            func.lower(Location.city) == city.lower()
+        ).first() is not None
 class AmenitiesCRUD:
     def __init__(self, db: Session):
         self.db = db
@@ -124,7 +213,15 @@ class AmenitiesCRUD:
 
     def get_all(self):
         return self.db.query(Amenities).all()
-    
+
+    def delete(self, amenity_id: int) -> bool:
+        amenity = self.get(amenity_id)
+        if amenity:
+            self.db.delete(amenity)
+            self.db.commit()
+            return True
+        return False
+
 # 1st-LEVEL DEPENDENT TABLES
 
 class BoardingHousesCRUD:
@@ -160,7 +257,9 @@ class BoardingHousesCRUD:
         return bh
     
     def search_listings(self, location_id: int = None, min_price: float = None,
-                        max_price: float = None, min_stay_months: int = None):
+                        max_price: float = None, min_stay_months: int = None,
+                        q: str = None, amenity_ids: list[int] = None,
+                        limit: int = 20, offset: int = 0):
         query = self.db.query(BoardingHouse).filter(BoardingHouse.status == 'active')
 
         if location_id is not None:
@@ -169,15 +268,66 @@ class BoardingHousesCRUD:
         if min_stay_months is not None:
             query = query.filter(BoardingHouse.min_stay_months <= min_stay_months)
 
-        if min_price is not None:
-            query = query.join(Rooms).filter(Rooms.price_per_month >= min_price)
+        if min_price is not None or max_price is not None:
+            query = query.join(Rooms)
+            if min_price is not None:
+                query = query.filter(Rooms.price_per_month >= min_price)
+            if max_price is not None:
+                query = query.filter(Rooms.price_per_month <= max_price)
 
-        if max_price is not None:
-            query = query.join(Rooms).filter(Rooms.price_per_month <= max_price)
+        if q:
+            query = query.filter(BoardingHouse.bh_name.ilike(f"%{q}%"))
 
-        return query.distinct().all()
+        if amenity_ids:
+            query = query.join(ListingAmenities).filter(
+                ListingAmenities.amenity_id.in_(amenity_ids)
+            )
+
+        return query.distinct().offset(offset).limit(limit).all()
     
+    def delete(self, listing_id: int) -> bool:
+        bh = self.get(listing_id)
+        if bh:
+            self.db.delete(bh)
+            self.db.commit()
+            return True
+        return False
 
+    def get_dashboard_listings(self, limit: int = 20, offset: int = 0) -> list[dict]:
+        houses = self.db.query(BoardingHouse).filter(
+            BoardingHouse.status == 'active'
+        ).options(
+            joinedload(BoardingHouse.listing_amenities).joinedload(ListingAmenities.amenity),
+            joinedload(BoardingHouse.location),
+            joinedload(BoardingHouse.photos)
+        ).offset(offset).limit(limit).all()
+        
+        result = []
+        for house in houses:
+            house: BoardingHouse 
+            
+            amenities = []
+            if house.listing_amenities:
+                for la in house.listing_amenities:
+                    la: ListingAmenities 
+                    amenities.append(la.amenity.amenity_name)
+
+            photo_url = None
+            if house.photos:
+                primary = next((p for p in house.photos if p.is_primary), None)
+                photo_url = (primary or house.photos[0]).photo_url
+                    
+            result.append({
+                "id": house.listing_id,
+                "name": house.bh_name,
+                "location": f"{house.location.city}, {house.location.province}" if house.location else "Unknown",
+                "amenities": " • ".join(amenities) if amenities else "Basic Room",
+                "desc": house.description,
+                "photo_url": photo_url
+            })
+            
+        return result
+    
 class PhotosCRUD:
     def __init__(self, db: Session):
         self.db = db
@@ -270,14 +420,14 @@ class ReportsCRUD:
             Reports.target_id == listing_id
         ).all()
 
-    def update_status(self, report_id: int, new_status: str, resolved_by: int) -> Reports:
+    def update_status(self, report_id: int, status: str, resolved_by: int) -> Reports:
         """
         State Side Effect Sync: Automatically writes audit trails to the model 
         to ensure data caught at the boundary layer is preserved in the database.
         """
         report = self.get(report_id)
         if report:
-            report.status = new_status
+            report.status = status
             report.resolved_by = resolved_by
             report.resolved_at = func.now() # Auto-stamps database completion time
             self.db.commit()
@@ -466,6 +616,11 @@ class BookingsCRUD:
     def get_room_bookings(self, room_id: int):
         """Clean Naming: Fixed plural collection grammar."""
         return self.db.query(Bookings).filter(Bookings.room_id == room_id).all()
+
+    def get_owner_bookings(self, owner_id: int):
+        return self.db.query(Bookings).join(Rooms, Bookings.room_id == Rooms.room_id).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).filter(BoardingHouse.owner_id == owner_id).all()
     
     def update_status(self, booking_id: int, new_status: str, changed_by_user_id: int) -> Bookings:
         booking = self.get(booking_id)
@@ -552,6 +707,53 @@ class BookingHistoryCRUD:
             BookingHistory.changed_by == changed_by_user_id
         ).order_by(BookingHistory.changed_at.desc()).all()
     
+
+class MaintenanceCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, listing_id: int, tenant_id: int, title: str, description: str, **kwargs):
+        request = MaintenanceRequest(
+            listing_id=listing_id,
+            tenant_id=tenant_id,
+            title=title,
+            description=description,
+            **kwargs
+        )
+        self.db.add(request)
+        self.db.commit()
+        self.db.refresh(request)
+        return request
+
+    def get(self, request_id: int):
+        return self.db.query(MaintenanceRequest).filter(MaintenanceRequest.request_id == request_id).first()
+
+    def get_by_listing(self, listing_id: int):
+        return self.db.query(MaintenanceRequest).filter(MaintenanceRequest.listing_id == listing_id).all()
+
+    def get_by_owner(self, owner_id: int):
+        return self.db.query(MaintenanceRequest).join(
+            BoardingHouse, MaintenanceRequest.listing_id == BoardingHouse.listing_id
+        ).filter(BoardingHouse.owner_id == owner_id).all()
+
+    def update_status(self, request_id: int, status: str, resolved_at=None):
+        req = self.get(request_id)
+        if req:
+            req.status = status
+            if resolved_at:
+                req.resolved_at = resolved_at
+            self.db.commit()
+            self.db.refresh(req)
+        return req
+
+    def delete(self, request_id: int) -> bool:
+        req = self.get(request_id)
+        if req:
+            self.db.delete(req)
+            self.db.commit()
+            return True
+        return False
+
 
 class PaymentsCRUD:
     def __init__(self, db: Session):

@@ -2,6 +2,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from src.config import settings
+from src.logger import logger
 
 class StorageService:
     def __init__(self, s3_client=None, bucket_name=settings.R2_BUCKET_NAME):
@@ -24,19 +25,25 @@ class StorageService:
             self.client.put_object(Bucket=self.bucket_name, Key=object_name, Body=file_content)
             return True
         except ClientError as e:
-            print(f"Failed to upload to R2: {e}")
+            logger.error("Failed to upload to R2: %s", e)
             return False
 
     def list_files(self) -> list:
         try:
             response = self.client.list_objects_v2(Bucket=self.bucket_name)
             return [obj['Key'] for obj in response.get('Contents', [])]
-        except ClientError:
+        except ClientError as e:
+            logger.warning("Failed to list files from R2: %s", e)
             return []
+
+    def get_public_url(self, object_name: str, folder: str = None) -> str:
+        path = f"{folder}/{object_name}" if folder else object_name
+        return f"https://r2.beepboops.app/{path}"
 
     def delete_file(self, object_name: str) -> bool:
         try:
             self.client.delete_object(Bucket=self.bucket_name, Key=object_name)
             return True
-        except ClientError:
+        except ClientError as e:
+            logger.warning("Failed to delete file from R2: %s", e)
             return False

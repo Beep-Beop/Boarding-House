@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 from src import crud, schemas, database
+from src.dependencies import get_current_user, limiter
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 @router.post("/", response_model=schemas.NotificationsResponse, status_code=status.HTTP_201_CREATED)
-def create_notification(notification: schemas.NotificationsCreate, db: Session = Depends(database.get_db)):
+@limiter.limit("10/minute")
+def create_notification(request: Request, notification: schemas.NotificationsCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     notif_crud = crud.NotificationsCRUD(db)
 
     return notif_crud.create(**notification.model_dump())

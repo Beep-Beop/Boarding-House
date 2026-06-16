@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
+from src.dependencies import get_current_user, limiter
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 @router.post("/", response_model=schemas.ReportsResponse, status_code=status.HTTP_201_CREATED)
-def create_report(report: schemas.ReportsCreate, db: Session = Depends(database.get_db)):
+@limiter.limit("10/minute")
+def create_report(request: Request, report: schemas.ReportsCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     reports_crud = crud.ReportsCRUD(db)
 
-    return reports_crud.create(**report.model_dump())
+    return reports_crud.create(reporter_id=current_user.user_id, **report.model_dump())
 
 
 @router.get("/{report_id}", response_model=schemas.ReportsResponse)

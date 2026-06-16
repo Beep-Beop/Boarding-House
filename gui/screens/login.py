@@ -1,0 +1,358 @@
+import threading
+import customtkinter as ctk
+from requests.exceptions import ConnectionError
+from gui.screens.google_auth import GoogleAuthHandler
+
+
+class LoginMixin:
+    def show_login_page(self):
+        print("[DEBUG] Showing: Login Page")
+        self.clear_container()
+
+        self.geometry("630x700")
+
+        self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.form_container.pack(pady=40, fill="both", expand=True)
+
+        # Logo
+        logo_label = ctk.CTkLabel(self.form_container,
+                                  text=None,
+                                  image=self.logo,
+                                  width=140,
+                                  height=32
+                                  )
+        logo_label.pack(pady=(20, 15))
+
+        welcome_label = ctk.CTkLabel(self.form_container,
+                                     text="WELCOME TO",
+                                     height=5,
+                                     width=121,
+                                     font=self.body_light_font,
+                                     text_color=self.text_color
+                                    )
+        welcome_label.pack(pady=(0, 7))
+
+        title_label = ctk.CTkLabel(self.form_container,
+                                   text="BOARDING HOUSE FINDER",
+                                   width=273,
+                                   height=20,
+                                   font=self.alt_title_font,
+                                   text_color=self.text_color
+                                   )
+        title_label.pack(pady=(0, 10))
+
+        notes_label = ctk.CTkLabel(self.form_container,
+                                   text="Please enter your login details",
+                                   width=213,
+                                   height=5,
+                                   font=self.body_paragraph_font,
+                                   text_color=self.text_color
+                                   )
+        notes_label.pack(pady=(0, 7))
+
+        # Email Row
+        email_frame = ctk.CTkFrame(self.form_container,
+                                   fg_color="transparent"
+                                   )
+        email_frame.pack(pady=(0, 15))
+
+        self.email_label = ctk.CTkLabel(email_frame,
+                                        text="Email",
+                                        font=self.body_light_font,
+                                        text_color=self.text_color
+                                        )
+        self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        # THE "FAKE" ENTRY (Visual box user sees)
+        self.email_fake_entry = ctk.CTkFrame(email_frame,
+                                      width=400,
+                                      height=40,
+                                      fg_color=self.fg_color,
+                                      border_color=self.entry_border,
+                                      border_width=1,
+                                      corner_radius=6
+                                      )
+        self.email_fake_entry.pack()
+        self.email_fake_entry.pack_propagate(False)
+
+        self.email_entry = ctk.CTkEntry(self.email_fake_entry,
+                                        placeholder_text="example@gmail.com",
+                                        height=24,
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color
+                                        )
+        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+
+        self.login_email_error = ctk.CTkLabel(email_frame,
+                                              text="",
+                                              text_color=self.error_red,
+                                              font=self.inline_error_font
+                                              )
+        self.login_email_error.pack(anchor="w", padx=(15, 0))
+
+        # Password Row
+        password_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        password_frame.pack(pady=(0, 10))
+
+        self.password_label = ctk.CTkLabel(password_frame,
+                                           text="Password",
+                                           font=self.body_light_font,
+                                           text_color=self.text_color
+                                           )
+        self.password_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
+
+        self.password_fake_entry = ctk.CTkFrame(password_frame,
+                                         width=400,
+                                         height=40,
+                                         fg_color=self.fg_color,
+                                         border_color=self.entry_border,
+                                         border_width=1,
+                                         corner_radius=6
+                                         )
+        self.password_fake_entry.pack()
+        self.password_fake_entry.pack_propagate(False)
+
+        self.password_entry = ctk.CTkEntry(self.password_fake_entry,
+                                           placeholder_text="Password",
+                                           height=24,
+                                           show="\u2022",
+                                           font=self.body_light_font,
+                                           fg_color="transparent",
+                                           border_width=0,
+                                           text_color=self.text_color
+                                           )
+        self.password_entry.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+
+        self.password_eye = ctk.CTkLabel(self.password_fake_entry,
+                                         image=self.closed_eye_icon,
+                                         text="",
+                                         cursor="hand2",
+                                         )
+        self.password_eye.place(relx=0.9, rely=0.5, anchor="center")
+
+        def _toggle_password_visible(e):
+            self._password_visible = not getattr(self, "_password_visible", False)
+            if self._password_visible:
+                self.password_entry.configure(show="")
+                self._animate_eye(self.password_eye, self._eye_frames_open)
+            else:
+                self.password_entry.configure(show="\u2022")
+                self._animate_eye(self.password_eye, self._eye_frames_closed)
+        self.password_eye.bind("<Button-1>", _toggle_password_visible)
+
+        self.login_password_error = ctk.CTkLabel(password_frame,
+                                                 text="",
+                                                 text_color=self.error_red,
+                                                 font=self.inline_error_font
+                                                 )
+        self.login_password_error.pack(anchor="w", padx=(15, 0))
+
+        actions_frame = ctk.CTkFrame(password_frame, fg_color="transparent", width=400, height=30)
+        actions_frame.pack(fill="x", pady=(10, 0))
+
+        # 2. Pack the checkbox to the LEFT
+        self.remember_checkbox = ctk.CTkCheckBox(actions_frame,
+                                                text="Remember me",
+                                                font=self.body_paragraph_font,
+                                                text_color=self.text_color,
+                                                fg_color=self.primary_color,
+                                                hover_color=self.hover_color,
+                                                border_color=self.entry_border,
+                                                border_width=2,
+                                                checkbox_height=20,
+                                                checkbox_width=20
+                                                )
+        self.remember_checkbox.pack(side="left")
+
+        self.forgot_pwd_btn = ctk.CTkButton(actions_frame,
+                                            text="Forgot Password?",
+                                            font=self.body_paragraph_font,
+                                            text_color=self.primary_color,
+                                            fg_color="transparent",
+                                            hover_color=self.hover_color_text,
+                                            cursor="hand2",
+                                            width=0,
+                                            height=20,
+                                            command=self.forgot_password)
+        self.forgot_pwd_btn.pack(side="right")
+
+        # Login Action
+        self.login_btn = ctk.CTkButton(self.form_container,
+                                  text="LOG IN",
+                                  width=400,
+                                  height=45,
+                                  corner_radius=6,
+                                  font=self.body_bold_font,
+                                  fg_color=self.primary_color,
+                                  hover_color=self.hover_color,
+                                  text_color="#FFFFFF",
+                                  command=self.attempt_login
+                                  )
+        self.login_btn.pack(pady=(10, 10))
+
+        self.google_label = ctk.CTkLabel(self.form_container,
+                                         text="Or Continue With",
+                                         width=153,
+                                         height=20,
+                                         font=self.body_paragraph_font,
+                                         text_color=self.text_color
+                                         )
+        self.google_label.pack(pady=(15, 0))
+
+        self.google_btn = ctk.CTkLabel(self.form_container,
+                                       text="",
+                                       image=self.google_icon,
+                                       cursor="hand2"
+                                       )
+        self.google_btn.pack(pady=(0, 0))
+        self.google_btn.bind("<Button-1>", lambda event: self.start_google_login())
+
+        register_frame = ctk.CTkFrame(self.form_container,
+                                      fg_color="transparent"
+                                      )
+        register_frame.pack(pady=(0, 0))
+
+        self.new_member_label = ctk.CTkLabel(register_frame,
+                                             text="New member here?",
+                                             font=self.body_paragraph_font,
+                                             text_color=self.text_color,
+                                             )
+        self.new_member_label.pack(side="left", padx=(0, 5))
+
+        self.register_btn = ctk.CTkButton(register_frame,
+                                          text="Register Now",
+                                          font=ctk.CTkFont(family="Poppins", size=15, weight="bold"),
+                                          text_color=self.primary_color,
+                                          fg_color="transparent",
+                                          hover_color=self.hover_color_text,
+                                          width=0,
+                                          height=20,
+                                          command=self.show_account_type
+                                          )
+        self.register_btn.pack(side="left")
+
+    def attempt_login(self):
+        email = self.email_entry.get().strip()
+        password = self.password_entry.get()
+
+        self.login_email_error.configure(text="")
+        self.login_password_error.configure(text="")
+        self.email_fake_entry.configure(border_color=self.entry_border)
+        self.password_fake_entry.configure(border_color=self.entry_border)
+
+        has_error = False
+
+        if not email:
+            self.login_email_error.configure(text="Please enter your email.")
+            self.email_fake_entry.configure(border_color=self.error_red)
+            has_error = True
+
+        if not password:
+            self.login_password_error.configure(text="Please enter your password.")
+            self.password_fake_entry.configure(border_color=self.error_red)
+            has_error = True
+
+        if has_error:
+            return
+
+        self.login_btn.configure(state="disabled", text="LOGGING IN...")
+        print("[DEBUG] attempt_login: sending POST /auth/login")
+        try:
+            login_data = {
+                "email": email,
+                "password": password
+            }
+
+            response = self.api.post("/auth/login", json=login_data)
+
+            if response.status_code == 200:
+                user_info = response.json()
+                print(f"[DEBUG] Login OK — role={user_info.get('role')}, routing to dashboard")
+                self.access_token = user_info.get("access_token")
+                self.api.access_token = self.access_token
+                self.current_user = user_info
+
+                if self.remember_checkbox.get():
+                    self._save_session(user_info)
+
+                role = user_info.get('role')
+                if role == 'admin':
+                    self.show_admin_dashboard()
+                elif role == 'owner':
+                    self.show_owner_dashboard()
+                else:
+                    self.show_tenant_dashboard()
+
+            elif response.status_code in [401, 403]:
+                error_msg = response.json().get("detail", "Login Failed.")
+                self.login_email_error.configure(text=error_msg)
+                self.login_password_error.configure(text=error_msg)
+                self.email_fake_entry.configure(border_color=self.error_red)
+                self.password_fake_entry.configure(border_color=self.error_red)
+
+            else:
+                self.login_email_error.configure(text="Server error, Try again Later.")
+        except ConnectionError:
+            print("[DEBUG] Login failed: ConnectionError — backend unreachable")
+            self.login_email_error.configure(text="Error: Cannot connect to backend server")
+            self.email_fake_entry.configure(border_color=self.error_red)
+        finally:
+            self.login_btn.configure(state="normal", text="LOG IN")
+
+    def _save_session(self, user_info):
+        import json, os
+        session_dir = os.path.expanduser("~/.boarding-house")
+        os.makedirs(session_dir, exist_ok=True)
+        with open(os.path.join(session_dir, "session.json"), "w") as f:
+            json.dump(user_info, f)
+
+    def _load_session(self):
+        import json, os
+        path = os.path.expanduser("~/.boarding-house/session.json")
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return None
+
+    def _clear_session(self):
+        import os
+        path = os.path.expanduser("~/.boarding-house/session.json")
+        if os.path.exists(path):
+            os.remove(path)
+
+    def start_google_login(self):
+        print("[DEBUG] Starting Google Login flow")
+        def on_success(user_info):
+            self.access_token = user_info.get("access_token")
+            self.api.access_token = self.access_token
+            self.current_user = user_info
+
+            self._save_session(user_info)
+
+            if not user_info.get("account_setup_complete", False):
+                self.show_google_account_type(user_info)
+                return
+
+            self.show_toast(f"Welcome, {user_info['name']}", is_error=False)
+            role = user_info.get('role')
+            if role == 'admin':
+                self.show_admin_dashboard()
+            elif role == 'owner':
+                self.show_owner_dashboard()
+            else:
+                self.show_tenant_dashboard()
+
+        def on_error(msg):
+            self.show_toast(msg, is_error=True)
+
+        GoogleAuthHandler(self.api, self, on_success, on_error).start()
+
+    def forgot_password(self):
+        self.show_forgot_password_page()
+
+

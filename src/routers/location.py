@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from src import crud, schemas, database, state
+from src import crud, schemas, database
 
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
 @router.get("/provinces", response_model=schemas.LocationOptionsResponse)
-def get_provinces(db: Session = Depends(database.get_db)):
-    if state.province_cache:
-        return {"options": state.province_cache}
-    
+def get_provinces(request: Request, db: Session = Depends(database.get_db)):
+    cache = request.app.state.cache
+    if cache.is_province_cached():
+        return {"options": cache.get_provinces()}
+
     location_crud = crud.LocationsCRUD(db)
-    return {"options": location_crud.get_distinct_provinces}
+    provinces = location_crud.get_distinct_provinces()
+    cache.set_provinces(provinces)
+    return {"options": provinces}
 
 @router.get("/cities", response_model=schemas.LocationOptionsResponse)
 def get_cities(province: str, db: Session = Depends(database.get_db)):
@@ -22,6 +25,13 @@ def get_cities(province: str, db: Session = Depends(database.get_db)):
             detail="Province parameter cannot be empty"
         )
     
+    provinces = location_crud.get_distinct_provinces()
+    if not any(p.lower() == province.lower() for p in provinces):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Province not found"
+        )
+
     cities = location_crud.get_distinct_cities(province_name=province)
 
     return {"options": cities}
@@ -36,6 +46,12 @@ def get_barangays(city: str, db: Session = Depends(database.get_db)):
             detail="City parameter cannot be empty"
         )
     
+    if not location_crud.city_exists(city):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="City not found"
+        )
+
     barangays = location_crud.get_distinct_barangays(city_name=city)
 
     return {"options": barangays}

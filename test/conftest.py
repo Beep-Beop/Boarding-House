@@ -1,3 +1,4 @@
+import os
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,10 +7,11 @@ import boto3
 
 from src.database import Base
 
+TEST_DB_URL = os.getenv("TEST_DB_URL", "sqlite:///:memory:")
+
 @pytest.fixture(scope="session")
 def db_engine():
-    test_db_url = "mysql+pymysql://root:rootpassword@127.0.0.1:3306/testdb"
-    engine = create_engine(test_db_url)
+    engine = create_engine(TEST_DB_URL)
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)

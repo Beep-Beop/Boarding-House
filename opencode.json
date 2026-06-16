@@ -1,0 +1,49 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "commands": {
+    "api": {
+      "description": "Start the FastAPI backend",
+      "prompt": "Run the FastAPI dev server: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000"
+    },
+    "gui": {
+      "description": "Start the desktop GUI",
+      "prompt": "Run the CustomTkinter desktop app: python main.py"
+    },
+    "test": {
+      "description": "Run all tests",
+      "prompt": "Run the test suite: pytest test/ -v"
+    },
+    "test:db": {
+      "description": "Start MySQL test container",
+      "prompt": "Start the MySQL Docker container for testing: docker compose up -d"
+    },
+    "migrate": {
+      "description": "Run Alembic migrations",
+      "prompt": "Run Alembic migrations: alembic upgrade head"
+    },
+    "seed": {
+      "description": "Seed the database",
+      "prompt": "Run the seed script: python seed_data.py"
+    },
+    "mkmig": {
+      "description": "Create a new Alembic migration",
+      "prompt": "Create a new auto-generated Alembic migration: alembic revision --autogenerate -m \"${1:description}\""
+    }
+  },
+
+  "references": {
+    "plan": {
+      "path": "plan.md",
+      "description": "Project plan, TODOs, and known bugs"
+    },
+    "db-schema": {
+      "path": "src/models.py",
+      "description": "SQLAlchemy ORM models (database schema)"
+    },
+    "api-routes": {
+      "path": "src/main.py",
+      "description": "FastAPI router registration"
+    }
+  }
+}

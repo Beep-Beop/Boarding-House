@@ -22,6 +22,14 @@ class Users(Base):
     id_document_url = Column(String(255)) # URL to uploaded Valid ID in R2 Bucket
     is_verified = Column(Boolean, default=False) # True if Admin approves their ID document
     status = Column(Enum('active', 'banned', 'suspended'), default='active')
+    email_verified = Column(Boolean, default=False)
+    verification_token = Column(String(64), nullable=True)
+    verification_token_expires = Column(DateTime, nullable=True)
+    verification_code = Column(String(6), nullable=True)
+    verification_code_expires = Column(DateTime, nullable=True)
+    reset_code_hash = Column(String(128), nullable=True)
+    reset_code_expires = Column(DateTime, nullable=True)
+    account_setup_complete = Column(Boolean, default=False)
 
     # Relationships: If a user is deleted, delete their houses, bookings, and reviews.
     location = relationship("Location", backref="users")
@@ -260,6 +268,30 @@ class BookingHistory(Base):
     
     # RESTRICT prevents deleting a user if they manipulated a booking status.
     changed_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="RESTRICT"), nullable=False)
+
+
+class MaintenanceRequest(Base):
+    __tablename__ = "MAINTENANCE_REQUESTS"
+
+    request_id = Column(Integer, primary_key=True, autoincrement=True)
+    listing_id = Column(Integer, ForeignKey("BOARDING_HOUSE.listing_id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(Enum('pending', 'in_progress', 'completed'), default='pending')
+    created_at = Column(DateTime, server_default=func.now())
+    resolved_at = Column(DateTime, nullable=True)
+
+    listing = relationship("BoardingHouse", backref="maintenance_requests")
+    tenant = relationship("Users", foreign_keys=[tenant_id], backref="maintenance_requests")
+
+
+class TokenBlacklist(Base):
+    __tablename__ = "TOKEN_BLACKLIST"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    jti = Column(String(36), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
 
 
 class Payments(Base):

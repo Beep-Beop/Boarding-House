@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
 from src import crud, schemas, database
+from src.dependencies import get_current_user, limiter
 from src.storage import StorageService
 
 router = APIRouter(prefix="/photos", tags=["Photos"])
@@ -10,7 +11,8 @@ router = APIRouter(prefix="/photos", tags=["Photos"])
 storage_service = StorageService()
 
 @router.post("/", response_model=schemas.PhotoResponse, status_code=status.HTTP_201_CREATED)
-async def create_photo(file: UploadFile = File(...), metadata: schemas.PhotoUploadMetadata = Depends(), db: Session = Depends(database.get_db)):
+@limiter.limit("5/minute")
+async def create_photo(request: Request, file: UploadFile = File(...), metadata: schemas.PhotoUploadMetadata = Depends(), db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     photo_crud = crud.PhotosCRUD(db)
 
     if not file.filename:
@@ -32,18 +34,40 @@ async def create_photo(file: UploadFile = File(...), metadata: schemas.PhotoUplo
                 detail="Room not found"
             )
 
-    file_content = await file.read()
+    MAX_FILE_SIZE = 5 * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File too large. Maximum size is 5MB."
+        )
+
+    magic = contents[:12]
+    ALLOWED_MAGIC = [
+        (b"\xff\xd8\xff", "image/jpeg"),
+        (b"\x89PNG\r\n\x1a\n", "image/png"),
+    ]
+    is_webp = magic[:4] == b"RIFF" and magic[8:12] == b"WEBP"
+    is_valid = any(magic.startswith(sig) for sig, _ in ALLOWED_MAGIC) or is_webp
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid file type. Only JPEG, PNG, and WebP images are allowed."
+        )
+
+    file_content = contents
     file_extension = file.filename.split(".")[-1]
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
 
-    success = storage_service.upload_file(file_content, unique_filename)
+    folder = metadata.entity_type  # "listing" or "room"
+    success = storage_service.upload_file(file_content, f"{folder}/{unique_filename}")
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail="Failed to upload image to Cloudflare R2"
         )
     
-    public_url = f"https://your-r2-bucket-url.com/{unique_filename}" # no url yet
+    public_url = storage_service.get_public_url(unique_filename, folder=folder)
 
     return photo_crud.create(photo_url=public_url, **metadata.model_dump())
 

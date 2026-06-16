@@ -5,7 +5,6 @@ Author: Akash Bora
 
 import customtkinter
 import sys
-import time
 import difflib
 
 class CTkScrollableDropdown(customtkinter.CTkToplevel):
@@ -42,7 +41,6 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.overrideredirect(True)
             self.transparent_color = '#000001'
             self.corner = 0
-            self.padding = 18
             self.withdraw()
 
         self.hide = True
@@ -90,7 +88,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         elif justify.lower()=="right":
             self.justify = "e"
         else:
-            self.justify = "c"
+            self.justify = "center"
             
         self.button_height = button_height
         self.values = values
@@ -99,7 +97,10 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         
         self.resizable(width=False, height=False)
         self.transient(self.master)
-        self._init_buttons(**button_kwargs)
+        self._button_kwargs = button_kwargs
+        self._buttons_built = False
+        self.widgets = {}
+        self.i = 0
 
         # Add binding for different ctk widgets
         if double_click or type(self.attach) is customtkinter.CTkEntry or type(self.attach) is customtkinter.CTkComboBox:
@@ -162,22 +163,22 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.attach.bind("<Key>", appear)
             self.var_update.trace_add('write', self._update)
         
-    def fade_out(self):
-        for i in range(100,0,-10):
-            if not self.winfo_exists():
-                break
-            self.attributes("-alpha", i/100)
-            self.update()
-            time.sleep(1/100)
-            
     def fade_in(self):
-        for i in range(0,100,10):
-            if not self.winfo_exists():
-                break
-            self.attributes("-alpha", i/100)
-            self.update()
-            time.sleep(1/100)
+        if not self.winfo_exists():
+            return
+        self.attributes("-alpha", self.alpha)
             
+    def fade_out(self):
+        if not self.winfo_exists():
+            return
+        self.attributes("-alpha", 0)
+            
+    def _ensure_buttons(self):
+        if self._buttons_built:
+            return
+        self._init_buttons(**self._button_kwargs)
+        self._buttons_built = True
+
     def _init_buttons(self, **button_kwargs):
         self.i = 0
         self.widgets = {}
@@ -191,7 +192,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
                                                           anchor=self.justify,
                                                           hover_color=self.hover_color,
                                                           command=lambda k=row: self._attach_key_press(k), **button_kwargs)
-            self.widgets[self.i].pack(fill="x", pady=2, padx=(self.padding, 0))
+            self.widgets[self.i].pack(fill="x", pady=2, padx=(5, 5))
             self.i+=1
  
         self.hide = False
@@ -225,6 +226,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if self.winfo_ismapped():
             self.hide = False
         if self.hide:
+            self._ensure_buttons()
             self.event_generate("<<Opened>>")      
             self.focus()
             self.hide = False
@@ -252,6 +254,7 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
         if not self.appear: return
         if self.disable: return
         if self.fade: return
+        self._ensure_buttons()
         if string:
             string = string.lower()
             self._deiconify()
@@ -328,9 +331,14 @@ class CTkScrollableDropdown(customtkinter.CTkToplevel):
             self.values = kwargs.pop("values")
             self.image_values = None
             self.button_num = len(self.values)
-            for key in self.widgets.keys():
-                self.widgets[key].destroy()
-            self._init_buttons()
+            if self._buttons_built:
+                for key in self.widgets.keys():
+                    self.widgets[key].destroy()
+                self.widgets = {}
+                self.i = 0
+                self._init_buttons(**self._button_kwargs)
+            else:
+                self._buttons_built = False
  
         if "image_values" in kwargs:
             self.image_values = kwargs.pop("image_values")

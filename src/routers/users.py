@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database, security
+from src.dependencies import get_current_user, require_role, limiter
+from src.logger import logger
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("/", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: schemas.UserRegister, db: Session = Depends(database.get_db)):
+@limiter.limit("5/minute")
+def create_user(request: Request, user: schemas.UserRegister, db: Session = Depends(database.get_db)):
     try:
         user_crud = crud.UsersCRUD(db)
 
@@ -18,33 +21,26 @@ def create_user(user: schemas.UserRegister, db: Session = Depends(database.get_d
 
         user_data = user.model_dump()
         user_data["password"] = security.get_password_hash(user_data["password"])
-        role_map = {"tenant": "student", "landlord": "owner"}
-        user_data["role"] = role_map.get(user_data["role"], user_data["role"])
     
         return user_crud.register(**user_data)
     
     except HTTPException:
         raise
     except Exception as e:
-        print("REGISTER ERROR", str(e))
+        logger.error("Register error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Internal server error"
         )
 
-@router.post("/login")
-def login(credentials: schemas.UserLogin, db: Session = Depends(database.get_db)):
+@router.get("/check-email")
+def check_email(email: str, db: Session = Depends(database.get_db)):
     user_crud = crud.UsersCRUD(db)
 
-    user = user_crud.get_user_by_email(credentials.email)
-    if not user or not security.verify_password(credentials.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
+    if user_crud.get_user_by_email(email):
+        return {"exists": True, "detail": "Email already registered"}  # FIX: was "exist" (typo)
 
-    return {"user_id": user.user_id, "role": user.role, "name": user.name}
-
+    return {"exists": False, "detail": "Email is available"}
 
 @router.get("/{user_id}", response_model=schemas.UserResponse)
 def get_user(user_id: int, db: Session = Depends(database.get_db)):
@@ -59,8 +55,18 @@ def get_user(user_id: int, db: Session = Depends(database.get_db)):
 
     return user
 
+@router.patch("/{user_id}", response_model=schemas.UserResponse)
+def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    if current_user.user_id != user_id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this user")
+    user_crud = crud.UsersCRUD(db)
+    user = user_crud.update(user_id, **user_update.model_dump(exclude_unset=True))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
 @router.patch("/{user_id}/status", response_model=schemas.UserResponse)
-def update_user_status(user_id: int, new_status: str, db: Session = Depends(database.get_db)):
+def update_user_status(user_id: int, new_status: str, db: Session = Depends(database.get_db), admin: schemas.TokenData = Depends(require_role("admin"))):
     user_crud = crud.UsersCRUD(db)
 
     user = user_crud.update_status(user_id=user_id, new_status=new_status)
@@ -69,14 +75,5 @@ def update_user_status(user_id: int, new_status: str, db: Session = Depends(data
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    
+
     return user
-
-@router.get("/check-email")
-def check_email(email: str, db: Session = Depends(database.get_db)):
-    user_crud = crud.UsersCRUD(db)
-
-    if user_crud.get_user_by_email(email):
-        return {"exist": True, "detail": "Email already registered"}
-    
-    return {"exists": False, "detail": "Email is available"}

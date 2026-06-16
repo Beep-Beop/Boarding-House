@@ -18,13 +18,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, examples=["beepboop123"])
-    role: Literal['student', 'owner', 'admin', 'tenant', 'landlord']
+    role: Literal['student', 'owner']
 
 class UserRegister(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    role: Literal['tenant', 'landlord']
+    role: Literal['student', 'owner']
     phone: Optional[str] = Field(None, max_length=20)
     province: str
     city: str
@@ -40,6 +40,15 @@ class UserResponse(UserBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=255)
+    phone: Optional[str] = Field(None, max_length=20)
+    street: Optional[str] = None
+    profile_photo: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    role: Optional[Literal['student', 'owner', 'admin']] = None
+    account_setup_complete: Optional[bool] = None
 
 class UserLogin(BaseModel):
     email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
@@ -116,7 +125,6 @@ class BoardingHouseUpdate(BaseModel):
     min_stay_months: Optional[int] = None
     status: Optional[Literal['active', 'pending', 'banned']] = None
 
-
 # --- PHOTOS ---
 class PhotoBase(BaseModel):
     entity_type: Literal['listing', 'room'] = Field(..., examples=['listing'])
@@ -166,7 +174,6 @@ class ReportsBase(BaseModel):
 
 class ReportsCreate(ReportsBase):
     target_id: int
-    reporter_id: int  # Fixed: Cleaned up and removed redundant reported_by field
     reviewed_id: Optional[int] = None 
 
 class ReportsUpdate(BaseModel):
@@ -257,6 +264,10 @@ class ListingSearchQuery(BaseModel):
     min_price: Optional[Decimal] = None
     max_price: Optional[Decimal] = None
     min_stay_months: Optional[int] = None
+    q: Optional[str] = None
+    amenity_ids: Optional[List[int]] = None
+    limit: int = 20
+    offset: int = 0
 
 
 # --- FAVORITES ---
@@ -264,7 +275,6 @@ class FavoritesBase(BaseModel):
     notes: Optional[str] = Field(None, max_length=255)
 
 class FavoritesCreate(FavoritesBase):
-    user_id: int 
     listing_id: int
 
 class FavoritesResponse(FavoritesBase):
@@ -319,7 +329,6 @@ class ReviewsBase(BaseModel):
     comment: Optional[str] = None
 
 class ReviewsCreate(ReviewsBase):
-    user_id: int
     listing_id: int
     booking_id: Optional[int] = None 
 
@@ -378,3 +387,72 @@ class PaymentQueryFilter(BaseModel):
 
 class PaymentStatusUpdate(BaseModel):
     status: Literal['pending', 'completed', 'failed', 'refunded']
+
+
+# --- AUTH ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+    role: Optional[str] = None
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class VerifyResetCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6)
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=6)
+
+class SendVerificationRequest(BaseModel):
+    email: EmailStr
+
+class VerifyEmailCode(BaseModel):
+    email: EmailStr
+    code: str
+
+
+# --- MAINTENANCE ---
+class MaintenanceRequestBase(BaseModel):
+    title: str = Field(..., max_length=255)
+    description: str
+
+class MaintenanceRequestCreate(MaintenanceRequestBase):
+    listing_id: int
+
+class MaintenanceRequestUpdate(BaseModel):
+    status: Literal['pending', 'in_progress', 'completed']
+    resolved_at: Optional[datetime] = None
+
+class MaintenanceRequestResponse(MaintenanceRequestBase):
+    request_id: int
+    listing_id: int
+    tenant_id: int
+    status: Literal['pending', 'in_progress', 'completed']
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -- Dashboard --
+
+class DashboardCardResponse(BaseModel):
+    id:int
+    name: str
+    location: str
+    amenities: str
+    desc: Optional[str] = None
+    photo_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
