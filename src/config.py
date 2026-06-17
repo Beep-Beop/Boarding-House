@@ -36,12 +36,11 @@ settings = Settings()
 REQUIRED_ENV_VARS = {
     "DATABASE_URL": settings.DATABASE_URL,
     "ACCESS_SECRET_KEY": settings.ACCESS_SECRET_KEY,
-    "R2_ACCOUNT_ID": settings.R2_ACCOUNT_ID,
-    "R2_ACCESS_KEY_ID": settings.R2_ACCESS_KEY_ID,
-    "R2_SECRET_ACCESS_KEY": settings.R2_SECRET_ACCESS_KEY,
-    "R2_BUCKET_NAME": settings.R2_BUCKET_NAME,
 }
 
 missing = [name for name, val in REQUIRED_ENV_VARS.items() if not val]
 if missing:
     raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+
+if not all([settings.R2_ACCOUNT_ID, settings.R2_ACCESS_KEY_ID, settings.R2_SECRET_ACCESS_KEY, settings.R2_BUCKET_NAME]):
+    logger.warning("R2 storage vars are missing — file uploads will fail")
