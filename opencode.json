@@ -29,6 +29,10 @@
     "mkmig": {
       "description": "Create a new Alembic migration",
       "prompt": "Create a new auto-generated Alembic migration: alembic revision --autogenerate -m \"${1:description}\""
+    },
+    "deploy": {
+      "description": "Deploy to Hugging Face Spaces (push to GitHub, HF auto-builds)",
+      "prompt": "Commit and push changes to GitHub for HF Spaces deployment: git add . && git commit -m \"update\" && git push"
     }
   },
 
@@ -44,6 +48,10 @@
     "api-routes": {
       "path": "src/main.py",
       "description": "FastAPI router registration"
+    },
+    "hf-deploy": {
+      "path": "plan.md",
+      "description": "HF Spaces deployment guide and secrets checklist"
     }
   }
 }
