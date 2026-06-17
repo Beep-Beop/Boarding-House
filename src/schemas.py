@@ -365,6 +365,28 @@ class BookingStats(BaseModel):
     cancelled_count: int
     total_revenue: Decimal
 
+# --- PAYMENTS ---
+class PaymentsBase(BaseModel):
+    amount: Decimal = Field(..., max_digits=10, decimal_places=2)
+    method: Literal['gcash', 'bank_transfer', 'cash', 'card'] = Field(..., examples=["gcash"])
+    paid_at: Optional[datetime] = None 
+    reference_no: Optional[str] = Field(None, max_length=100) 
+
+class PaymentsCreate(PaymentsBase):
+    booking_id: int
+
+class PaymentsResponse(PaymentsBase):
+    payment_id: int
+    booking_id: int
+    amount: Decimal
+    method: Literal['gcash', 'bank_transfer', 'cash', 'card']
+    paid_at: Optional[datetime]
+    reference_no: Optional[str]
+    status: Literal['pending', 'completed', 'failed', 'refunded']
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BookingDetailResponse(BookingAdminResponse):
     payments: List[PaymentsResponse] = []
     history: List[BookingHistoryResponse] = []
@@ -409,28 +431,6 @@ class BookingHistoryResponse(BookingHistoryBase):
     booking_id: int
     changed_by: int
     changed_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# --- PAYMENTS ---
-class PaymentsBase(BaseModel):
-    amount: Decimal = Field(..., max_digits=10, decimal_places=2)
-    method: Literal['gcash', 'bank_transfer', 'cash', 'card'] = Field(..., examples=["gcash"])
-    paid_at: Optional[datetime] = None 
-    reference_no: Optional[str] = Field(None, max_length=100) 
-
-class PaymentsCreate(PaymentsBase):
-    booking_id: int
-
-class PaymentsResponse(PaymentsBase):
-    payment_id: int
-    booking_id: int
-    amount: Decimal
-    method: Literal['gcash', 'bank_transfer', 'cash', 'card']
-    paid_at: Optional[datetime]
-    reference_no: Optional[str]
-    status: Literal['pending', 'completed', 'failed', 'refunded']
 
     model_config = ConfigDict(from_attributes=True)
 
