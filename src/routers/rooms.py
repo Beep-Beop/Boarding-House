@@ -20,7 +20,8 @@ def create_room(request: Request, room: schemas.RoomsCreate, db: Session = Depen
     return rooms_crud.create(**room.model_dump())
 
 @router.get("/{room_id}", response_model=schemas.RoomsResponse)
-def get_room(room_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("60/minute")
+def get_room(request: Request, room_id: int, db: Session = Depends(database.get_db)):
     rooms_crud = crud.RoomsCRUD(db)
 
     room = rooms_crud.get(room_id=room_id)
@@ -51,9 +52,26 @@ def update_room(request: Request, room_id: int, room_update: schemas.RoomUpdate,
     return room
 
 @router.get("/listing/{listing_id}", response_model=List[schemas.RoomsResponse])
-def get_listing_rooms(listing_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("60/minute")
+def get_listing_rooms(request: Request, listing_id: int, db: Session = Depends(database.get_db)):
     rooms_crud = crud.RoomsCRUD(db)
 
     rooms = rooms_crud.get_room_by_listing(listing_id=listing_id)
 
     return rooms
+
+
+@router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+def delete_room(request: Request, room_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    rooms_crud = crud.RoomsCRUD(db)
+
+    existing = rooms_crud.get(room_id)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
+    bh = crud.BoardingHousesCRUD(db).get(existing.listing_id)
+    if bh and bh.owner_id != current_user.user_id and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this room")
+
+    rooms_crud.delete(room_id)

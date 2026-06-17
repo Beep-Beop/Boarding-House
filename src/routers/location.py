@@ -1,10 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
+from src.dependencies import get_current_user, limiter
 
 router = APIRouter(prefix="/locations", tags=["Locations"])
 
+
+@router.post("/", response_model=schemas.LocationResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
+def create_location(request: Request, location: schemas.LocationCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    location_crud = crud.LocationsCRUD(db)
+    return location_crud.create(**location.model_dump())
+
 @router.get("/provinces", response_model=schemas.LocationOptionsResponse)
+@limiter.limit("30/minute")
 def get_provinces(request: Request, db: Session = Depends(database.get_db)):
     cache = request.app.state.cache
     if cache.is_province_cached():
@@ -16,7 +25,8 @@ def get_provinces(request: Request, db: Session = Depends(database.get_db)):
     return {"options": provinces}
 
 @router.get("/cities", response_model=schemas.LocationOptionsResponse)
-def get_cities(province: str, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_cities(request: Request, province: str, db: Session = Depends(database.get_db)):
     location_crud = crud.LocationsCRUD(db)
 
     if not province or not province.strip():
@@ -37,7 +47,8 @@ def get_cities(province: str, db: Session = Depends(database.get_db)):
     return {"options": cities}
 
 @router.get("/barangays", response_model=schemas.LocationOptionsResponse)
-def get_barangays(city: str, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_barangays(request: Request, city: str, db: Session = Depends(database.get_db)):
     location_crud = crud.LocationsCRUD(db)
 
     if not city or not city.strip():

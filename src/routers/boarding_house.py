@@ -25,7 +25,8 @@ def create_boarding_house(request: Request, boarding_house: schemas.BoardingHous
 
 
 @router.get("/{listing_id}", response_model=schemas.BoardingHouseResponse)
-def get_boarding_house(listing_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("60/minute")
+def get_boarding_house(request: Request, listing_id: int, db: Session = Depends(database.get_db)):
     bh_crud = crud.BoardingHousesCRUD(db)
 
     boarding_house = bh_crud.get(listing_id=listing_id)
@@ -62,8 +63,15 @@ def update_boarding_house(request: Request, listing_id: int, boarding_house_upda
 
 
 @router.get("/owner/{owner_id}", response_model=List[schemas.BoardingHouseResponse])
-def get_owner_boarding_houses(owner_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_owner_boarding_houses(request: Request, owner_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     bh_crud = crud.BoardingHousesCRUD(db)
+
+    if current_user.role != "admin" and current_user.user_id != owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this owner's listings"
+        )
 
     return bh_crud.get_by_owner(owner_id=owner_id)
 
@@ -89,7 +97,8 @@ def delete_boarding_house(request: Request, listing_id: int, db: Session = Depen
 
 
 @router.get("/feed/dashboard", response_model=List[schemas.DashboardCardResponse])
-def get_dashboard_feed(limit: int = 20, offset: int = 0, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_dashboard_feed(request: Request, limit: int = 20, offset: int = 0, db: Session = Depends(database.get_db)):
     bh_crud = crud.BoardingHousesCRUD(db)
     houses = bh_crud.get_dashboard_listings(limit=limit, offset=offset)
 

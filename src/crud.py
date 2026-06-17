@@ -31,6 +31,10 @@ class UsersCRUD:
     
     def get_user_by_email(self, email: str) -> Users:
         return self.db.query(Users).filter(Users.email == email).first()
+
+    def get_all(self):
+        """Returns all users. Intended for admin-only use."""
+        return self.db.query(Users).all()
     
     def update_status(self, user_id: int, new_status: str) -> Users:
         """Architectural Fix: Returns the modified entity rather than a boolean."""
@@ -126,16 +130,18 @@ class UsersCRUD:
     def set_verification_code(self, user_id: int, code: str, expires) -> Users:
         user = self.get(user_id)
         if user:
-            user.verification_code = code
+            import hashlib
+            user.verification_code = hashlib.sha256(code.encode()).hexdigest()
             user.verification_code_expires = expires
             self.db.commit()
             self.db.refresh(user)
         return user
 
     def verify_email_code(self, email: str, code: str) -> Users:
+        import hashlib
         from datetime import datetime, timezone
         user = self.get_user_by_email(email)
-        if user and user.verification_code and secrets.compare_digest(str(code), str(user.verification_code)) and user.verification_code_expires:
+        if user and user.verification_code and secrets.compare_digest(hashlib.sha256(code.encode()).hexdigest(), user.verification_code) and user.verification_code_expires:
             if user.verification_code_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
                 user.email_verified = True
                 user.verification_code = None
@@ -210,6 +216,9 @@ class AmenitiesCRUD:
     
     def get(self, amenity_id: int) -> Amenities:
         return self.db.query(Amenities).filter(Amenities.amenity_id == amenity_id).first()
+
+    def get_by_name(self, name: str) -> Amenities:
+        return self.db.query(Amenities).filter(Amenities.amenity_name == name).first()
 
     def get_all(self):
         return self.db.query(Amenities).all()
@@ -413,6 +422,9 @@ class ReportsCRUD:
     def get_pending_reports(self):
         """Plugs Crash: Router endpoint can now cleanly pull pending validation queues."""
         return self.db.query(Reports).filter(Reports.status == 'pending').all()
+
+    def get_all(self):
+        return self.db.query(Reports).order_by(Reports.created_at.desc()).all()
 
     def get_reports_by_listing(self, listing_id: int):
         return self.db.query(Reports).filter(
@@ -640,7 +652,103 @@ class BookingsCRUD:
         self.db.commit()
         self.db.refresh(booking)
         return booking
-    
+
+    def get_all_bookings(self, status: str = None, search: str = None, page: int = 1, limit: int = 50):
+        query = self.db.query(Bookings).join(Rooms, Bookings.room_id == Rooms.room_id).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).join(Users, Bookings.user_id == Users.user_id)
+        if status and status.lower() != "all":
+            query = query.filter(Bookings.status == status)
+        if search:
+            pattern = f"%{search}%"
+            query = query.filter(
+                Users.name.ilike(pattern) | BoardingHouse.bh_name.ilike(pattern)
+            )
+        total = query.count()
+        query = query.order_by(Bookings.created_at.desc()).offset((page - 1) * limit).limit(limit)
+        return query.all(), total
+
+    def get_booking_stats(self):
+        all_bookings = self.db.query(Bookings).all()
+        total_revenue = sum(b.total_price for b in all_bookings)
+        return {
+            "total_bookings": len(all_bookings),
+            "pending_count": sum(1 for b in all_bookings if b.status == "pending"),
+            "active_count": sum(1 for b in all_bookings if b.status == "active"),
+            "cancelled_count": sum(1 for b in all_bookings if b.status == "cancelled"),
+            "total_revenue": total_revenue,
+        }
+
+    def get_owner_bookings_enriched(self, owner_id: int, status: str = None, search: str = None):
+        query = self.db.query(Bookings).join(Rooms, Bookings.room_id == Rooms.room_id).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).join(Users, Bookings.user_id == Users.user_id).filter(
+            BoardingHouse.owner_id == owner_id
+        )
+        if status and status.lower() != "all":
+            query = query.filter(Bookings.status == status)
+        if search:
+            pattern = f"%{search}%"
+            query = query.filter(
+                Users.name.ilike(pattern) | BoardingHouse.bh_name.ilike(pattern)
+            )
+        query = query.order_by(Bookings.created_at.desc())
+        bookings = query.all()
+
+        result = []
+        for b in bookings:
+            room = self.db.query(Rooms).filter(Rooms.room_id == b.room_id).first()
+            listing = self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == room.listing_id).first() if room else None
+            tenant = self.db.query(Users).filter(Users.user_id == b.user_id).first()
+            payments = self.db.query(Payments).filter(Payments.booking_id == b.booking_id).all()
+            payment_status = payments[0].status if payments else None
+            payment_method = payments[0].method if payments else None
+            payment_amount = payments[0].amount if payments else None
+            result.append({
+                "booking": b,
+                "room": room,
+                "listing": listing,
+                "tenant": tenant,
+                "payments": payments,
+                "payment_status": payment_status,
+                "payment_method": payment_method,
+                "payment_amount": payment_amount,
+            })
+        return result
+
+    def get_owner_booking_stats(self, owner_id: int):
+        bookings = self.db.query(Bookings).join(Rooms, Bookings.room_id == Rooms.room_id).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).filter(BoardingHouse.owner_id == owner_id).all()
+        total_revenue = sum(b.total_price for b in bookings if b.status == "active")
+        return {
+            "total_bookings": len(bookings),
+            "pending_count": sum(1 for b in bookings if b.status == "pending"),
+            "active_count": sum(1 for b in bookings if b.status == "active"),
+            "cancelled_count": sum(1 for b in bookings if b.status == "cancelled"),
+            "total_revenue": total_revenue,
+        }
+
+    def get_booking_detail(self, booking_id: int):
+        booking = self.db.query(Bookings).filter(Bookings.booking_id == booking_id).first()
+        if not booking:
+            return None
+        room = self.db.query(Rooms).filter(Rooms.room_id == booking.room_id).first()
+        listing = self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == room.listing_id).first()
+        tenant = self.db.query(Users).filter(Users.user_id == booking.user_id).first()
+        owner = self.db.query(Users).filter(Users.user_id == listing.owner_id).first() if listing else None
+        payments = self.db.query(Payments).filter(Payments.booking_id == booking_id).all()
+        history = self.db.query(BookingHistory).filter(BookingHistory.booking_id == booking_id).order_by(BookingHistory.changed_at.asc()).all()
+        return {
+            "booking": booking,
+            "room": room,
+            "listing": listing,
+            "tenant": tenant,
+            "owner": owner,
+            "payments": payments,
+            "history": history,
+        }
+
 
 # FOURTH-LEVEL DEPENDENT TABLES
 
@@ -669,6 +777,9 @@ class ReviewsCRUD:
         """Standardized: Uniform single-record fetch syntax."""
         return self.db.query(Reviews).filter(Reviews.review_id == review_id).first()
     
+    def get_all(self):
+        return self.db.query(Reviews).order_by(Reviews.created_at.desc()).all()
+
     def get_reviews_by_listing(self, listing_id: int):
         return self.db.query(Reviews).filter(
             Reviews.listing_id == listing_id
@@ -782,6 +893,17 @@ class PaymentsCRUD:
             Payments.booking_id == booking_id
         ).order_by(Payments.paid_at.desc()).all()
     
+    def get_payments_by_owner(self, owner_id: int):
+        return self.db.query(Payments).join(
+            Bookings, Payments.booking_id == Bookings.booking_id
+        ).join(
+            Rooms, Bookings.room_id == Rooms.room_id
+        ).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).filter(
+            BoardingHouse.owner_id == owner_id
+        ).order_by(Payments.paid_at.desc()).all()
+
     def update_status(self, payment_id: int, new_status: str) -> Payments:
         """
         Regional Localization Logic Side-Effect: Automatically stamps full transaction 

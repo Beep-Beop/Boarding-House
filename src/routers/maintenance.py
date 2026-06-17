@@ -24,8 +24,30 @@ def create_maintenance_request(
 
 
 @router.get("/listing/{listing_id}", response_model=List[schemas.MaintenanceRequestResponse])
-def get_listing_maintenance(listing_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+@limiter.limit("30/minute")
+def get_listing_maintenance(request: Request, listing_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     maint_crud = crud.MaintenanceCRUD(db)
+
+    bh = crud.BoardingHousesCRUD(db).get(listing_id)
+    if not bh:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Listing not found"
+        )
+
+    # Allow: admin, listing owner, or tenant who created a request for this listing
+    if current_user.role != "admin" and bh.owner_id != current_user.user_id:
+        # Check if the current user is a tenant with a maintenance request for this listing
+        tenant_requests = maint_crud.get_by_listing(listing_id)
+        is_tenant = any(r.tenant_id == current_user.user_id for r in tenant_requests)
+        if not is_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to view maintenance requests for this listing"
+            )
+        # If tenant, only show their own requests
+        return [r for r in tenant_requests if r.tenant_id == current_user.user_id]
+
     return maint_crud.get_by_listing(listing_id)
 
 

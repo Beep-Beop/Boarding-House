@@ -6,8 +6,12 @@ from sqlalchemy.orm import Session
 import requests
 from src import crud, schemas, database, security
 from src.config import settings
-from src.dependencies import limiter, get_current_user
+from src.dependencies import limiter, get_current_user, require_role
+from src.models import AdminLogs
 from src.email_service import send_reset_code, send_verification_email
+
+# In-memory store for OAuth state nonces (maps state -> redirect_port)
+_oauth_states: dict = {}
 
 bearer_scheme = HTTPBearer()
 
@@ -20,7 +24,19 @@ def login(request: Request, credentials: schemas.UserLogin, db: Session = Depend
 
     user = user_crud.get_user_by_email(credentials.email)
 
-    if not user or not security.verify_password(credentials.password, user.password):
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    if not security.verify_password(credentials.password, user.password):
+        if user.auth_provider in ("google", "both"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This account uses Google login. Please sign in with Google.",
+                headers={"X-Auth-Hint": "google_login"}
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -192,13 +208,56 @@ def logout(request: Request, credentials: HTTPAuthorizationCredentials = Depends
     return {"message": "Logged out successfully."}
 
 
+@router.post("/create-admin", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
+def create_admin(
+    request: Request,
+    admin_data: schemas.AdminCreate,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(require_role("admin"))
+):
+    """Admin-only: Creates a new admin account with email_verified and account_setup_complete pre-set."""
+    user_crud = crud.UsersCRUD(db)
+
+    existing = user_crud.get_user_by_email(admin_data.email)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    hashed = security.get_password_hash(admin_data.password)
+    new_admin = user_crud.create(
+        name=admin_data.name,
+        email=admin_data.email,
+        password=hashed,
+        role="admin",
+        email_verified=True,
+        account_setup_complete=True,
+        status="active",
+    )
+
+    log = AdminLogs(
+        admin_id=current_user.user_id,
+        action="CREATED_ADMIN",
+        target_type="user",
+        target_id=new_admin.user_id,
+        description=f"Admin {current_user.user_id} created admin account for {admin_data.email}",
+    )
+    db.add(log)
+    db.commit()
+
+    return schemas.UserResponse.model_validate(new_admin)
+
+
 @router.get("/google/login")
 def google_login(request: Request):
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google OAuth is not configured")
 
     redirect_port = request.query_params.get("redirect_port", "9876")
-    state = f"port_{redirect_port}"
+    state = secrets.token_urlsafe(16)
+    _oauth_states[state] = redirect_port
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
@@ -272,7 +331,12 @@ def google_callback(request: Request, code: str = None, state: str = None, error
             role="student",
             email_verified=True,
             profile_photo=google_user.get("picture"),
+            auth_provider="google",
         )
+    elif user.auth_provider == "email":
+        user.auth_provider = "both"
+        db.commit()
+        db.refresh(user)
 
     if not user.email_verified:
         setattr(user, "email_verified", True)
@@ -287,9 +351,10 @@ def google_callback(request: Request, code: str = None, state: str = None, error
         data={"sub": str(user.user_id), "role": user.role}
     )
 
-    redirect_port = "9876"
-    if state and state.startswith("port_"):
-        redirect_port = state.split("port_")[1]
+    if not state or state not in _oauth_states:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or missing OAuth state parameter")
+
+    redirect_port = _oauth_states.pop(state, "9876")
 
     from fastapi.responses import HTMLResponse
     import json

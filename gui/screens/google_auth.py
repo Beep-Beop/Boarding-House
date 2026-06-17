@@ -48,6 +48,7 @@ class GoogleAuthHandler:
                     name = params.get("name", [None])[0]
                     email = params.get("email", [None])[0]
                     is_new = params.get("is_new", ["false"])[0] == "true"
+                    account_setup_complete = params.get("account_setup_complete", ["false"])[0] == "true"
 
                     if access_token and user_id:
                         self.server._result = {
@@ -57,6 +58,7 @@ class GoogleAuthHandler:
                             "name": name,
                             "email": email,
                             "is_new": is_new,
+                            "account_setup_complete": account_setup_complete,
                         }
                         self.server._server_event.set()
                 else:

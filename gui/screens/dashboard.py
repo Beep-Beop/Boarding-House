@@ -4,6 +4,7 @@ import threading
 from PIL import Image
 import io
 from src.logger import logger
+from datetime import datetime
 
 
 class DashboardMixin:
@@ -26,7 +27,7 @@ class DashboardMixin:
 
         # Nav Bar
         self.nav_bar_frame = ctk.CTkFrame(self.form_container,
-                                          fg_color=self.secondary_color,
+                                          fg_color="transparent",
                                           height=60,
                                           border_width=1,
                                           border_color=self.entry_border
@@ -78,6 +79,22 @@ class DashboardMixin:
                                          )
         self.search_entry.bind("<Return>", lambda e: self._do_search())
 
+        # Notification Bell
+        self.notif_bell_frame = ctk.CTkFrame(self.nav_bar_frame, fg_color="transparent")
+        self.notif_bell_frame.pack(side="right", padx=(0, 5))
+
+        self.notif_bell_btn = ctk.CTkLabel(self.notif_bell_frame, text="",
+                                           image=self.notification_icon, cursor="hand2")
+        self.notif_bell_btn.pack(side="left", padx=5)
+        self.notif_bell_btn.bind("<Button-1>", lambda e: self.show_notifications_page())
+
+        # Badge
+        self.notif_badge = ctk.CTkLabel(self.notif_bell_frame, text="",
+                                        width=16, height=16, corner_radius=8,
+                                        fg_color=self.error_red, text_color="white",
+                                        font=ctk.CTkFont(size=9, weight="bold"))
+        self.notif_badge.place(x=18, y=-2)
+
         self.profile_frame = ctk.CTkFrame(self.nav_bar_frame,
                                           fg_color="transparent"
                                           )
@@ -113,12 +130,72 @@ class DashboardMixin:
                                       )
         self.uid_label.grid(row=1, column=0, sticky="w")
 
+        # Chevron indicator for clickability
+        self.profile_chevron = ctk.CTkLabel(self.profile_text_frame, text="▾",
+                                            font=self.body_light_font, text_color=self.text_color)
+        self.profile_chevron.grid(row=0, column=1, padx=(4, 0), sticky="w")
+
+        # Make entire profile frame clickable
+        self.profile_frame.bind("<Button-1>", lambda e: self._toggle_user_menu())
+        self.profile_frame.configure(cursor="hand2")
+        for child in self.profile_frame.winfo_children():
+            child.bind("<Button-1>", lambda e: self._toggle_user_menu())
+
         # Main Content
 
         self.content_wrapper = ctk.CTkFrame(self.form_container,
                                             fg_color="transparent"
                                             )
         self.content_wrapper.pack(fill="both", expand=True, padx=(260, 10), pady=20)
+
+        # Welcome Banner
+        self.welcome_frame = ctk.CTkFrame(self.content_wrapper, fg_color=self.secondary_color,
+                                          corner_radius=8, height=80,
+                                          border_width=1, border_color=self.entry_border)
+        self.welcome_frame.pack(fill="x", pady=(0, 15))
+        self.welcome_frame.pack_propagate(False)
+
+        inner_welcome = ctk.CTkFrame(self.welcome_frame, fg_color="transparent")
+        inner_welcome.pack(fill="both", padx=20, pady=15)
+
+        accent = ctk.CTkFrame(inner_welcome, width=4, fg_color=self.primary_color, corner_radius=2)
+        accent.pack(side="left", fill="y", padx=(0, 12))
+
+        welcome_text = f"Welcome back, {user_name}!"
+        today_str = datetime.now().strftime("%A, %B %d, %Y")
+        ctk.CTkLabel(inner_welcome, text=welcome_text, font=self.body_bold_paragraph_font,
+                     text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(inner_welcome, text=today_str, font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+
+        # Quick Stats Row
+        self.stats_row_frame = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        self.stats_row_frame.pack(fill="x", pady=(0, 15))
+        self.stats_row_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="stats")
+
+        stats_cards = [
+            ("Active Bookings", "0", self.primary_color),
+            ("Saved Favorites", "0", self.hover_color),
+            ("Total Reviews", "0", self.text_color),
+        ]
+        self._stat_labels = {}
+        for i, (title, val, accent_color) in enumerate(stats_cards):
+            card = ctk.CTkFrame(self.stats_row_frame, fg_color=self.secondary_color,
+                                corner_radius=6, height=70,
+                                border_width=1, border_color=self.entry_border)
+            card.grid(row=0, column=i, padx=4, sticky="nsew")
+            card.pack_propagate(False)
+            card.grid_propagate(False)
+
+            accent_bar = ctk.CTkFrame(card, height=3, fg_color=accent_color, corner_radius=0)
+            accent_bar.place(x=0, y=0, relwidth=1)
+
+            ctk.CTkLabel(card, text=title, font=self.body_description_font,
+                         text_color=self.text_color).place(x=12, y=8)
+            val_lbl = ctk.CTkLabel(card, text=val, font=self.body_bold_paragraph_font,
+                                   text_color=self.text_color)
+            val_lbl.place(x=12, y=30)
+            self._stat_labels[title] = val_lbl
 
         self.filter_scroll_frame = ctk.CTkScrollableFrame(self.content_wrapper,
                                                           orientation="horizontal",
@@ -147,7 +224,7 @@ class DashboardMixin:
         self.filter_buttons["All"].configure(fg_color=self.primary_color, text_color="white")
 
         self.main_content_frame = ctk.CTkScrollableFrame(self.content_wrapper,
-                                               fg_color=self.secondary_color
+                                               fg_color="transparent"
                                                )
         self.main_content_frame.pack(fill="both", expand=True)
 
@@ -178,10 +255,12 @@ class DashboardMixin:
         self.after(100, self.reflow_cards)
 
         self._load_initial_dashboard()
+        self._fetch_notif_count()
+        self._fetch_dashboard_stats()
 
         # Menu Frame
         self.sidebar_main_frame = ctk.CTkFrame(self.form_container,
-                                     fg_color=self.secondary_color,
+                                     fg_color="transparent",
                                      width=250,
                                      corner_radius=0,
                                      border_color=self.entry_border,
@@ -410,9 +489,19 @@ class DashboardMixin:
         return card
 
     def reflow_cards(self, event=None):
-        columns = 3 if self.is_sidebar_expanded else 4
+        available_width = self.main_content_frame.winfo_width()
+        if available_width <= 0:
+            available_width = 800
 
-        if columns == getattr(self, "current_columns", None):
+        card_total_width = 440
+        columns = max(1, available_width // card_total_width)
+
+        if self.cards_list:
+            columns = min(columns, len(self.cards_list))
+
+        if (columns == getattr(self, "current_columns", None) and
+            self.cards_list and
+            all(card.winfo_manager() == "grid" for card in self.cards_list)):
             return
 
         self.current_columns = columns
@@ -669,3 +758,147 @@ class DashboardMixin:
     def _cancel_done(self):
         self.show_toast("Booking cancelled!", is_error=False)
         self.show_student_bookings()
+
+
+    def _fetch_notif_count(self):
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            return
+
+        def _do():
+            try:
+                resp = self.api.get(f"/notifications/user/{user_id}", timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    unread = sum(1 for n in data if not n.get("is_read", False))
+                else:
+                    unread = 0
+            except Exception:
+                unread = 0
+            self.after(0, lambda: self._update_notif_badge(unread))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _update_notif_badge(self, count):
+        if count > 0:
+            self.notif_badge.configure(text=str(count) if count <= 99 else "99+")
+        else:
+            self.notif_badge.configure(text="")
+
+    def _toggle_user_menu(self):
+        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_ismapped():
+            self._hide_user_menu()
+        else:
+            self._show_user_menu()
+
+    def _show_user_menu(self):
+        self._hide_user_menu()
+
+        menu = ctk.CTkFrame(self.form_container, fg_color=self.secondary_color,
+                            corner_radius=6, border_width=1, border_color=self.entry_border,
+                            width=200)
+        self._user_menu = menu
+
+        profile_x = self.profile_frame.winfo_rootx() - self.form_container.winfo_rootx()
+        profile_y = self.profile_frame.winfo_rooty() - self.form_container.winfo_rooty()
+        profile_h = self.profile_frame.winfo_height()
+        menu_x = profile_x + self.profile_frame.winfo_width() - 200
+        menu_y = profile_y + profile_h + 5
+
+        menu.place(x=menu_x, y=menu_y)
+        menu.lift()
+
+        items = [
+            ("View Profile", self.menu_profile_icon, lambda: self._menu_action(self.show_profile)),
+            ("Change Password", self.menu_lock_icon, lambda: self._menu_action(self.show_change_password)),
+            ("Notifications", self.notification_icon, lambda: self._menu_action(self.show_notifications_page)),
+            ("My Bookings", self.menu_bookings_icon, lambda: self._menu_action(self.show_student_bookings)),
+            None,
+            ("Logout", self.menu_logout_icon, lambda: self._menu_action(self._handle_logout)),
+        ]
+
+        for item in items:
+            if item is None:
+                sep = ctk.CTkFrame(menu, height=1, fg_color=self.entry_border)
+                sep.pack(fill="x", padx=10, pady=5)
+                continue
+            text, icon, cmd = item
+            btn = ctk.CTkButton(menu, text=text, image=icon,
+                                font=self.body_paragraph_font,
+                                fg_color="transparent", text_color=self.text_color,
+                                hover_color=self.hover_color, anchor="w",
+                                height=36, command=cmd)
+            btn.pack(fill="x", padx=5, pady=2)
+
+        self.bind_all("<Button-1>", self._dismiss_user_menu, add="+")
+
+    def _hide_user_menu(self):
+        if hasattr(self, '_user_menu') and self._user_menu:
+            try:
+                self._user_menu.destroy()
+            except Exception:
+                pass
+            self._user_menu = None
+        try:
+            self.unbind_all("<Button-1>")
+        except Exception:
+            pass
+
+    def _dismiss_user_menu(self, event):
+        if not hasattr(self, '_user_menu') or not self._user_menu:
+            return
+        x = event.x_root
+        y = event.y_root
+        widget = self.winfo_containing(x, y)
+        if widget and (self._user_menu == widget or self._user_menu in self._get_all_children(widget)):
+            return
+        self._hide_user_menu()
+
+    def _get_all_children(self, widget):
+        children = []
+        try:
+            for child in widget.winfo_children():
+                children.append(child)
+                children.extend(self._get_all_children(child))
+        except Exception:
+            pass
+        return children
+
+    def _menu_action(self, callback):
+        self._hide_user_menu()
+        callback()
+
+    def _fetch_dashboard_stats(self):
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            return
+
+        def _do():
+            bookings_count = "0"
+            favorites_count = "0"
+            try:
+                resp = self.api.get(f"/bookings/user/{user_id}", timeout=5)
+                if resp.status_code == 200:
+                    bookings = resp.json()
+                    bookings_count = str(len(bookings))
+            except Exception:
+                pass
+            try:
+                resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
+                if resp.status_code == 200:
+                    favorites = resp.json()
+                    favorites_count = str(len(favorites))
+            except Exception:
+                pass
+            self.after(0, lambda: self._update_stat_labels(bookings_count, favorites_count, "0"))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _update_stat_labels(self, bookings, favorites, reviews):
+        if hasattr(self, '_stat_labels'):
+            if "Active Bookings" in self._stat_labels:
+                self._stat_labels["Active Bookings"].configure(text=bookings)
+            if "Saved Favorites" in self._stat_labels:
+                self._stat_labels["Saved Favorites"].configure(text=favorites)
+            if "Total Reviews" in self._stat_labels:
+                self._stat_labels["Total Reviews"].configure(text=reviews)

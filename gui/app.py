@@ -1,6 +1,10 @@
 import customtkinter as ctk
+from tkinterdnd2.TkinterDnD import require as require_dnd
 from PIL import Image
 import os
+import base64
+import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 from gui.api_client import APIClient
@@ -16,6 +20,7 @@ from gui.screens.forgot_password import ForgotPasswordMixin
 from gui.screens.profile import ProfileMixin
 from gui.screens.change_password import ChangePasswordMixin
 from gui.screens.admin_dashboard import AdminDashboardMixin
+from gui.screens.notifications import NotificationsMixin
 
 
 @dataclass
@@ -34,9 +39,10 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                        RegisterSkeletonMixin,
                        EmailVerifyMixin, DashboardMixin, OwnerDashboardMixin,
                        ForgotPasswordMixin, ProfileMixin, ChangePasswordMixin,
-                       AdminDashboardMixin):
+                       NotificationsMixin, AdminDashboardMixin):
     def __init__(self):
         super().__init__()
+        require_dnd(self)
 
         ctk.set_default_color_theme("green")
         self.title("Boarding House Finder")
@@ -80,6 +86,13 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.pfp_placeholder = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(40, 40))
         self.search_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "search.png")), size=(30, 30))
         self.bookmark_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(25, 25))
+        self.upload_image_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "upload_image.png")), size=(60, 60))
+
+        self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
+        self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(18, 18))
+        self.menu_lock_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "info.png")), size=(18, 18))
+        self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(18, 18))
+        self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(18, 18))
 
         self.logo = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "logo.png")), size=(140, 32))
         raw_google = Image.open(os.path.join(parent_dir, "assets", "google.png"))
@@ -161,6 +174,14 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         # --- Try loading saved session ---
         saved = self._load_session()
         if saved and saved.get("access_token"):
+            token = saved["access_token"]
+            if not self._is_token_valid(token):
+                print("[DEBUG] Saved token expired — clearing session")
+                self._clear_session()
+                self.access_token = None
+                self.api.access_token = None
+                saved = None
+        if saved and saved.get("access_token"):
             print(f"[DEBUG] Session restored — role={saved.get('role')}, routing to dashboard")
             self.access_token = saved["access_token"]
             self.api.access_token = self.access_token
@@ -180,6 +201,21 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.show_login_page()
         #self.show_owner_dashboard()
         #self.show_tenant_dashboard()
+
+    def _is_token_valid(self, token):
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return False
+            payload_b64 = parts[1]
+            padding = 4 - len(payload_b64) % 4
+            if padding != 4:
+                payload_b64 += "=" * padding
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+            exp = payload.get("exp", 0)
+            return exp > datetime.now(timezone.utc).timestamp()
+        except Exception:
+            return False
 
     def clear_container(self):
         if not getattr(self, "_building_under_skeleton", False):

@@ -37,6 +37,11 @@ def decode_access_token(token: str, db: Session = None) -> dict:
             blacklisted = db.query(TokenBlacklist).filter(TokenBlacklist.jti == jti).first()
             if blacklisted:
                 return None
+            # Probabilistic cleanup: purge expired blacklist entries with ~1% chance
+            if secrets.randbelow(100) == 0:
+                from datetime import datetime, timezone
+                db.query(TokenBlacklist).filter(TokenBlacklist.expires_at < datetime.now(timezone.utc)).delete()
+                db.commit()
         return payload
     except JWTError:
         return None

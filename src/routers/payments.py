@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database
@@ -20,15 +21,9 @@ def create_payment(request: Request, payment: schemas.PaymentsCreate, db: Sessio
 
 
 @router.get("/{payment_id}", response_model=schemas.PaymentsResponse)
-def get_payment(payment_id: int, query_params: schemas.PaymentQueryFilter = Depends(), db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_payment(request: Request, payment_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     payments_crud = crud.PaymentsCRUD(db)
-    user_crud = crud.UsersCRUD(db)
-
-    if not user_crud.get(user_id=query_params.user_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
 
     payment = payments_crud.get(payment_id=payment_id)
 
@@ -37,5 +32,31 @@ def get_payment(payment_id: int, query_params: schemas.PaymentQueryFilter = Depe
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Payment not found"
         )
+
+    # Get the booking to verify ownership
+    booking = crud.BookingsCRUD(db).get(payment.booking_id)
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated booking not found"
+        )
+
+    if current_user.role != "admin" and booking.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this payment"
+        )
     
     return payment
+
+
+@router.get("/owner/{owner_id}", response_model=List[schemas.PaymentsResponse])
+def get_owner_payments(
+    owner_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin" and current_user.user_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    payments_crud = crud.PaymentsCRUD(db)
+    return payments_crud.get_payments_by_owner(owner_id=owner_id)

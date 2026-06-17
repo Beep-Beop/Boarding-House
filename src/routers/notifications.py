@@ -15,21 +15,36 @@ def create_notification(request: Request, notification: schemas.NotificationsCre
 
 
 @router.patch("/{notif_id}/read", response_model=schemas.NotificationsResponse)
-def update_notification_read(notif_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def update_notification_read(request: Request, notif_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     notif_crud = crud.NotificationsCRUD(db)
 
-    notification = notif_crud.mark_as_read(notif_id=notif_id)
+    notification = notif_crud.get(notif_id)
 
     if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found"
         )
+
+    if current_user.role != "admin" and notification.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update this notification"
+        )
+    
+    notification = notif_crud.mark_as_read(notif_id=notif_id)
     
     return notification
 
 @router.get("/user/{user_id}", response_model=List[schemas.NotificationsResponse])
-def get_user_notifications(user_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_user_notifications(request: Request, user_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    if current_user.role != "admin" and current_user.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view these notifications"
+        )
     notif_crud = crud.NotificationsCRUD(db)
 
     notifications = notif_crud.get_user_unread(user_id=user_id)

@@ -287,10 +287,30 @@ class LoginMixin:
 
             elif response.status_code in [401, 403]:
                 error_msg = response.json().get("detail", "Login Failed.")
-                self.login_email_error.configure(text=error_msg)
-                self.login_password_error.configure(text=error_msg)
-                self.email_fake_entry.configure(border_color=self.error_red)
-                self.password_fake_entry.configure(border_color=self.error_red)
+                auth_hint = response.headers.get("X-Auth-Hint")
+                if auth_hint == "google_login":
+                    self._google_hint_cleared = False
+                    self.login_email_error.configure(text=error_msg)
+                    self.login_password_error.configure(text="")
+                    self.email_fake_entry.configure(border_color=self.error_red)
+                    self.password_fake_entry.configure(border_color=self.entry_border)
+                    self.google_btn.configure(fg_color=self.error_red)
+                    self.after(2000, lambda: self.google_btn.configure(fg_color="transparent"))
+                    if not hasattr(self, "_google_hint_label") or not self._google_hint_label.winfo_exists():
+                        self._google_hint_label = ctk.CTkLabel(
+                            self.form_container,
+                            text="\u2b06 Sign in with Google above",
+                            font=self.body_paragraph_font,
+                            text_color=self.primary_color,
+                        )
+                        self._google_hint_label.pack(pady=(0, 5))
+                    self.email_entry.bind("<Key>", self._clear_google_hint, add="+")
+                    self.password_entry.bind("<Key>", self._clear_google_hint, add="+")
+                else:
+                    self.login_email_error.configure(text=error_msg)
+                    self.login_password_error.configure(text=error_msg)
+                    self.email_fake_entry.configure(border_color=self.error_red)
+                    self.password_fake_entry.configure(border_color=self.error_red)
 
             else:
                 self.login_email_error.configure(text="Server error, Try again Later.")
@@ -332,7 +352,8 @@ class LoginMixin:
             self.api.access_token = self.access_token
             self.current_user = user_info
 
-            self._save_session(user_info)
+            if self.remember_checkbox.get():
+                self._save_session(user_info)
 
             if not user_info.get("account_setup_complete", False):
                 self.show_google_account_type(user_info)
@@ -351,6 +372,14 @@ class LoginMixin:
             self.show_toast(msg, is_error=True)
 
         GoogleAuthHandler(self.api, self, on_success, on_error).start()
+
+    def _clear_google_hint(self, event=None):
+        if getattr(self, "_google_hint_cleared", False):
+            return
+        self._google_hint_cleared = True
+        if hasattr(self, "_google_hint_label") and self._google_hint_label.winfo_exists():
+            self._google_hint_label.destroy()
+        self.google_btn.configure(fg_color="transparent")
 
     def forgot_password(self):
         self.show_forgot_password_page()

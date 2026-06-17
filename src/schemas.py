@@ -38,6 +38,14 @@ class UserResponse(UserBase):
     is_verified: bool
     status: Literal['active', 'banned', 'suspended']
     created_at: datetime
+    auth_provider: Literal['email', 'google', 'both'] = 'email'
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PublicUserResponse(UserBase):
+    """User response that excludes sensitive/internal fields like auth_provider, is_verified, status."""
+    user_id: int
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,6 +57,7 @@ class UserUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     role: Optional[Literal['student', 'owner', 'admin']] = None
     account_setup_complete: Optional[bool] = None
+    auth_provider: Optional[Literal['email', 'google', 'both']] = None
 
 class UserLogin(BaseModel):
     email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
@@ -61,11 +70,15 @@ class LocationBase(BaseModel):
     barangay: Optional[str] = Field(None, max_length=100)
     city: Optional[str] = Field(None, max_length=100)
     province: Optional[str] = Field(None, max_length=100)
+    zip_code: Optional[str] = Field(None, max_length=20)
     latitude: Optional[Decimal] = Field(None, max_digits=10, decimal_places=8)
     longitude: Optional[Decimal] = Field(None, max_digits=11, decimal_places=8)
 
 class LocationCreate(LocationBase):
-    pass
+    province: str = Field(..., max_length=100)
+    city: str = Field(..., max_length=100)
+    barangay: str = Field(..., max_length=100)
+    street: str = Field(..., max_length=255)
 
 class LocationResponse(LocationBase):
     location_id: int
@@ -96,6 +109,7 @@ class AmenitiesResponse(AmenitiesBase):
 # --- BOARDING HOUSE ---
 class BoardingHouseBase(BaseModel):
     bh_name: str = Field(..., max_length=255)
+    property_type: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
     price_range: str = Field(..., max_length=100)
     permit_url: str = Field(..., max_length=255)
@@ -118,12 +132,14 @@ class BoardingHouseResponse(BoardingHouseBase):
 class BoardingHouseUpdate(BaseModel):
     location_id: Optional[int] = None
     bh_name: Optional[str] = None
+    property_type: Optional[str] = None
     description: Optional[str] = None
     price_range: Optional[str] = None
     permit_url: Optional[str] = None
     rules: Optional[str] = None
     min_stay_months: Optional[int] = None
     status: Optional[Literal['active', 'pending', 'banned']] = None
+    is_verified: Optional[bool] = None
 
 # --- PHOTOS ---
 class PhotoBase(BaseModel):
@@ -132,6 +148,8 @@ class PhotoBase(BaseModel):
 
 class PhotoCreate(PhotoBase):
     entity_id: int
+    is_primary: bool = False
+    sort_order: int = 0
 
 class PhotoResponse(PhotoBase):
     photo_id: int
@@ -146,6 +164,10 @@ class PhotoUploadMetadata(BaseModel):
     entity_id: int
     is_primary: bool = False
     sort_order: int = 0
+
+class UploadResponse(BaseModel):
+    url: str
+    filename: str
 
 # --- ADMIN LOGS ---
 class AdminLogsBase(BaseModel):
@@ -252,6 +274,10 @@ class ListingAmenitiesCreate(ListingAmenitiesBase):
     listing_id: int
     amenity_id: int
 
+class LinkAmenityRequest(BaseModel):
+    listing_id: int
+    amenity_name: str
+
 class ListingAmenitiesResponse(ListingAmenitiesBase):
     lm_id: int
     listing_id: int
@@ -264,7 +290,7 @@ class ListingSearchQuery(BaseModel):
     min_price: Optional[Decimal] = None
     max_price: Optional[Decimal] = None
     min_stay_months: Optional[int] = None
-    q: Optional[str] = None
+    q: Optional[str] = Field(None, max_length=200)
     amenity_ids: Optional[List[int]] = None
     limit: int = 20
     offset: int = 0
@@ -319,6 +345,32 @@ class BookingUpdate(BaseModel):  # Fixed: Dropped parent class inheritance to su
 class BookingStatusUpdate(BaseModel):
     status: Literal['active', 'pending', 'cancelled']
     changed_by_user_id: int  # Converted from a loose parameter into an encapsulated field
+
+class BookingAdminResponse(BookingsResponse):
+    tenant_name: Optional[str] = None
+    tenant_email: Optional[str] = None
+    tenant_phone: Optional[str] = None
+    property_name: Optional[str] = None
+    property_type: Optional[str] = None
+    room_number: Optional[int] = None
+    room_type: Optional[str] = None
+    payment_status: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_amount: Optional[Decimal] = None
+
+class BookingStats(BaseModel):
+    total_bookings: int
+    pending_count: int
+    active_count: int
+    cancelled_count: int
+    total_revenue: Decimal
+
+class BookingDetailResponse(BookingAdminResponse):
+    payments: List[PaymentsResponse] = []
+    history: List[BookingHistoryResponse] = []
+    listing_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    property_address: Optional[str] = None
 
 
 # FOURTH-LEVEL DEPENDENT TABLES
@@ -413,6 +465,11 @@ class ResetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=6)
+
+class AdminCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
 
 class SendVerificationRequest(BaseModel):
     email: EmailStr

@@ -43,8 +43,13 @@ class RegisterValidationMixin:
                             if self.email_entry.get().strip() != email:
                                 return
                             if exists:
+                                provider = response.json().get("provider")
+                                if provider in ("google", "both"):
+                                    msg = "\u26a0 Already signed up with Google. Use Google login."
+                                else:
+                                    msg = "\u26a0 Email already registered."
                                 self.email_bg_frame.configure(border_color=self.error_red)
-                                self.email_error_lbl.configure(text="\u26a0 Email already registered.")
+                                self.email_error_lbl.configure(text=msg)
                             else:
                                 self.email_bg_frame.configure(border_color="green")
                                 self.email_error_lbl.configure(text="")

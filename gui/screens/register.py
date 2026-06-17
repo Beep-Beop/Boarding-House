@@ -166,7 +166,12 @@ class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("exists"):
-                        self.email_error_lbl.configure(text="This email is already registered.")
+                        provider = data.get("provider")
+                        if provider in ("google", "both"):
+                            msg = "Already signed up with Google. Use Google login."
+                        else:
+                            msg = "This email is already registered."
+                        self.email_error_lbl.configure(text=msg)
                         self.email_bg_frame.configure(border_color=self.error_red)
                         return
             except requests.exceptions.ConnectionError:

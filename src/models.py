@@ -30,6 +30,7 @@ class Users(Base):
     reset_code_hash = Column(String(128), nullable=True)
     reset_code_expires = Column(DateTime, nullable=True)
     account_setup_complete = Column(Boolean, default=False)
+    auth_provider = Column(Enum('email', 'google', 'both'), default='email', nullable=False)
 
     # Relationships: If a user is deleted, delete their houses, bookings, and reviews.
     location = relationship("Location", backref="users")
@@ -47,6 +48,7 @@ class Location(Base):
     city = Column(String(100), nullable=False)
     barangay = Column(String(100), nullable=False)
     street = Column(String(255), nullable=True) # e.g., "123 Sumulong Highway"
+    zip_code = Column(String(20), nullable=True)
     latitude = Column(DECIMAL(10, 8), nullable=True)  
     longitude = Column(DECIMAL(11, 8), nullable=True) 
 
@@ -72,6 +74,7 @@ class BoardingHouse(Base):
     location_id = Column(Integer, ForeignKey("LOCATION.location_id", ondelete="RESTRICT"), nullable=False)
     
     bh_name = Column(String(255), nullable=False)
+    property_type = Column(String(100), nullable=True) # e.g., "Boarding House", "Dormitory", "Apartment"
     description = Column(Text) 
     price_range = Column(String(100)) # e.g., "3000 - 5000"
     status = Column(Enum('active', 'pending', 'banned'), default='pending')

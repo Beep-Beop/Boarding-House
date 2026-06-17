@@ -16,5 +16,11 @@ def toggle_favorite(request: Request, fav: schemas.FavoritesCreate, db: Session 
 
 
 @router.get("/user/{user_id}", response_model=List[schemas.FavoritesResponse])
-def get_user_favorites(user_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_user_favorites(request: Request, user_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    if current_user.role != "admin" and current_user.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view these favorites"
+        )
     return crud.FavoritesCRUD(db).get_user_favorites(user_id=user_id)

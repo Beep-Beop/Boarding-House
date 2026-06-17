@@ -6,6 +6,13 @@ from src.dependencies import get_current_user, limiter
 
 router = APIRouter(prefix="/social", tags=["Social"])
 
+@router.get("/reviews/all", response_model=List[schemas.ReviewsResponse])
+@limiter.limit("30/minute")
+def get_all_reviews(request: Request, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view all reviews")
+    return crud.ReviewsCRUD(db).get_all()
+
 @router.post("/reviews", response_model=schemas.ReviewsResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 def create_review(request: Request, review: schemas.ReviewsCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
@@ -14,7 +21,8 @@ def create_review(request: Request, review: schemas.ReviewsCreate, db: Session =
     return review_crud.create(user_id=current_user.user_id, **review.model_dump())
 
 @router.get("/reviews/listing/{listing_id}", response_model=List[schemas.ReviewsResponse])
-def get_listing_reviews(listing_id: int, db: Session = Depends(database.get_db)):
+@limiter.limit("30/minute")
+def get_listing_reviews(request: Request, listing_id: int, db: Session = Depends(database.get_db)):
     review_crud = crud.ReviewsCRUD(db)
 
     return review_crud.get_reviews_by_listing(listing_id=listing_id)
@@ -24,12 +32,19 @@ def get_listing_reviews(listing_id: int, db: Session = Depends(database.get_db))
 def delete_review(request: Request, review_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     review_crud = crud.ReviewsCRUD(db)
 
-    deleted = review_crud.delete(review_id=review_id)
-
-    if not deleted:
+    review = review_crud.get(review_id=review_id)
+    if not review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found"
         )
+
+    if current_user.role != "admin" and review.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this review"
+        )
+
+    review_crud.delete(review_id=review_id)
     
     return None

@@ -7,6 +7,18 @@ from src.dependencies import get_current_user, limiter
 router = APIRouter(prefix="/amenities", tags=["Amenities"])
 
 
+@router.post("/link-to-listing", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
+def link_amenity_to_listing(request: Request, body: schemas.LinkAmenityRequest, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    amenity_crud = crud.AmenitiesCRUD(db)
+    amenity = amenity_crud.get_by_name(body.amenity_name)
+    if not amenity:
+        amenity = amenity_crud.create(amenity_name=body.amenity_name)
+
+    listing_amenity_crud = crud.ListingAmenitiesCRUD(db)
+    return listing_amenity_crud.add_amenities_to_listing(listing_id=body.listing_id, amenity_id=amenity.amenity_id)
+
+
 @router.post("/", response_model=schemas.AmenitiesResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def create_amenity(request: Request, amenity: schemas.AmenitiesCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):

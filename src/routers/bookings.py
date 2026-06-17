@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from src import crud, schemas, database
 from src.dependencies import get_current_user, limiter
 
@@ -90,6 +90,220 @@ def get_owner_bookings(owner_id: int, db: Session = Depends(database.get_db), cu
     booking_crud = crud.BookingsCRUD(db)
     return booking_crud.get_owner_bookings(owner_id=owner_id)
 
+
+# GET /owner/{owner_id}/enriched → Owner: get enriched bookings with optional status/search filter
+@router.get("/owner/{owner_id}/enriched", response_model=List[schemas.BookingAdminResponse])
+def get_owner_bookings_enriched(
+    owner_id: int,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin" and current_user.user_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    booking_crud = crud.BookingsCRUD(db)
+    enriched = booking_crud.get_owner_bookings_enriched(owner_id=owner_id, status=status, search=search)
+    result = []
+    for item in enriched:
+        b = item["booking"]
+        room = item["room"]
+        listing = item["listing"]
+        tenant = item["tenant"]
+        result.append(schemas.BookingAdminResponse(
+            booking_id=b.booking_id, user_id=b.user_id, room_id=b.room_id,
+            check_in=b.check_in, check_out=b.check_out, status=b.status,
+            total_price=b.total_price, notes=b.notes, created_at=b.created_at,
+            updated_at=b.updated_at,
+            tenant_name=tenant.name if tenant else None,
+            tenant_email=tenant.email if tenant else None,
+            tenant_phone=tenant.phone if tenant else None,
+            property_name=listing.bh_name if listing else None,
+            property_type=listing.property_type if listing else None,
+            room_number=room.room_id if room else None,
+            room_type=room.room_type if room else None,
+            payment_status=item["payment_status"],
+            payment_method=item["payment_method"],
+            payment_amount=item["payment_amount"],
+        ))
+    return result
+
+
+# GET /owner/{owner_id}/stats → Owner: get booking stats
+@router.get("/owner/{owner_id}/stats", response_model=schemas.BookingStats)
+def get_owner_booking_stats(
+    owner_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin" and current_user.user_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    booking_crud = crud.BookingsCRUD(db)
+    return booking_crud.get_owner_booking_stats(owner_id=owner_id)
+
+
+# GET /{booking_id}/owner-detail → Owner: get full booking detail they own
+@router.get("/{booking_id}/owner-detail", response_model=schemas.BookingDetailResponse)
+def get_owner_booking_detail(
+    booking_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin" and current_user.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    booking_crud = crud.BookingsCRUD(db)
+    data = booking_crud.get_booking_detail(booking_id)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    b = data["booking"]
+    room = data["room"]
+    listing = data["listing"]
+    tenant = data["tenant"]
+    owner = data["owner"]
+    payments = data["payments"]
+    history = data["history"]
+
+    if current_user.role == "owner" and (not listing or listing.owner_id != current_user.user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this property")
+
+    payment_status = payments[0].status if payments else None
+    payment_method = payments[0].method if payments else None
+    payment_amount = payments[0].amount if payments else None
+    address = None
+    if listing and listing.location_id:
+        loc = crud.LocationsCRUD(db).get(listing.location_id)
+        if loc:
+            address = f"{loc.street or ''}, {loc.barangay or ''}, {loc.city or ''}, {loc.province or ''}".strip(", ")
+    payment_responses = [schemas.PaymentsResponse.model_validate(p) for p in payments]
+    history_responses = [schemas.BookingHistoryResponse.model_validate(h) for h in history]
+    return schemas.BookingDetailResponse(
+        booking_id=b.booking_id, user_id=b.user_id, room_id=b.room_id,
+        check_in=b.check_in, check_out=b.check_out, status=b.status,
+        total_price=b.total_price, notes=b.notes, created_at=b.created_at,
+        updated_at=b.updated_at,
+        tenant_name=tenant.name if tenant else None,
+        tenant_email=tenant.email if tenant else None,
+        tenant_phone=tenant.phone if tenant else None,
+        property_name=listing.bh_name if listing else None,
+        property_type=listing.property_type if listing else None,
+        room_number=room.room_id if room else None,
+        room_type=room.room_type if room else None,
+        payment_status=payment_status,
+        payment_method=payment_method,
+        payment_amount=payment_amount,
+        payments=payment_responses,
+        history=history_responses,
+        listing_id=listing.listing_id if listing else None,
+        owner_name=owner.name if owner else None,
+        property_address=address,
+    )
+
+
+# GET /all → Admin: get all bookings with enriched data
+@router.get("/all", response_model=dict)
+def get_all_bookings(
+    request: Request,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    booking_crud = crud.BookingsCRUD(db)
+    bookings, total = booking_crud.get_all_bookings(status=status, search=search, page=page, limit=limit)
+    result = []
+    for b in bookings:
+        room = crud.RoomsCRUD(db).get(b.room_id)
+        listing = crud.BoardingHousesCRUD(db).get(room.listing_id) if room else None
+        tenant = crud.UsersCRUD(db).get(b.user_id)
+        payments = crud.PaymentsCRUD(db).get_payments_by_booking(b.booking_id)
+        payment_status = payments[0].status if payments else None
+        payment_method = payments[0].method if payments else None
+        payment_amount = payments[0].amount if payments else None
+        result.append(schemas.BookingAdminResponse(
+            booking_id=b.booking_id, user_id=b.user_id, room_id=b.room_id,
+            check_in=b.check_in, check_out=b.check_out, status=b.status,
+            total_price=b.total_price, notes=b.notes, created_at=b.created_at,
+            updated_at=b.updated_at,
+            tenant_name=tenant.name if tenant else None,
+            tenant_email=tenant.email if tenant else None,
+            tenant_phone=tenant.phone if tenant else None,
+            property_name=listing.bh_name if listing else None,
+            property_type=listing.property_type if listing else None,
+            room_number=room.room_id if room else None,
+            room_type=room.room_type if room else None,
+            payment_status=payment_status,
+            payment_method=payment_method,
+            payment_amount=payment_amount,
+        ))
+    return {"bookings": result, "total": total, "page": page, "limit": limit}
+
+# GET /stats → Admin: get booking counts and revenue
+@router.get("/stats", response_model=schemas.BookingStats)
+def get_booking_stats(
+    request: Request,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    booking_crud = crud.BookingsCRUD(db)
+    return booking_crud.get_booking_stats()
+
+# GET /{booking_id}/details → Admin: get full booking detail
+@router.get("/{booking_id}/details", response_model=schemas.BookingDetailResponse)
+def get_booking_detail(
+    booking_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    booking_crud = crud.BookingsCRUD(db)
+    data = booking_crud.get_booking_detail(booking_id)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+    b = data["booking"]
+    room = data["room"]
+    listing = data["listing"]
+    tenant = data["tenant"]
+    owner = data["owner"]
+    payments = data["payments"]
+    history = data["history"]
+    payment_status = payments[0].status if payments else None
+    payment_method = payments[0].method if payments else None
+    payment_amount = payments[0].amount if payments else None
+    address = None
+    if listing and listing.location_id:
+        loc = crud.LocationsCRUD(db).get(listing.location_id)
+        if loc:
+            address = f"{loc.street or ''}, {loc.barangay or ''}, {loc.city or ''}, {loc.province or ''}".strip(", ")
+    payment_responses = [schemas.PaymentsResponse.model_validate(p) for p in payments]
+    history_responses = [schemas.BookingHistoryResponse.model_validate(h) for h in history]
+    return schemas.BookingDetailResponse(
+        booking_id=b.booking_id, user_id=b.user_id, room_id=b.room_id,
+        check_in=b.check_in, check_out=b.check_out, status=b.status,
+        total_price=b.total_price, notes=b.notes, created_at=b.created_at,
+        updated_at=b.updated_at,
+        tenant_name=tenant.name if tenant else None,
+        tenant_email=tenant.email if tenant else None,
+        tenant_phone=tenant.phone if tenant else None,
+        property_name=listing.bh_name if listing else None,
+        property_type=listing.property_type if listing else None,
+        room_number=room.room_id if room else None,
+        room_type=room.room_type if room else None,
+        payment_status=payment_status,
+        payment_method=payment_method,
+        payment_amount=payment_amount,
+        payments=payment_responses,
+        history=history_responses,
+        listing_id=listing.listing_id if listing else None,
+        owner_name=owner.name if owner else None,
+        property_address=address,
+    )
 
 # GET /user/{user_id} → Fetch a collection of records filtered by user
 @router.get("/user/{user_id}", response_model=List[schemas.BookingsResponse])

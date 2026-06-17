@@ -15,5 +15,13 @@ htmlcov/
 
 test.py
 seed_data.py
+reset_users.py
+seed.py
+create_admin.py
+
+opencode.json
+
+
 
 plan.md
+owner-bookins-plan.md
