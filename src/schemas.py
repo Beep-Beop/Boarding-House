@@ -387,6 +387,23 @@ class PaymentsResponse(PaymentsBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- BOOKING HISTORY ---
+class BookingHistoryBase(BaseModel):
+    old_status: Optional[Literal['active', 'pending', 'cancelled']] = Field(None, examples=["active"])
+    new_status: Literal['active', 'pending', 'cancelled'] = Field(..., examples=["active"])
+
+class BookingHistoryCreate(BookingHistoryBase):
+    booking_id: int
+    changed_by: int 
+
+class BookingHistoryResponse(BookingHistoryBase):
+    history_id: int
+    booking_id: int
+    changed_by: int
+    changed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 class BookingDetailResponse(BookingAdminResponse):
     payments: List[PaymentsResponse] = []
     history: List[BookingHistoryResponse] = []
@@ -417,22 +434,6 @@ class ReviewsResponse(ReviewsBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# --- BOOKING HISTORY ---
-class BookingHistoryBase(BaseModel):
-    old_status: Optional[Literal['active', 'pending', 'cancelled']] = Field(None, examples=["active"])
-    new_status: Literal['active', 'pending', 'cancelled'] = Field(..., examples=["active"])
-
-class BookingHistoryCreate(BookingHistoryBase):
-    booking_id: int
-    changed_by: int 
-
-class BookingHistoryResponse(BookingHistoryBase):
-    history_id: int
-    booking_id: int
-    changed_by: int
-    changed_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 
 class PaymentQueryFilter(BaseModel):
     user_id: int
