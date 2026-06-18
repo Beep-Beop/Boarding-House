@@ -751,3 +751,134 @@ class AccountSettingsMixin:
         self.show_toast("Account deleted.", is_error=False)
         self._close_account_overlay()
         self._handle_logout()
+
+    def _build_verification_tab(self, parent):
+        """Build the Verification tab (Tenant only)."""
+        user = getattr(self, 'current_user', {}) or {}
+        is_verified = user.get('is_verified', False)
+        id_doc_url = user.get('id_document_url', '')
+
+        # ── Status Card ─────────────────────────────────────────────
+        if is_verified:
+            status_color = ("#2E7D32", "#4CAF50")
+            status_text = "✓ Verified"
+            status_detail = "Your account is verified. You can book listings."
+        elif id_doc_url:
+            status_color = self.hover_color
+            status_text = "● Pending Review"
+            status_detail = "Your ID is under review (1-2 business days)."
+        else:
+            status_color = self.hover_color
+            status_text = "○ Not Verified"
+            status_detail = "Upload a valid government ID to get verified."
+
+        status_card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                                   border_width=1, border_color=status_color,
+                                   corner_radius=6)
+        status_card.pack(fill="x", padx=10, pady=(15, 10))
+
+        ctk.CTkLabel(status_card, text=status_text,
+                     font=self.body_paragraph_font,
+                     text_color=status_color).pack(anchor="w", padx=15, pady=(10, 2))
+        ctk.CTkLabel(status_card, text=status_detail,
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
+
+        # ── ID Upload Section ───────────────────────────────────────
+        ctk.CTkLabel(parent, text="Valid ID Document",
+                     font=self.body_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+
+        upload_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        upload_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        self._verify_upload_btn = ctk.CTkButton(upload_frame,
+                                                text="📤  Upload Valid ID",
+                                                font=self.body_light_font,
+                                                fg_color=self.primary_color,
+                                                hover_color=self.hover_color,
+                                                text_color=("white", "white"),
+                                                command=self._pick_id_document)
+        self._verify_upload_btn.pack(side="left")
+
+        ctk.CTkLabel(upload_frame,
+                     text="Accepted: JPG, PNG, PDF (max 5MB)",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(side="left", padx=(10, 0))
+
+        # Existing file info
+        self._verify_file_label = ctk.CTkLabel(parent, text="",
+                                                font=self.body_light_font,
+                                                text_color=self.text_color)
+        self._verify_file_label.pack(anchor="w", padx=10)
+        if id_doc_url:
+            filename = id_doc_url.split("/")[-1] if "/" in id_doc_url else id_doc_url
+            self._verify_file_label.configure(text=f"Current file: {filename}")
+
+        self._verify_progress = ctk.CTkProgressBar(parent, mode="indeterminate",
+                                                    fg_color=self.entry_border,
+                                                    progress_color=self.primary_color)
+        self._verify_error = ctk.CTkLabel(parent, text="",
+                                          text_color=self.error_red,
+                                          font=self.inline_error_font)
+        self._verify_error.pack(anchor="w", padx=10, pady=(5, 0))
+
+        # ── Linked Accounts ─────────────────────────────────────────
+        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
+            fill="x", padx=10, pady=10)
+
+        ctk.CTkLabel(parent, text="Linked Accounts",
+                     font=self.body_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(0, 8))
+
+        auth_provider = user.get('auth_provider', 'email')
+        self._build_linked_account_card(parent, auth_provider)
+
+    def _pick_id_document(self):
+        """Open file dialog to select an ID document."""
+        file_path = filedialog.askopenfilename(
+            title="Select Valid ID",
+            filetypes=[("Images/PDF", "*.jpg *.jpeg *.png *.pdf")]
+        )
+        if not file_path:
+            return
+
+        import os
+        if os.path.getsize(file_path) > 5 * 1024 * 1024:
+            self._verify_error.configure(text="File must be under 5MB")
+            return
+
+        self._verify_error.configure(text="")
+        self._verify_progress.pack(fill="x", padx=10, pady=(5, 0))
+        self._verify_progress.start()
+
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+
+        def _do():
+            try:
+                # Upload file logic — assumes API endpoint accepts multipart
+                with open(file_path, "rb") as f:
+                    files = {"file": (os.path.basename(file_path), f, "application/octet-stream")}
+                    resp = self.api.post(f"/users/{user_id}/upload-id", files=files, timeout=30)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    url = data.get("url", "")
+                    if self.current_user:
+                        self.current_user["id_document_url"] = url
+                    self.after(0, lambda: self._on_id_uploaded(os.path.basename(file_path)))
+                else:
+                    err = resp.json().get("detail", "Upload failed")
+                    self.after(0, lambda: self._verify_error.configure(text=err))
+            except Exception:
+                self.after(0, lambda: self._verify_error.configure(
+                    text="Cannot connect to server"))
+            finally:
+                self.after(0, lambda: self._verify_progress.stop())
+                self.after(0, lambda: self._verify_progress.pack_forget())
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_id_uploaded(self, filename):
+        """Handle successful ID upload."""
+        self.show_toast("ID document uploaded!", is_error=False)
+        self._verify_file_label.configure(text=f"Current file: {filename}")
