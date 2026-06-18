@@ -31,7 +31,7 @@ class AccountSettingsMixin:
         card = ctk.CTkFrame(overlay, fg_color=self.secondary_color,
                             corner_radius=12, border_width=1,
                             border_color=self.entry_border)
-        card.place(x=40, y=40, relwidth=1, relheight=1, width=-80, height=-80)
+        card.pack(fill="both", expand=True, padx=40, pady=40)
 
         # Close button
         close_btn = ctk.CTkButton(card, text="✕", width=32, height=32,
