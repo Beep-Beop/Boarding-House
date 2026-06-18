@@ -181,14 +181,14 @@ class AccountSettingsMixin:
         ctk.CTkLabel(name_frame, text="Full Name",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_name_entry = ctk.CTkEntry(name_frame, width=480, height=38,
+        self._profile_name_entry = ctk.CTkEntry(name_frame, height=38,
                                                 font=self.body_light_font,
                                                 fg_color=self.fg_color,
                                                 border_color=self.entry_border,
                                                 border_width=1, corner_radius=6,
                                                 text_color=self.text_color,
                                                 placeholder_text="John Doe")
-        self._profile_name_entry.pack()
+        self._profile_name_entry.pack(fill="x")
         self._profile_name_entry.insert(0, user.get('name', ''))
 
         # Phone
@@ -197,14 +197,14 @@ class AccountSettingsMixin:
         ctk.CTkLabel(phone_frame, text="Phone Number",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_phone_entry = ctk.CTkEntry(phone_frame, width=480, height=38,
-                                                 font=self.body_light_font,
-                                                 fg_color=self.fg_color,
-                                                 border_color=self.entry_border,
-                                                 border_width=1, corner_radius=6,
-                                                 text_color=self.text_color,
-                                                 placeholder_text="+63 912 345 6789")
-        self._profile_phone_entry.pack()
+        self._profile_phone_entry = ctk.CTkEntry(phone_frame, height=38,
+                                                  font=self.body_light_font,
+                                                  fg_color=self.fg_color,
+                                                  border_color=self.entry_border,
+                                                  border_width=1, corner_radius=6,
+                                                  text_color=self.text_color,
+                                                  placeholder_text="+63 912 345 6789")
+        self._profile_phone_entry.pack(fill="x")
         self._profile_phone_entry.insert(0, user.get('phone', ''))
 
         # Street
@@ -213,14 +213,14 @@ class AccountSettingsMixin:
         ctk.CTkLabel(street_frame, text="Street Address",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_street_entry = ctk.CTkEntry(street_frame, width=480, height=38,
-                                                  font=self.body_light_font,
-                                                  fg_color=self.fg_color,
-                                                  border_color=self.entry_border,
-                                                  border_width=1, corner_radius=6,
-                                                  text_color=self.text_color,
-                                                  placeholder_text="123 Mabini St, Barangay ...")
-        self._profile_street_entry.pack()
+        self._profile_street_entry = ctk.CTkEntry(street_frame, height=38,
+                                                   font=self.body_light_font,
+                                                   fg_color=self.fg_color,
+                                                   border_color=self.entry_border,
+                                                   border_width=1, corner_radius=6,
+                                                   text_color=self.text_color,
+                                                   placeholder_text="123 Mabini St, Barangay ...")
+        self._profile_street_entry.pack(fill="x")
         self._profile_street_entry.insert(0, user.get('street', ''))
 
         # Date of Birth
@@ -318,14 +318,14 @@ class AccountSettingsMixin:
         self._profile_error.pack(pady=(10, 0))
 
         self._profile_save_btn = ctk.CTkButton(parent, text="SAVE CHANGES",
-                                               width=480, height=42,
+                                               height=42,
                                                corner_radius=6,
                                                font=self.body_bold_font,
                                                fg_color=self.primary_color,
                                                hover_color=self.hover_color,
                                                text_color=("white", "white"),
                                                command=self._save_profile_tab)
-        self._profile_save_btn.pack(pady=(8, 15))
+        self._profile_save_btn.pack(fill="x", padx=10, pady=(8, 15))
 
     def _format_date(self, date_str):
         """Format ISO date string to 'Month Day, Year'."""
@@ -576,14 +576,14 @@ class AccountSettingsMixin:
 
         # Update Password button
         self._sec_update_btn = ctk.CTkButton(parent, text="UPDATE PASSWORD",
-                                             width=480, height=42,
+                                             height=42,
                                              corner_radius=6,
                                              font=self.body_bold_font,
                                              fg_color=self.primary_color,
                                              hover_color=self.hover_color,
                                              text_color=("white", "white"),
                                              command=self._update_password)
-        self._sec_update_btn.pack(pady=(8, 15))
+        self._sec_update_btn.pack(fill="x", padx=10, pady=(8, 15))
 
         # ── Danger Zone ────────────────────────────────────────────
         ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
