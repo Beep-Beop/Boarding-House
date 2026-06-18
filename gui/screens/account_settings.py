@@ -439,3 +439,315 @@ class AccountSettingsMixin:
             self.name_label.configure(text=self._profile_name_entry.get().strip())
         if hasattr(self, 'owner_name_label') and self.owner_name_label:
             self.owner_name_label.configure(text=self._profile_name_entry.get().strip())
+
+    def _build_security_tab(self, parent):
+        """Build the Security tab — shared across all roles."""
+        # ── Change Password Section ────────────────────────────────
+        ctk.CTkLabel(parent, text="Change Password",
+                     font=self.body_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 8))
+
+        # Current Password
+        curr_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        curr_frame.pack(fill="x", padx=10, pady=(0, 8))
+        ctk.CTkLabel(curr_frame, text="Current Password",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 3))
+
+        curr_input_frame = ctk.CTkFrame(curr_frame, fg_color=self.fg_color,
+                                        border_color=self.entry_border,
+                                        border_width=1, corner_radius=6,
+                                        height=38)
+        curr_input_frame.pack(fill="x")
+        curr_input_frame.pack_propagate(False)
+
+        self._sec_old_pw = ctk.CTkEntry(curr_input_frame,
+                                        placeholder_text="Enter current password",
+                                        height=30, show="•",
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color)
+        self._sec_old_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+
+        self._sec_old_eye = ctk.CTkLabel(curr_input_frame,
+                                         image=self.closed_eye_icon,
+                                         text="", cursor="hand2")
+        self._sec_old_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_old_eye.bind("<Button-1>",
+                               lambda e: self._toggle_pw_visibility("old"))
+
+        # New Password
+        new_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        new_frame.pack(fill="x", padx=10, pady=(0, 8))
+        ctk.CTkLabel(new_frame, text="New Password",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 3))
+
+        new_input_frame = ctk.CTkFrame(new_frame, fg_color=self.fg_color,
+                                       border_color=self.entry_border,
+                                       border_width=1, corner_radius=6,
+                                       height=38)
+        new_input_frame.pack(fill="x")
+        new_input_frame.pack_propagate(False)
+
+        self._sec_new_pw = ctk.CTkEntry(new_input_frame,
+                                        placeholder_text="Enter new password",
+                                        height=30, show="•",
+                                        font=self.body_light_font,
+                                        fg_color="transparent",
+                                        border_width=0,
+                                        text_color=self.text_color)
+        self._sec_new_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+
+        self._sec_new_eye = ctk.CTkLabel(new_input_frame,
+                                         image=self.closed_eye_icon,
+                                         text="", cursor="hand2")
+        self._sec_new_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_new_eye.bind("<Button-1>",
+                               lambda e: self._toggle_pw_visibility("new"))
+
+        # Password requirement checklist (reusing register page pattern)
+        req_frame = ctk.CTkFrame(new_frame, fg_color="transparent")
+        req_frame.pack(anchor="w", padx=5, pady=(4, 0))
+
+        self._sec_req_length = ctk.CTkLabel(
+            req_frame, text="✗  8+ characters", font=self.inline_error_font,
+            text_color=self.entry_border)
+        self._sec_req_upper = ctk.CTkLabel(
+            req_frame, text="✗  Uppercase letter", font=self.inline_error_font,
+            text_color=self.entry_border)
+        self._sec_req_number = ctk.CTkLabel(
+            req_frame, text="✗  Number", font=self.inline_error_font,
+            text_color=self.entry_border)
+        self._sec_req_special = ctk.CTkLabel(
+            req_frame, text="✗  Special character", font=self.inline_error_font,
+            text_color=self.entry_border)
+
+        self._sec_req_length.grid(row=0, column=0, sticky="w", padx=(0, 20), pady=1)
+        self._sec_req_upper.grid(row=0, column=1, sticky="w", pady=1)
+        self._sec_req_number.grid(row=1, column=0, sticky="w", padx=(0, 20), pady=1)
+        self._sec_req_special.grid(row=1, column=1, sticky="w", pady=1)
+
+        self._sec_new_pw.bind("<KeyRelease>", self._validate_sec_strength)
+
+        # Confirm New Password
+        confirm_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        confirm_frame.pack(fill="x", padx=10, pady=(0, 8))
+        ctk.CTkLabel(confirm_frame, text="Confirm New Password",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 3))
+
+        confirm_input_frame = ctk.CTkFrame(confirm_frame, fg_color=self.fg_color,
+                                           border_color=self.entry_border,
+                                           border_width=1, corner_radius=6,
+                                           height=38)
+        confirm_input_frame.pack(fill="x")
+        confirm_input_frame.pack_propagate(False)
+
+        self._sec_confirm_pw = ctk.CTkEntry(confirm_input_frame,
+                                            placeholder_text="Re-enter new password",
+                                            height=30, show="•",
+                                            font=self.body_light_font,
+                                            fg_color="transparent",
+                                            border_width=0,
+                                            text_color=self.text_color)
+        self._sec_confirm_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+
+        self._sec_confirm_eye = ctk.CTkLabel(confirm_input_frame,
+                                             image=self.closed_eye_icon,
+                                             text="", cursor="hand2")
+        self._sec_confirm_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_confirm_eye.bind("<Button-1>",
+                                   lambda e: self._toggle_pw_visibility("confirm"))
+
+        self._sec_confirm_pw.bind("<KeyRelease>", self._validate_sec_match)
+
+        # Password match error label
+        self._sec_match_error = ctk.CTkLabel(parent, text="",
+                                             text_color=self.error_red,
+                                             font=self.inline_error_font)
+        self._sec_match_error.pack(anchor="w", padx=15)
+
+        # Error label
+        self._sec_error = ctk.CTkLabel(parent, text="",
+                                       text_color=self.error_red,
+                                       font=self.inline_error_font)
+        self._sec_error.pack(pady=(5, 0))
+
+        # Update Password button
+        self._sec_update_btn = ctk.CTkButton(parent, text="UPDATE PASSWORD",
+                                             width=480, height=42,
+                                             corner_radius=6,
+                                             font=self.body_bold_font,
+                                             fg_color=self.primary_color,
+                                             hover_color=self.hover_color,
+                                             text_color=("white", "white"),
+                                             command=self._update_password)
+        self._sec_update_btn.pack(pady=(8, 15))
+
+        # ── Danger Zone ────────────────────────────────────────────
+        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
+            fill="x", padx=10, pady=10)
+
+        ctk.CTkLabel(parent, text="Danger Zone",
+                     font=self.body_paragraph_font,
+                     text_color=self.error_red).pack(anchor="w", padx=10, pady=(0, 8))
+
+        danger_card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                                   border_width=1, border_color=self.error_red,
+                                   corner_radius=6)
+        danger_card.pack(fill="x", padx=10, pady=(0, 15))
+
+        ctk.CTkLabel(danger_card,
+                     text="Delete your account and all associated data.\nThis action CANNOT be undone.",
+                     font=self.body_light_font,
+                     text_color=self.text_color,
+                     justify="left").pack(anchor="w", padx=15, pady=(15, 10))
+
+        delete_btn = ctk.CTkButton(danger_card, text="Delete Account",
+                                   fg_color=self.error_red,
+                                   hover_color="#b52e2a",
+                                   text_color=("white", "white"),
+                                   font=self.body_paragraph_font,
+                                   width=140, height=36,
+                                   command=self._confirm_delete_account)
+        delete_btn.pack(anchor="e", padx=15, pady=(0, 12))
+
+    def _toggle_pw_visibility(self, field):
+        """Toggle password visibility for security tab fields."""
+        attr_visible = f"_sec_{field}_visible"
+        attr_entry = f"_sec_{field}_pw"
+        attr_eye = f"_sec_{field}_eye"
+
+        is_visible = getattr(self, attr_visible, False)
+        setattr(self, attr_visible, not is_visible)
+
+        entry = getattr(self, attr_entry)
+        eye = getattr(self, attr_eye)
+
+        if is_visible:
+            entry.configure(show="•")
+            self._animate_eye(eye, self._eye_frames_closed)
+        else:
+            entry.configure(show="")
+            self._animate_eye(eye, self._eye_frames_open)
+
+    def _validate_sec_strength(self, event=None):
+        """Real-time password strength validation (register page pattern)."""
+        if not hasattr(self, "_sec_req_length") or not self._sec_req_length.winfo_exists():
+            return
+        password = self._sec_new_pw.get()
+        checks = [
+            (self._sec_req_length, len(password) >= 8, "8+ characters"),
+            (self._sec_req_upper, bool(re.search(r"[A-Z]", password)), "Uppercase letter"),
+            (self._sec_req_number, bool(re.search(r"[0-9]", password)), "Number"),
+            (self._sec_req_special, bool(re.search(r"[^a-zA-Z0-9\s]", password)), "Special character"),
+        ]
+        for label, met, text in checks:
+            if met:
+                label.configure(text=f"✓  {text}", text_color="green")
+            else:
+                label.configure(
+                    text=f"✗  {text}",
+                    text_color=self.error_red if password else self.entry_border
+                )
+
+    def _validate_sec_match(self, event=None):
+        """Real-time password match validation."""
+        new_pw = self._sec_new_pw.get()
+        confirm = self._sec_confirm_pw.get()
+        if not confirm:
+            self._sec_match_error.configure(text="")
+        elif new_pw != confirm:
+            self._sec_match_error.configure(text="Passwords do not match")
+        else:
+            self._sec_match_error.configure(text="")
+
+    def _update_password(self):
+        """Call API to change password."""
+        old_pw = self._sec_old_pw.get()
+        new_pw = self._sec_new_pw.get()
+        confirm = self._sec_confirm_pw.get()
+
+        # Validation
+        if not old_pw or not new_pw or not confirm:
+            self._sec_error.configure(text="All fields are required")
+            return
+        if new_pw != confirm:
+            self._sec_error.configure(text="New passwords do not match")
+            return
+        if len(new_pw) < 8:
+            self._sec_error.configure(text="Password must be at least 8 characters")
+            return
+
+        self._sec_error.configure(text="")
+        self._sec_update_btn.configure(state="disabled", text="UPDATING...")
+
+        def _do():
+            try:
+                resp = self.api.post("/auth/change-password", json={
+                    "old_password": old_pw,
+                    "new_password": new_pw
+                }, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self._on_password_updated())
+                else:
+                    err = resp.json().get("detail", "Failed to change password")
+                    self.after(0, lambda: self._sec_error.configure(text=err))
+            except Exception:
+                self.after(0, lambda: self._sec_error.configure(
+                    text="Cannot connect to server"))
+            finally:
+                self.after(0, lambda: self._sec_update_btn.configure(
+                    state="normal", text="UPDATE PASSWORD"))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_password_updated(self):
+        """Handle successful password change."""
+        self.show_toast("Password changed successfully!", is_error=False)
+        self._sec_old_pw.delete(0, "end")
+        self._sec_new_pw.delete(0, "end")
+        self._sec_confirm_pw.delete(0, "end")
+        self._sec_match_error.configure(text="")
+        self._sec_error.configure(text="")
+        # Reset requirement labels
+        for label in (self._sec_req_length, self._sec_req_upper,
+                      self._sec_req_number, self._sec_req_special):
+            label.configure(text_color=self.entry_border)
+
+    def _confirm_delete_account(self):
+        """Show confirmation dialog, then delete account."""
+        from customtkinter import CTkInputDialog
+        dialog = CTkInputDialog(
+            text="Type DELETE to permanently delete your account:",
+            title="Delete Account"
+        )
+        result = dialog.get_input()
+        if result != "DELETE":
+            return
+
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            return
+
+        def _do():
+            try:
+                resp = self.api.delete(f"/users/{user_id}", timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self._on_account_deleted())
+                else:
+                    err = resp.json().get("detail", "Failed to delete account")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast(
+                    "Cannot connect to server", is_error=True))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_account_deleted(self):
+        """Handle account deletion — logout."""
+        self.show_toast("Account deleted.", is_error=False)
+        self._close_account_overlay()
+        self._handle_logout()
