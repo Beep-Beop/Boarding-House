@@ -1,3 +1,4 @@
+import atexit
 import base64
 import os
 import tempfile
@@ -9,6 +10,17 @@ from src.config import settings
 
 Base = declarative_base()
 
+_temp_files: list[str] = []
+
+def _cleanup_temp_files():
+    for path in _temp_files:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+atexit.register(_cleanup_temp_files)
+
 def _write_ssl_ca():
     raw = os.getenv("SSL_CA_CERT")
     if not raw:
@@ -18,6 +30,7 @@ def _write_ssl_ca():
         tmp = tempfile.NamedTemporaryFile(prefix="aiven-ca-", suffix=".pem", delete=False)
         tmp.write(decoded)
         tmp.close()
+        _temp_files.append(tmp.name)
         return tmp.name
     except Exception:
         return None

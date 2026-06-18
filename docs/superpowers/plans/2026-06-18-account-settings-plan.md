@@ -1,12 +1,43 @@
+# Account Settings Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace two separate overlay dialogs (Profile + Change Password) with a single tabbed Account Settings overlay, with role-specific tabs for Tenant, Owner, and Admin.
+
+**Architecture:** A new `AccountSettingsMixin` mixin class in `gui/screens/account_settings.py` handles all UI. The overlay uses `CTkTabview` with 2-3 tabs depending on role. The Profile tab is shared across all roles. The Security tab is shared across all roles. The third tab is role-specific (Verification for Tenant, Documents for Owner, none for Admin). Old `profile.py` and `change_password.py` files are deleted. Three dashboard files have their user menu items updated to replace two entries with one.
+
+**Tech Stack:** CustomTkinter, PIL for image handling, `threading` for async API calls, `re` for password validation.
+
+## Global Constraints
+
+- All colors must use theme tuples `(light, dark)` from `app.py` — no hardcoded hex strings except white text on colored badges.
+- API calls must use `threading.Thread` + `self.after(0, ...)` — never block the main thread.
+- Error labels must be pre-created with empty text and toggled — never dynamically created/destroyed.
+- All existing theme tokens (`self.primary_color`, `self.secondary_color`, `self.fg_color`, `self.text_color`, `self.entry_border`, `self.hover_color`, `self.error_red`, `self.alt_title_font`, `self.body_bold_paragraph_font`, `self.body_light_font`, `self.body_paragraph_font`, `self.body_description_font`, `self.body_bold_font`, `self.inline_error_font`) must be reused.
+- Password validation logic must match the pattern in `gui/screens/register_validation.py` (checklist of 4 criteria with ✗/✓ labels).
+
+---
+
+### Task 1: Account Settings Mixin Shell — Overlay + Tabview
+
+**Files:**
+- Create: `gui/screens/account_settings.py`
+- Test: N/A (GUI integration, verified by running the app)
+
+**Interfaces:**
+- Consumes: Theme tokens from `app.py` (self.primary_color, etc.), `self.api`, `self.current_user`, existing eye icons, `self._hide_user_menu()`, `self.show_toast()`
+- Produces: `AccountSettingsMixin.show_account_settings()` — entry point called from dashboards, `AccountSettingsMixin._close_account_overlay()` — cleanup method
+
+- [ ] **Step 1: Create file with imports and class skeleton**
+
+Create `gui/screens/account_settings.py`:
+```python
 import customtkinter as ctk
 import threading
 from PIL import Image
 import io
 import re
 from tkinter import filedialog, messagebox
-import os
-from datetime import datetime
-from customtkinter import CTkInputDialog
 
 
 class AccountSettingsMixin:
@@ -91,7 +122,37 @@ class AccountSettingsMixin:
             except Exception:
                 pass
             self._account_overlay = None
+```
 
+- [ ] **Step 2: Verify the file parses correctly**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/screens/account_settings.py').read()); print('Syntax OK')"`
+Expected output: `Syntax OK`
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/screens/account_settings.py
+git commit -m "feat: add AccountSettingsMixin shell with overlay and tabview"
+```
+
+---
+
+### Task 2: Profile Tab (All Roles)
+
+**Files:**
+- Modify: `gui/screens/account_settings.py` — add `_build_profile_tab` and helper methods
+
+**Interfaces:**
+- Consumes: `self.current_user` dict with keys `name`, `email`, `phone`, `street`, `date_of_birth`, `role`, `created_at`, `auth_provider`, `status`, `email_verified`, `is_verified`, `user_id`, `profile_photo`, `id_document_url`
+- Produces: `self._pick_profile_photo()` — filedialog + preview, `self._save_profile_tab()` — PATCH API call
+
+- [ ] **Step 1: Add `_build_profile_tab` method**
+
+After `_close_account_overlay`, add:
+
+```python
     def _build_profile_tab(self, parent):
         """Build the Profile tab — shared across all roles."""
         user = getattr(self, 'current_user', {}) or {}
@@ -152,7 +213,7 @@ class AccountSettingsMixin:
         if email_verified:
             ctk.CTkLabel(badges_frame, text="✓ Email Verified",
                          font=self.body_description_font,
-                         fg_color=("#2E7D32", "#4CAF50"), text_color=("white", "white"),
+                         fg_color="green", text_color=("white", "white"),
                          corner_radius=4, padx=6).pack(side="left", padx=(0, 4))
         else:
             ctk.CTkLabel(badges_frame, text="○ Unverified",
@@ -333,11 +394,18 @@ class AccountSettingsMixin:
         if not date_str or not isinstance(date_str, str):
             return "—"
         try:
+            from datetime import datetime
             dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
             return dt.strftime("%B %d, %Y")
         except (ValueError, IndexError):
             return date_str[:10] if date_str else "—"
+```
 
+- [ ] **Step 2: Add `_pick_profile_photo` and `_save_profile_tab` methods**
+
+After `_format_date`, add:
+
+```python
     def _pick_profile_photo(self):
         """Open file dialog to select a profile photo."""
         file_path = filedialog.askopenfilename(
@@ -348,6 +416,7 @@ class AccountSettingsMixin:
             return
 
         # Validate file size (max 2MB)
+        import os
         if os.path.getsize(file_path) > 2 * 1024 * 1024:
             self._profile_error.configure(text="Image must be under 2MB")
             return
@@ -383,21 +452,17 @@ class AccountSettingsMixin:
         month = self._profile_dob_month.get()
         day = self._profile_dob_day.get()
         year = self._profile_dob_year.get()
-        dob_changed = False
-        if day and year:
+        if month != "Jan" and day and year:
             month_map = {"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04",
                          "May": "05", "Jun": "06", "Jul": "07", "Aug": "08",
                          "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"}
             month_num = month_map.get(month, "01")
             try:
                 day_int = int(day)
-                new_dob_str = f"{year}-{month_num}-{day_int:02d}"
-                datetime.strptime(new_dob_str, "%Y-%m-%d")  # validate
-                # Check if actually changed
-                current_dob = getattr(self, 'current_user', {}).get('date_of_birth', '')
-                if current_dob != new_dob_str:
-                    payload["date_of_birth"] = new_dob_str
-                    dob_changed = True
+                dob_str = f"{year}-{month_num}-{day_int:02d}"
+                from datetime import datetime
+                datetime.strptime(dob_str, "%Y-%m-%d")  # validate
+                payload["date_of_birth"] = dob_str
             except (ValueError, TypeError):
                 self._profile_error.configure(text="Invalid date of birth")
                 return
@@ -414,10 +479,8 @@ class AccountSettingsMixin:
                 resp = self.api.patch(f"/users/{user_id}", json=payload, timeout=10)
                 if resp.status_code == 200:
                     updated = resp.json()
-                    if self.current_user and isinstance(updated, dict):
-                        for key in ("name", "phone", "street", "date_of_birth", "email"):
-                            if key in updated:
-                                self.current_user[key] = updated[key]
+                    if self.current_user:
+                        self.current_user["name"] = updated.get("name", self.current_user.get("name"))
                     self.after(0, lambda: self._on_profile_saved())
                 else:
                     err = resp.json().get("detail", "Update failed")
@@ -439,7 +502,33 @@ class AccountSettingsMixin:
             self.name_label.configure(text=self._profile_name_entry.get().strip())
         if hasattr(self, 'owner_name_label') and self.owner_name_label:
             self.owner_name_label.configure(text=self._profile_name_entry.get().strip())
+```
 
+- [ ] **Step 3: Verify syntax**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/screens/account_settings.py').read()); print('Syntax OK')"`
+Expected: `Syntax OK`
+
+- [ ] **Step 4: Commit**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/screens/account_settings.py
+git commit -m "feat: add Profile tab with avatar, form fields, and save logic"
+```
+
+---
+
+### Task 3: Security Tab (All Roles)
+
+**Files:**
+- Modify: `gui/screens/account_settings.py` — add `_build_security_tab`, password validation helpers, and danger zone
+
+- [ ] **Step 1: Add `_build_security_tab` method**
+
+After `_on_profile_saved`, add:
+
+```python
     def _build_security_tab(self, parent):
         """Build the Security tab — shared across all roles."""
         # ── Change Password Section ────────────────────────────────
@@ -607,13 +696,19 @@ class AccountSettingsMixin:
 
         delete_btn = ctk.CTkButton(danger_card, text="Delete Account",
                                    fg_color=self.error_red,
-                                   hover_color=self.error_red,
+                                   hover_color="#b52e2a",
                                    text_color=("white", "white"),
                                    font=self.body_paragraph_font,
                                    width=140, height=36,
                                    command=self._confirm_delete_account)
         delete_btn.pack(anchor="e", padx=15, pady=(0, 12))
+```
 
+- [ ] **Step 2: Add password validation helpers**
+
+After `_build_security_tab`, add:
+
+```python
     def _toggle_pw_visibility(self, field):
         """Toggle password visibility for security tab fields."""
         attr_visible = f"_sec_{field}_visible"
@@ -646,7 +741,7 @@ class AccountSettingsMixin:
         ]
         for label, met, text in checks:
             if met:
-                label.configure(text=f"✓  {text}", text_color=("#2E7D32", "#4CAF50"))
+                label.configure(text=f"✓  {text}", text_color="green")
             else:
                 label.configure(
                     text=f"✗  {text}",
@@ -663,7 +758,13 @@ class AccountSettingsMixin:
             self._sec_match_error.configure(text="Passwords do not match")
         else:
             self._sec_match_error.configure(text="")
+```
 
+- [ ] **Step 3: Add `_update_password` and `_confirm_delete_account`**
+
+After `_validate_sec_match`, add:
+
+```python
     def _update_password(self):
         """Call API to change password."""
         old_pw = self._sec_old_pw.get()
@@ -719,6 +820,7 @@ class AccountSettingsMixin:
 
     def _confirm_delete_account(self):
         """Show confirmation dialog, then delete account."""
+        from customtkinter import CTkInputDialog
         dialog = CTkInputDialog(
             text="Type DELETE to permanently delete your account:",
             title="Delete Account"
@@ -750,7 +852,33 @@ class AccountSettingsMixin:
         self.show_toast("Account deleted.", is_error=False)
         self._close_account_overlay()
         self._handle_logout()
+```
 
+- [ ] **Step 4: Verify syntax**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/screens/account_settings.py').read()); print('Syntax OK')"`
+Expected: `Syntax OK`
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/screens/account_settings.py
+git commit -m "feat: add Security tab with password validation and danger zone"
+```
+
+---
+
+### Task 4: Tenant — Verification Tab
+
+**Files:**
+- Modify: `gui/screens/account_settings.py` — add `_build_verification_tab`
+
+- [ ] **Step 1: Add `_build_verification_tab` method**
+
+After `_on_account_deleted`, add:
+
+```python
     def _build_verification_tab(self, parent):
         """Build the Verification tab (Tenant only)."""
         user = getattr(self, 'current_user', {}) or {}
@@ -759,7 +887,7 @@ class AccountSettingsMixin:
 
         # ── Status Card ─────────────────────────────────────────────
         if is_verified:
-            status_color = ("#2E7D32", "#4CAF50")
+            status_color = "green"
             status_text = "✓ Verified"
             status_detail = "Your account is verified. You can book listings."
         elif id_doc_url:
@@ -842,6 +970,7 @@ class AccountSettingsMixin:
         if not file_path:
             return
 
+        import os
         if os.path.getsize(file_path) > 5 * 1024 * 1024:
             self._verify_error.configure(text="File must be under 5MB")
             return
@@ -851,9 +980,6 @@ class AccountSettingsMixin:
         self._verify_progress.start()
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
-        if not user_id:
-            self._verify_error.configure(text="Not logged in")
-            return
 
         def _do():
             try:
@@ -865,7 +991,7 @@ class AccountSettingsMixin:
                     data = resp.json()
                     url = data.get("url", "")
                     if self.current_user:
-                        self.after(0, lambda: self.current_user.update({"id_document_url": url}))
+                        self.current_user["id_document_url"] = url
                     self.after(0, lambda: self._on_id_uploaded(os.path.basename(file_path)))
                 else:
                     err = resp.json().get("detail", "Upload failed")
@@ -883,15 +1009,43 @@ class AccountSettingsMixin:
         """Handle successful ID upload."""
         self.show_toast("ID document uploaded!", is_error=False)
         self._verify_file_label.configure(text=f"Current file: {filename}")
+```
 
+- [ ] **Step 2: Verify syntax**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/screens/account_settings.py').read()); print('Syntax OK')"`
+Expected: `Syntax OK`
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/screens/account_settings.py
+git commit -m "feat: add Tenant Verification tab with ID upload"
+```
+
+---
+
+### Task 5: Owner — Documents Tab + Linked Accounts Helper
+
+**Files:**
+- Modify: `gui/screens/account_settings.py` — add `_build_documents_tab` and `_build_linked_account_card`
+
+- [ ] **Step 1: Add `_build_documents_tab` and `_build_linked_account_card`**
+
+After `_on_id_uploaded`, add:
+
+```python
     def _build_documents_tab(self, parent):
         """Build the Documents tab (Owner only — business permit)."""
         user = getattr(self, 'current_user', {}) or {}
         permit_url = user.get('permit_url', '')
+        # Check if any listing is verified as a proxy for permit status
         is_verified = user.get('is_verified', False)
 
+        # ── Status Card ─────────────────────────────────────────────
         if is_verified:
-            status_color = ("#2E7D32", "#4CAF50")
+            status_color = "green"
             status_text = "✓ Verified"
             status_detail = "Your business permit is verified. Your listings show the Verified badge."
         elif permit_url:
@@ -915,6 +1069,7 @@ class AccountSettingsMixin:
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
 
+        # ── Permit Upload Section ───────────────────────────────────
         ctk.CTkLabel(parent, text="Business Permit",
                      font=self.body_paragraph_font,
                      text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
@@ -952,6 +1107,7 @@ class AccountSettingsMixin:
                                        font=self.inline_error_font)
         self._doc_error.pack(anchor="w", padx=10, pady=(5, 0))
 
+        # ── Linked Accounts ─────────────────────────────────────────
         ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
             fill="x", padx=10, pady=10)
 
@@ -983,7 +1139,7 @@ class AccountSettingsMixin:
         if has_google:
             ctk.CTkLabel(row, text="● Connected",
                          font=self.body_description_font,
-                         fg_color=("#2E7D32", "#4CAF50"), text_color=("white", "white"),
+                         fg_color="green", text_color=("white", "white"),
                          corner_radius=4, padx=6).pack(side="right")
 
             ctk.CTkButton(row, text="Unlink",
@@ -1006,18 +1162,20 @@ class AccountSettingsMixin:
                           state="disabled",
                           width=60, height=28).pack(side="right", padx=(0, 8))
 
+        # Email below
         ctk.CTkLabel(card, text=email,
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
 
     def _unlink_google(self):
         """Unlink Google account from user."""
+        from customtkinter import CTkInputDialog
         dialog = CTkInputDialog(
             text="Unlink your Google account? You can still log in with your email.",
             title="Unlink Google"
         )
         result = dialog.get_input()
-        if result is None:
+        if result is None:  # cancelled
             return
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
@@ -1030,10 +1188,10 @@ class AccountSettingsMixin:
                                       json={"auth_provider": "email"}, timeout=10)
                 if resp.status_code == 200:
                     if self.current_user:
-                        self.after(0, lambda: self.current_user.update({"auth_provider": "email"}))
+                        self.current_user["auth_provider"] = "email"
                     self.after(0, lambda: self.show_toast("Google account unlinked", is_error=False))
                     self.after(0, lambda: self._close_account_overlay())
-                    self.after(100, self.show_account_settings)
+                    self.after(100, self.show_account_settings)  # refresh
                 else:
                     err = resp.json().get("detail", "Failed to unlink")
                     self.after(0, lambda: self.show_toast(err, is_error=True))
@@ -1051,6 +1209,7 @@ class AccountSettingsMixin:
         if not file_path:
             return
 
+        import os
         if os.path.getsize(file_path) > 10 * 1024 * 1024:
             self._doc_error.configure(text="File must be under 10MB")
             return
@@ -1060,9 +1219,6 @@ class AccountSettingsMixin:
         self._doc_progress.start()
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
-        if not user_id:
-            self._doc_error.configure(text="Not logged in")
-            return
 
         def _do():
             try:
@@ -1073,7 +1229,7 @@ class AccountSettingsMixin:
                     data = resp.json()
                     url = data.get("url", "")
                     if self.current_user:
-                        self.after(0, lambda: self.current_user.update({"permit_url": url}))
+                        self.current_user["permit_url"] = url
                     self.after(0, lambda: self._on_permit_uploaded(os.path.basename(file_path)))
                 else:
                     err = resp.json().get("detail", "Upload failed")
@@ -1091,3 +1247,205 @@ class AccountSettingsMixin:
         """Handle successful permit upload."""
         self.show_toast("Business permit uploaded!", is_error=False)
         self._doc_file_label.configure(text=f"Current file: {filename}")
+```
+
+- [ ] **Step 2: Verify syntax**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/screens/account_settings.py').read()); print('Syntax OK')"`
+Expected: `Syntax OK`
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/screens/account_settings.py
+git commit -m "feat: add Owner Documents tab with permit upload and linked accounts"
+```
+
+---
+
+### Task 6: Wire Up — Update Dashboards, Delete Old Files, Update app.py
+
+**Files:**
+- Modify: `gui/app.py` — swap imports, remove old mixins, add AccountSettingsMixin
+- Modify: `gui/screens/dashboard.py` — update `_toggle_user_menu`
+- Modify: `gui/screens/owner_dashboard.py` — update `_owner_toggle_user_menu`
+- Modify: `gui/screens/admin_dashboard.py` — update `_admin_toggle_user_menu`
+- Delete: `gui/screens/profile.py`
+- Delete: `gui/screens/change_password.py`
+
+- [ ] **Step 1: Update `gui/app.py` imports and class declaration**
+
+In `gui/app.py`:
+- Remove line: `from gui.screens.profile import ProfileMixin`
+- Remove line: `from gui.screens.change_password import ChangePasswordMixin`
+- Add line: `from gui.screens.account_settings import AccountSettingsMixin`
+- In class declaration, replace `ProfileMixin, ChangePasswordMixin` with `AccountSettingsMixin`
+
+```python
+# BEFORE:
+from gui.screens.profile import ProfileMixin
+from gui.screens.change_password import ChangePasswordMixin
+...
+class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
+                       RegisterSkeletonMixin,
+                       EmailVerifyMixin, DashboardMixin, OwnerDashboardMixin,
+                       ForgotPasswordMixin, ProfileMixin, ChangePasswordMixin,
+                       NotificationsMixin, AdminDashboardMixin):
+
+# AFTER:
+from gui.screens.account_settings import AccountSettingsMixin
+...
+class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
+                       RegisterSkeletonMixin,
+                       EmailVerifyMixin, DashboardMixin, OwnerDashboardMixin,
+                       ForgotPasswordMixin, AccountSettingsMixin,
+                       NotificationsMixin, AdminDashboardMixin):
+```
+
+- [ ] **Step 2: Update tenant dashboard menu** (`gui/screens/dashboard.py`)
+
+In `_toggle_user_menu` (around line 1792), replace the items list:
+```python
+# BEFORE:
+items=[
+    ("My Profile",     self.menu_profile_icon,  self.show_profile),
+    ("Account Security", self.menu_lock_icon,    self.show_change_password),
+    None,
+    ("My Bookings",    self.menu_bookings_icon, self.show_tenant_bookings_content),
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+
+# AFTER:
+items=[
+    ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
+    None,
+    ("My Bookings",    self.menu_bookings_icon, self.show_tenant_bookings_content),
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+```
+
+- [ ] **Step 3: Update owner dashboard menu** (`gui/screens/owner_dashboard.py`)
+
+In `_owner_toggle_user_menu` (around line 2756), same change:
+```python
+# BEFORE:
+items=[
+    ("My Profile",     self.menu_profile_icon,  self.show_profile),
+    ("Account Security", self.menu_lock_icon,    self.show_change_password),
+    None,
+    ("My Bookings",    self.menu_bookings_icon, self.show_owner_bookings),
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+
+# AFTER:
+items=[
+    ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
+    None,
+    ("My Bookings",    self.menu_bookings_icon, self.show_owner_bookings),
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+```
+
+- [ ] **Step 4: Update admin dashboard menu** (`gui/screens/admin_dashboard.py`)
+
+In `_admin_toggle_user_menu` (around line 214), same change:
+```python
+# BEFORE:
+items=[
+    ("My Profile",     self.menu_profile_icon,  self.show_profile),
+    ("Account Security", self.menu_lock_icon,    self.show_change_password),
+    None,
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+
+# AFTER:
+items=[
+    ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
+    None,
+    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+    None,
+    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+],
+```
+
+- [ ] **Step 5: Delete old files**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+rm gui/screens/profile.py
+rm gui/screens/change_password.py
+```
+
+- [ ] **Step 6: Verify import works**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "from gui.screens.account_settings import AccountSettingsMixin; print('Import OK')"`
+Expected: `Import OK`
+
+- [ ] **Step 7: Verify app.py parses correctly**
+
+Run: `cd /home/migz/Documents/Boarding-House && python -c "import ast; ast.parse(open('gui/app.py').read()); print('app.py Syntax OK')"`
+Expected: `app.py Syntax OK`
+
+- [ ] **Step 8: Commit all changes**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+git add gui/app.py gui/screens/dashboard.py gui/screens/owner_dashboard.py gui/screens/admin_dashboard.py
+git rm gui/screens/profile.py gui/screens/change_password.py
+git commit -m "feat: wire up Account Settings menu, delete old profile and change_password files"
+```
+
+---
+
+### Task 7: Integration Test — Launch App
+
+**Files:** None — manual verification
+
+- [ ] **Step 1: Start the backend server**
+
+In a terminal:
+```bash
+cd /home/migz/Documents/Boarding-House
+# Activate virtual environment and start backend
+# (adjust command based on how you normally start it)
+```
+
+- [ ] **Step 2: Launch the GUI app**
+
+```bash
+cd /home/migz/Documents/Boarding-House
+python main.py
+```
+
+- [ ] **Step 3: Verify manually**
+
+1. Log in as a tenant
+2. Click the profile navbar area → dropdown shows "Account Settings" (not two separate items)
+3. Click "Account Settings" → overlay appears with Profile + Security + Verification tabs
+4. Profile tab: avatar section shows, name/phone/street/DOB are editable, account info is read-only
+5. Edit a field → click "Save Changes" → toast "Profile updated!"
+6. Switch to Security tab → change password fields work, strength checklist updates in real-time
+7. Switch to Verification tab → ID upload works
+8. Close overlay → click profile area again → opens again correctly
+9. Log in as an owner → Account Settings shows Profile + Security + Documents tabs
+10. Log in as an admin → Account Settings shows Profile + Security tabs only
+
+- [ ] **Step 4: Fix any issues found during testing**
+
+If any issues arise, fix them and commit:
+```bash
+cd /home/migz/Documents/Boarding-House
+git add -A
+git commit -m "fix: address integration test issues"
+```

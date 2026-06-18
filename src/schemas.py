@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List, Literal
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 # INDEPENDENT TABLES
@@ -217,7 +217,7 @@ class ReportsResponse(ReportsBase):
 
 # --- NOTIFICATIONS ---
 class NotificationsBase(BaseModel):
-    type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples=['booking'])
+    notif_type: Literal['booking', 'review', 'system', 'favorite'] = Field(..., examples=['booking'])
     reference_type: Optional[str] = Field(None, max_length=100)
     content: str 
 
@@ -442,6 +442,32 @@ class PaymentStatusUpdate(BaseModel):
     status: Literal['pending', 'completed', 'failed', 'refunded']
 
 
+# --- VIEWINGS ---
+
+class ViewingBase(BaseModel):
+    scheduled_date: date
+    scheduled_time: Optional[time] = None
+    notes: Optional[str] = None
+
+class ViewingCreate(ViewingBase):
+    listing_id: int
+
+class ViewingResponse(ViewingBase):
+    viewing_id: int
+    tenant_id: int
+    listing_id: int
+    status: Literal['pending', 'confirmed', 'completed', 'cancelled']
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ViewingUpdate(BaseModel):
+    scheduled_date: Optional[date] = None
+    scheduled_time: Optional[time] = None
+    status: Optional[Literal['pending', 'confirmed', 'completed', 'cancelled']] = None
+    notes: Optional[str] = None
+
+
 # --- AUTH ---
 class Token(BaseModel):
     access_token: str
@@ -474,11 +500,6 @@ class AdminCreate(BaseModel):
 
 class SendVerificationRequest(BaseModel):
     email: EmailStr
-
-class VerifyEmailCode(BaseModel):
-    email: EmailStr
-    code: str
-
 
 # --- MAINTENANCE ---
 class MaintenanceRequestBase(BaseModel):

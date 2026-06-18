@@ -1,9 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
 from pydantic import BaseModel
-from typing import List
 from src import crud, schemas, database
 from src.dependencies import get_current_user, limiter
 from src.storage import StorageService
@@ -11,6 +10,18 @@ from src.storage import StorageService
 router = APIRouter(prefix="/photos", tags=["Photos"])
 
 storage_service = StorageService()
+
+
+def _get_entity_owner(db: Session, entity_type: str, entity_id: int) -> int | None:
+    if entity_type == "listing":
+        listing = crud.BoardingHousesCRUD(db).get(entity_id)
+        return listing.owner_id if listing else None
+    elif entity_type == "room":
+        room = crud.RoomsCRUD(db).get(entity_id)
+        if room:
+            listing = crud.BoardingHousesCRUD(db).get(room.listing_id)
+            return listing.owner_id if listing else None
+    return None
 
 
 class FileUploadResponse(BaseModel):
@@ -121,8 +132,20 @@ def create_photo_from_url(request: Request, photo: schemas.PhotoCreate, db: Sess
 
 @router.delete("/upload/{filename}")
 @limiter.limit("30/minute")
-async def delete_upload(request: Request, filename: str, current_user: schemas.TokenData = Depends(get_current_user)):
+async def delete_upload(request: Request, filename: str, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     folder = "uploads"
+    if ".." in filename or "/" in filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    photo_crud = crud.PhotosCRUD(db)
+    matching_photos = photo_crud.get_photos_by_url(f"{folder}/{filename}")
+    if matching_photos:
+        for photo in matching_photos:
+            if current_user.role != "admin":
+                entity_owner = _get_entity_owner(db, photo.entity_type, photo.entity_id)
+                if entity_owner != current_user.user_id:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this file")
+    elif current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this file")
     success = storage_service.delete_file(f"{folder}/{filename}")
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")

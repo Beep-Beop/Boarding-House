@@ -14,3 +14,7 @@ class CacheService:
     def set_provinces(self, provinces: list[str]) -> None:
         self.province_cache = list(provinces)
         logger.info("Province cache updated with %d provinces", len(provinces))
+
+    def invalidate_provinces(self) -> None:
+        self.province_cache = []
+        logger.info("Province cache invalidated")

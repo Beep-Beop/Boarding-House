@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey, DECIMAL, Text, DateTime, Date, func, and_
+from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey, DECIMAL, Text, DateTime, Date, Time, func
 from sqlalchemy.orm import relationship
 from src.database import Base
 
@@ -161,7 +161,7 @@ class Notifications(Base):
     user_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False) # Receiver
     triggered_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True) # Sender (or None if System)
     
-    type = Column(Enum('booking', 'review', 'system', 'favorite'), nullable=False) 
+    notif_type = Column(Enum('booking', 'review', 'system', 'favorite'), nullable=False) 
     content = Column(Text, nullable=False) # "Your booking was approved!"
     is_read = Column(Boolean, default=False) # For the unread notification badge
     reference_type = Column(String(100)) # Helps frontend create a hyperlink
@@ -307,3 +307,20 @@ class Payments(Base):
     status = Column(Enum('pending', 'completed', 'failed', 'refunded'), default='pending')
     paid_at = Column(DateTime, nullable=True) # Nullable until the payment is confirmed 'completed'
     reference_no = Column(String(100)) # e.g., GCash transaction ID
+
+
+class Viewings(Base):
+    __tablename__ = "VIEWINGS"
+
+    viewing_id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="CASCADE"), nullable=False)
+    listing_id = Column(Integer, ForeignKey("BOARDING_HOUSE.listing_id", ondelete="CASCADE"), nullable=False)
+    scheduled_date = Column(Date, nullable=False)
+    scheduled_time = Column(Time, nullable=True)
+    status = Column(Enum('pending', 'confirmed', 'completed', 'cancelled'), default='pending')
+    notes = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    tenant = relationship("Users", backref="viewings")
+    listing = relationship("BoardingHouse", backref="viewings")

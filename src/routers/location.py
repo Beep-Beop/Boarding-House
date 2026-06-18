@@ -10,7 +10,10 @@ router = APIRouter(prefix="/locations", tags=["Locations"])
 @limiter.limit("10/minute")
 def create_location(request: Request, location: schemas.LocationCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     location_crud = crud.LocationsCRUD(db)
-    return location_crud.create(**location.model_dump())
+    result = location_crud.create(**location.model_dump())
+    cache = request.app.state.cache
+    cache.invalidate_provinces()
+    return result
 
 @router.get("/provinces", response_model=schemas.LocationOptionsResponse)
 @limiter.limit("30/minute")

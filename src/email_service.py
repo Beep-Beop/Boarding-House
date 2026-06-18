@@ -65,20 +65,10 @@ def send_reset_code(to_email: str, code: str) -> bool:
     return _send_email(to_email, subject, text, html)
 
 
-def send_verification_email(to_email: str, token: str, code: str = None) -> bool:
+def send_verification_email(to_email: str, token: str) -> bool:
     verify_url = f"{settings.BASE_URL}/auth/verify-email/{token}"
     subject = "Verify Your Email - Boarding House Finder"
     text = f"Click this link to verify your email: {verify_url}\n\nThis link expires in 24 hours."
-    if code:
-        text += f"\n\nOr use this verification code: {code}"
-
-    code_html = ""
-    if code:
-        code_html = f"""
-        <p style="color: #3E362A; font-size: 16px; margin: 20px 0 10px 0;">Or enter this code in the app:</p>
-        <div style="background-color: #f6f1e8; border-radius: 8px; padding: 20px; display: inline-block;">
-          <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #3E362A;">{code}</span>
-        </div>"""
 
     html = f"""\
 <html>
@@ -100,7 +90,6 @@ def send_verification_email(to_email: str, token: str, code: str = None) -> bool
            text-decoration: none; padding: 14px 40px; border-radius: 6px; font-size: 16px; font-weight: bold;">
           VERIFY EMAIL
         </a>
-        {code_html}
         <p style="color: #666; font-size: 13px; margin: 25px 0 0 0;">
           This link expires in <strong>24 hours</strong>.<br>
           If you did not create an account, please ignore this email.

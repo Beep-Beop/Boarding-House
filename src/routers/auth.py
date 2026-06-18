@@ -1,4 +1,5 @@
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -10,8 +11,30 @@ from src.dependencies import limiter, get_current_user, require_role
 from src.models import AdminLogs
 from src.email_service import send_reset_code, send_verification_email
 
-# In-memory store for OAuth state nonces (maps state -> redirect_port)
-_oauth_states: dict = {}
+class _TTLCache:
+    def __init__(self, ttl_seconds: int = 300):
+        self._store: dict = {}
+        self._ttl = ttl_seconds
+
+    def __setitem__(self, key, value):
+        self._store[key] = (value, time.monotonic())
+
+    def __contains__(self, key):
+        if key not in self._store:
+            return False
+        _, ts = self._store[key]
+        if time.monotonic() - ts > self._ttl:
+            del self._store[key]
+            return False
+        return True
+
+    def pop(self, key, default=None):
+        if key in self._store:
+            val, _ = self._store.pop(key)
+            return val
+        return default
+
+_oauth_states = _TTLCache(ttl_seconds=300)
 
 bearer_scheme = HTTPBearer()
 
@@ -80,13 +103,11 @@ def send_verification(request: Request, background_tasks: BackgroundTasks, body:
         return {"message": "Email is already verified."}
 
     token = security.create_verification_token()
-    code = f"{secrets.randbelow(1000000):06d}"
     expires = datetime.now(timezone.utc) + timedelta(hours=24)
 
     user_crud.set_verification_token(user.user_id, token, expires)
-    user_crud.set_verification_code(user.user_id, code, expires)
 
-    background_tasks.add_task(send_verification_email, body.email, token, code)
+    background_tasks.add_task(send_verification_email, body.email, token)
 
     return {"message": "Verification email sent."}
 
@@ -114,21 +135,6 @@ def verify_email(token: str, db: Session = Depends(database.get_db)):
         "<p style='color: #666;'>Your email has been verified successfully. You can now close this page and log in.</p>"
         "</div></body></html>"
     )
-
-
-@router.post("/verify-email-code")
-@limiter.limit("10/minute")
-def verify_email_code(request: Request, body: schemas.VerifyEmailCode, db: Session = Depends(database.get_db)):
-    user_crud = crud.UsersCRUD(db)
-    user = user_crud.verify_email_code(body.email, body.code)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification code."
-        )
-
-    return {"message": "Email verified successfully."}
 
 
 @router.post("/forgot-password")

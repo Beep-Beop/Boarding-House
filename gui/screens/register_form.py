@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from CTkScrollableDropdown import CTkScrollableDropdown
 import threading
 import datetime
 from src.logger import logger
@@ -25,8 +24,7 @@ class RegisterFormMixin:
         self.form_container = ctk.CTkScrollableFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
 
-        self.form_container.bind_all("<Button-4>", lambda e: self.form_container._parent_canvas.yview("scroll", -1, "units") if hasattr(self.form_container, "_parent_canvas") else None)
-        self.form_container.bind_all("<Button-5>", lambda e: self.form_container._parent_canvas.yview("scroll", 1, "units") if hasattr(self.form_container, "_parent_canvas") else None)
+
 
         self._build_navbar()
         self._build_personal_section()
@@ -178,11 +176,19 @@ class RegisterFormMixin:
                                          border_width=0,
                                          button_color=self.primary_color,
                                          button_hover_color=self.hover_color,
-                                         dropdown_fg_color=self.fg_color
+                                         dropdown_fg_color=self.fg_color,
+                                         text_color=self.text_color,
+                                         dropdown_text_color=self.text_color,
+                                         dropdown_hover_color=self.hover_color,
+                                         dropdown_font=self.body_light_font
                                          )
         self.month_box.set("MM")
         self.month_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
         self.month_box.pack(side="left", padx=(35, 10), pady=8)
+        self.month_dropdown = self._make_dropdown(
+            self.month_box, values=months,
+            autocomplete=True, command=self.month_box.set
+        )
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
@@ -199,11 +205,19 @@ class RegisterFormMixin:
                                        border_color=self.entry_border,
                                        button_color=self.primary_color,
                                        button_hover_color=self.hover_color,
-                                       dropdown_fg_color=self.fg_color
+                                       dropdown_fg_color=self.fg_color,
+                                       text_color=self.text_color,
+                                       dropdown_text_color=self.text_color,
+                                       dropdown_hover_color=self.hover_color,
+                                       dropdown_font=self.body_light_font
                                        )
         self.day_box.set("DD")
         self.day_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
         self.day_box.pack(side="left", pady=8, padx=(0, 5))
+        self.day_dropdown = self._make_dropdown(
+            self.day_box, values=days,
+            autocomplete=True, command=self.day_box.set
+        )
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
@@ -215,17 +229,25 @@ class RegisterFormMixin:
         years = [str(y) for y in range(current_year, 1949, -1)]
         self.year_box = ctk.CTkComboBox(self.dob_bg_frame,
                                         values=years,
-                                        width=75,
+                                        width=95,
                                         fg_color=self.fg_color,
                                         border_width=0,
                                         border_color=self.entry_border,
                                         button_color=self.primary_color,
                                         button_hover_color=self.hover_color,
-                                        dropdown_fg_color=self.fg_color
+                                        dropdown_fg_color=self.fg_color,
+                                        text_color=self.text_color,
+                                        dropdown_text_color=self.text_color,
+                                        dropdown_hover_color=self.hover_color,
+                                        dropdown_font=self.body_light_font
                                         )
         self.year_box.set("YYYY")
         self.year_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
-        self.year_box.pack(side="left", pady=8, padx=(0, 45))
+        self.year_box.pack(side="left", pady=8, padx=(0, 35))
+        self.year_dropdown = self._make_dropdown(
+            self.year_box, values=years,
+            autocomplete=True, command=self.year_box.set
+        )
 
         # Email
         self.email_frame = ctk.CTkFrame(self.form_container,
@@ -337,6 +359,7 @@ class RegisterFormMixin:
                                              button_hover_color=self.hover_color,
                                              dropdown_fg_color=self.fg_color,
                                              dropdown_hover_color=self.hover_color,
+                                             dropdown_text_color=self.text_color,
                                              text_color=self.text_color,
                                              command=self.on_province_selected
                                              )
@@ -349,11 +372,11 @@ class RegisterFormMixin:
 
         self.province_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.province_menu, "Select Province..."))
 
-        self.province_dropdown = CTkScrollableDropdown(self.province_menu,
-                                                       values=["Select Province..."],
-                                                       autocomplete=True,
-                                                       command=self.on_province_selected
-                                                       )
+        self.province_dropdown = self._make_dropdown(self.province_menu,
+                                                      values=["Select Province..."],
+                                                      autocomplete=True,
+                                                      command=self.on_province_selected
+                                                      )
         self.province_error_lbl = ctk.CTkLabel(province_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.province_error_lbl.pack(anchor="w", padx=15)
 
@@ -393,16 +416,17 @@ class RegisterFormMixin:
                                          dropdown_fg_color=self.fg_color,
                                          dropdown_hover_color=self.hover_color,
                                          dropdown_text_color=self.text_color,
+                                         text_color=self.text_color,
                                          command=self.on_city_selected
                                          )
         self.city_menu.pack(pady=(0, 10))
         self.city_menu.set("Select City...")
 
-        self.city_dropdown = CTkScrollableDropdown(self.city_menu,
-                                                   values=["Select City..."],
-                                                   autocomplete=True,
-                                                   command=self.on_city_selected
-                                                   )
+        self.city_dropdown = self._make_dropdown(self.city_menu,
+                                                  values=["Select City..."],
+                                                  autocomplete=True,
+                                                  command=self.on_city_selected
+                                                  )
         self.city_error_lbl = ctk.CTkLabel(city_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.city_error_lbl.pack(anchor="w", padx=15)
 
@@ -448,11 +472,11 @@ class RegisterFormMixin:
         self.barangay_menu.pack(pady=(0, 10))
         self.barangay_menu.set("Select Barangay...")
 
-        self.barangay_dropdown = CTkScrollableDropdown(self.barangay_menu,
-                                                       values=["Select Barangay..."],
-                                                       autocomplete=True,
-                                                       command=lambda choice: [self.barangay_menu.set(choice), setattr(self, 'selected_barangay', choice)]
-                                                       )
+        self.barangay_dropdown = self._make_dropdown(self.barangay_menu,
+                                                     values=["Select Barangay..."],
+                                                     autocomplete=True,
+                                                     command=lambda choice: [self.barangay_menu.set(choice), setattr(self, 'selected_barangay', choice)]
+                                                     )
         self.barangay_error_lbl = ctk.CTkLabel(barangay_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.barangay_error_lbl.pack(anchor="w", padx=15)
 

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database, security
@@ -92,7 +92,7 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     return schemas.UserResponse.model_validate(user)
 
 @router.patch("/{user_id}/status", response_model=schemas.UserResponse)
-def update_user_status(user_id: int, new_status: str, db: Session = Depends(database.get_db), admin: schemas.TokenData = Depends(require_role("admin"))):
+def update_user_status(user_id: int, new_status: Literal['active', 'banned', 'suspended'], db: Session = Depends(database.get_db), admin: schemas.TokenData = Depends(require_role("admin"))):
     user_crud = crud.UsersCRUD(db)
 
     user = user_crud.update_status(user_id=user_id, new_status=new_status)

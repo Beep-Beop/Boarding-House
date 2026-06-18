@@ -4,7 +4,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 from typing import Callable
-from src import crud, database, security, schemas
+from src import database, security, schemas
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/hour"])
 

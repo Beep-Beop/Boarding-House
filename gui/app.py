@@ -29,6 +29,7 @@ if sys.platform.startswith("linux"):
 
 from gui.api_client import APIClient
 from src.logger import logger
+from CTkScrollableDropdown import CTkScrollableDropdown
 from gui.screens.login import LoginMixin
 from gui.screens.account_type import AccountTypeMixin
 from gui.screens.register import RegisterMixin
@@ -112,7 +113,6 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
 
         self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
         self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(18, 18))
-        self.menu_lock_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "close_eye_pass_icon.png")), size=(18, 18))
         self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(18, 18))
         self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(18, 18))
 
@@ -399,7 +399,6 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
             combobox.set("")
 
     def _make_dropdown(self, attach, **kwargs):
-        from CTkScrollableDropdown import CTkScrollableDropdown
         defaults = dict(
             fg_color=self.fg_color,
             button_color=self.secondary_color,

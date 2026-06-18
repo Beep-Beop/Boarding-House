@@ -1,10 +1,12 @@
 import secrets
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
+from src.logger import logger
 from src.models import (Users, Photo, BoardingHouse, Location, 
                         Amenities, Bookings, Reviews, AdminLogs, 
                         Reports, Notifications, Rooms, ListingAmenities,
-                        Favorites, Payments, BookingHistory, MaintenanceRequest)
+                        Favorites, Payments, BookingHistory, MaintenanceRequest,
+                        Viewings)
 
 # INDEPENDENT TABLES
 
@@ -51,6 +53,8 @@ class UsersCRUD:
             for key, value in kwargs.items():
                 if hasattr(user, key) and value is not None:
                     setattr(user, key, value)
+                elif not hasattr(user, key):
+                    logger.warning("UsersCRUD.update: unknown key '%s' for user %s", key, user_id)
             self.db.commit()
             self.db.refresh(user)
         return user
@@ -127,30 +131,6 @@ class UsersCRUD:
             self.db.refresh(user)
         return user
 
-    def set_verification_code(self, user_id: int, code: str, expires) -> Users:
-        user = self.get(user_id)
-        if user:
-            import hashlib
-            user.verification_code = hashlib.sha256(code.encode()).hexdigest()
-            user.verification_code_expires = expires
-            self.db.commit()
-            self.db.refresh(user)
-        return user
-
-    def verify_email_code(self, email: str, code: str) -> Users:
-        import hashlib
-        from datetime import datetime, timezone
-        user = self.get_user_by_email(email)
-        if user and user.verification_code and secrets.compare_digest(hashlib.sha256(code.encode()).hexdigest(), user.verification_code) and user.verification_code_expires:
-            if user.verification_code_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
-                user.email_verified = True
-                user.verification_code = None
-                user.verification_code_expires = None
-                self.db.commit()
-                self.db.refresh(user)
-                return user
-        return None
-
     def verify_email_token(self, token: str) -> Users:
         from datetime import datetime, timezone
         user = self.db.query(Users).filter(Users.verification_token == token).first()
@@ -197,9 +177,10 @@ class LocationsCRUD:
         return [r[0] for r in results]
 
     def city_exists(self, city: str) -> bool:
-        return self.db.query(Location).filter(
-            func.lower(Location.city) == city.lower()
-        ).first() is not None
+        rows = self.db.query(Location.city).filter(
+            Location.city.isnot(None)
+        ).all()
+        return any(r[0].lower() == city.lower() for r in rows)
 class AmenitiesCRUD:
     def __init__(self, db: Session):
         self.db = db
@@ -261,6 +242,8 @@ class BoardingHousesCRUD:
             for key, value in kwargs.items():
                 if hasattr(bh, key) and value is not None:
                     setattr(bh, key, value)
+                elif not hasattr(bh, key):
+                    logger.warning("BoardingHousesCRUD.update: unknown key '%s' for listing %s", key, listing_id)
             self.db.commit()
             self.db.refresh(bh)
         return bh
@@ -278,19 +261,28 @@ class BoardingHousesCRUD:
             query = query.filter(BoardingHouse.min_stay_months <= min_stay_months)
 
         if min_price is not None or max_price is not None:
-            query = query.join(Rooms)
+            room_sub = (
+                self.db.query(Rooms.room_id)
+                .filter(Rooms.listing_id == BoardingHouse.listing_id)
+            )
             if min_price is not None:
-                query = query.filter(Rooms.price_per_month >= min_price)
+                room_sub = room_sub.filter(Rooms.price_per_month >= min_price)
             if max_price is not None:
-                query = query.filter(Rooms.price_per_month <= max_price)
+                room_sub = room_sub.filter(Rooms.price_per_month <= max_price)
+            query = query.filter(room_sub.exists())
 
         if q:
             query = query.filter(BoardingHouse.bh_name.ilike(f"%{q}%"))
 
         if amenity_ids:
-            query = query.join(ListingAmenities).filter(
-                ListingAmenities.amenity_id.in_(amenity_ids)
+            amenity_sub = (
+                self.db.query(ListingAmenities.lm_id)
+                .filter(
+                    ListingAmenities.listing_id == BoardingHouse.listing_id,
+                    ListingAmenities.amenity_id.in_(amenity_ids)
+                )
             )
+            query = query.filter(amenity_sub.exists())
 
         return query.distinct().offset(offset).limit(limit).all()
     
@@ -361,6 +353,11 @@ class PhotosCRUD:
         return self.db.query(Photo).filter(
             Photo.entity_type == entity_type, 
             Photo.entity_id == entity_id
+        ).all()
+
+    def get_photos_by_url(self, url_pattern: str):
+        return self.db.query(Photo).filter(
+            Photo.photo_url.like(f"%{url_pattern}")
         ).all()
     
     def delete(self, photo_id: int) -> bool:
@@ -451,10 +448,10 @@ class NotificationsCRUD:
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, user_id: int, type: str, content: str, **kwargs) -> Notifications:
+    def create(self, user_id: int, notif_type: str, content: str, **kwargs) -> Notifications:
         notif = Notifications(
             user_id=user_id,
-            type=type,
+            notif_type=notif_type,
             content=content,
             **kwargs
         )
@@ -467,7 +464,13 @@ class NotificationsCRUD:
         return self.db.query(Notifications).filter(Notifications.notif_id == notif_id).first()
 
     def get_user_unread(self, user_id: int):
-        return self.db.query(Notifications).filter(Notifications.user_id == user_id, Notifications.is_read == False).all()
+        return self.db.query(Notifications).filter(Notifications.user_id == user_id, Notifications.is_read == False).all()  # noqa: E712
+
+    def get_user_notifications(self, user_id: int, unread_only: bool = False):
+        query = self.db.query(Notifications).filter(Notifications.user_id == user_id)
+        if unread_only:
+            query = query.filter(Notifications.is_read == False)  # noqa: E712
+        return query.order_by(Notifications.created_at.desc()).all()
     
     def mark_as_read(self, notif_id: int) -> Notifications:
         notif = self.get(notif_id)
@@ -503,7 +506,7 @@ class RoomsCRUD:
     def get_room_by_listing(self, listing_id: int, available_only: bool = False):
         query = self.db.query(Rooms).filter(Rooms.listing_id == listing_id)
         if available_only:
-            query = query.filter(Rooms.availability == True)
+            query = query.filter(Rooms.availability.is_(True))
         return query.all()
     
     def update(self, room_id: int, **kwargs) -> Rooms:
@@ -512,6 +515,8 @@ class RoomsCRUD:
             for key, value in kwargs.items():
                 if hasattr(room, key) and value is not None:
                     setattr(room, key, value)
+                elif not hasattr(room, key):
+                    logger.warning("RoomsCRUD.update: unknown key '%s' for room %s", key, room_id)
             self.db.commit()
             self.db.refresh(room)
         return room
@@ -602,6 +607,20 @@ class BookingsCRUD:
         self.db = db
 
     def create(self, user_id: int, room_id: int, check_in, check_out, total_price: float, notes: str = None, **kwargs) -> Bookings:
+        if check_out <= check_in:
+            from fastapi import HTTPException as FastAPIHTTPException
+            raise FastAPIHTTPException(status_code=422, detail="Check-out must be after check-in")
+
+        overlap = self.db.query(Bookings).filter(
+            Bookings.room_id == room_id,
+            Bookings.status.in_(["active", "pending"]),
+            Bookings.check_in < check_out,
+            Bookings.check_out > check_in,
+        ).first()
+        if overlap:
+            from fastapi import HTTPException as FastAPIHTTPException
+            raise FastAPIHTTPException(status_code=409, detail="Room is already booked for the selected dates")
+
         booking = Bookings(
             user_id=user_id,
             room_id=room_id,
@@ -669,21 +688,34 @@ class BookingsCRUD:
         return query.all(), total
 
     def get_booking_stats(self):
-        all_bookings = self.db.query(Bookings).all()
-        total_revenue = sum(b.total_price for b in all_bookings)
+        from sqlalchemy import func as sa_func
+        stats = self.db.query(
+            sa_func.count(Bookings.booking_id).label("total_bookings"),
+            sa_func.sum(sa_func.if_(Bookings.status == "pending", 1, 0)).label("pending_count"),
+            sa_func.sum(sa_func.if_(Bookings.status == "active", 1, 0)).label("active_count"),
+            sa_func.sum(sa_func.if_(Bookings.status == "cancelled", 1, 0)).label("cancelled_count"),
+            sa_func.coalesce(sa_func.sum(
+                sa_func.if_(Bookings.status == "active", Bookings.total_price, 0)
+            ), 0).label("total_revenue"),
+        ).first()
         return {
-            "total_bookings": len(all_bookings),
-            "pending_count": sum(1 for b in all_bookings if b.status == "pending"),
-            "active_count": sum(1 for b in all_bookings if b.status == "active"),
-            "cancelled_count": sum(1 for b in all_bookings if b.status == "cancelled"),
-            "total_revenue": total_revenue,
+            "total_bookings": stats.total_bookings or 0,
+            "pending_count": stats.pending_count or 0,
+            "active_count": stats.active_count or 0,
+            "cancelled_count": stats.cancelled_count or 0,
+            "total_revenue": stats.total_revenue or 0,
         }
 
     def get_owner_bookings_enriched(self, owner_id: int, status: str = None, search: str = None):
+        from sqlalchemy.orm import selectinload, contains_eager
         query = self.db.query(Bookings).join(Rooms, Bookings.room_id == Rooms.room_id).join(
             BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
         ).join(Users, Bookings.user_id == Users.user_id).filter(
             BoardingHouse.owner_id == owner_id
+        ).options(
+            contains_eager(Bookings.room),
+            contains_eager(Bookings.user),
+            selectinload(Bookings.payments),
         )
         if status and status.lower() != "all":
             query = query.filter(Bookings.status == status)
@@ -697,10 +729,10 @@ class BookingsCRUD:
 
         result = []
         for b in bookings:
-            room = self.db.query(Rooms).filter(Rooms.room_id == b.room_id).first()
-            listing = self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == room.listing_id).first() if room else None
-            tenant = self.db.query(Users).filter(Users.user_id == b.user_id).first()
-            payments = self.db.query(Payments).filter(Payments.booking_id == b.booking_id).all()
+            room = b.room
+            tenant = b.user
+            listing = room.boarding_house if room else None
+            payments = b.payments
             payment_status = payments[0].status if payments else None
             payment_method = payments[0].method if payments else None
             payment_amount = payments[0].amount if payments else None
@@ -730,14 +762,19 @@ class BookingsCRUD:
         }
 
     def get_booking_detail(self, booking_id: int):
-        booking = self.db.query(Bookings).filter(Bookings.booking_id == booking_id).first()
+        from sqlalchemy.orm import selectinload
+        booking = self.db.query(Bookings).options(
+            selectinload(Bookings.room).selectinload(Rooms.boarding_house),
+            selectinload(Bookings.user),
+            selectinload(Bookings.payments),
+        ).filter(Bookings.booking_id == booking_id).first()
         if not booking:
             return None
-        room = self.db.query(Rooms).filter(Rooms.room_id == booking.room_id).first()
-        listing = self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == room.listing_id).first()
-        tenant = self.db.query(Users).filter(Users.user_id == booking.user_id).first()
+        room = booking.room
+        listing = room.boarding_house if room else None
+        tenant = booking.user
         owner = self.db.query(Users).filter(Users.user_id == listing.owner_id).first() if listing else None
-        payments = self.db.query(Payments).filter(Payments.booking_id == booking_id).all()
+        payments = booking.payments
         history = self.db.query(BookingHistory).filter(BookingHistory.booking_id == booking_id).order_by(BookingHistory.changed_at.asc()).all()
         return {
             "booking": booking,
@@ -791,6 +828,8 @@ class ReviewsCRUD:
             for key, value in kwargs.items():
                 if hasattr(review, key) and value is not None:
                     setattr(review, key, value)
+                elif not hasattr(review, key):
+                    logger.warning("ReviewsCRUD.update: unknown key '%s' for review %s", key, review_id)
             self.db.commit()
             self.db.refresh(review)
         return review
@@ -893,6 +932,13 @@ class PaymentsCRUD:
             Payments.booking_id == booking_id
         ).order_by(Payments.paid_at.desc()).all()
     
+    def get_payments_by_user(self, user_id: int):
+        return self.db.query(Payments).join(
+            Bookings, Payments.booking_id == Bookings.booking_id
+        ).filter(
+            Bookings.user_id == user_id
+        ).order_by(Payments.paid_at.desc()).all()
+
     def get_payments_by_owner(self, owner_id: int):
         return self.db.query(Payments).join(
             Bookings, Payments.booking_id == Bookings.booking_id
@@ -917,3 +963,60 @@ class PaymentsCRUD:
             self.db.commit()
             self.db.refresh(payment)
         return payment
+
+
+class ViewingsCRUD:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, tenant_id: int, listing_id: int, scheduled_date, scheduled_time=None, notes=None) -> Viewings:
+        viewing = Viewings(
+            tenant_id=tenant_id,
+            listing_id=listing_id,
+            scheduled_date=scheduled_date,
+            scheduled_time=scheduled_time,
+            notes=notes,
+        )
+        self.db.add(viewing)
+        self.db.commit()
+        self.db.refresh(viewing)
+        return viewing
+
+    def get(self, viewing_id: int) -> Viewings:
+        return self.db.query(Viewings).filter(Viewings.viewing_id == viewing_id).first()
+
+    def get_user_viewings(self, tenant_id: int) -> list[Viewings]:
+        return self.db.query(Viewings).filter(
+            Viewings.tenant_id == tenant_id
+        ).order_by(Viewings.scheduled_date.desc()).all()
+
+    def get_listing_viewings(self, listing_id: int) -> list[Viewings]:
+        return self.db.query(Viewings).filter(
+            Viewings.listing_id == listing_id
+        ).order_by(Viewings.scheduled_date.desc()).all()
+
+    def update_status(self, viewing_id: int, new_status: str) -> Viewings:
+        viewing = self.get(viewing_id)
+        if viewing:
+            viewing.status = new_status
+            self.db.commit()
+            self.db.refresh(viewing)
+        return viewing
+
+    def update(self, viewing_id: int, **kwargs) -> Viewings:
+        viewing = self.get(viewing_id)
+        if viewing:
+            for key, value in kwargs.items():
+                if value is not None and hasattr(viewing, key):
+                    setattr(viewing, key, value)
+            self.db.commit()
+            self.db.refresh(viewing)
+        return viewing
+
+    def delete(self, viewing_id: int) -> bool:
+        viewing = self.get(viewing_id)
+        if viewing:
+            self.db.delete(viewing)
+            self.db.commit()
+            return True
+        return False

@@ -39,7 +39,13 @@ def update_notification_read(request: Request, notif_id: int, db: Session = Depe
 
 @router.get("/user/{user_id}", response_model=List[schemas.NotificationsResponse])
 @limiter.limit("30/minute")
-def get_user_notifications(request: Request, user_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+def get_user_notifications(
+    request: Request,
+    user_id: int,
+    unread_only: bool = False,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user)
+):
     if current_user.role != "admin" and current_user.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -47,6 +53,6 @@ def get_user_notifications(request: Request, user_id: int, db: Session = Depends
         )
     notif_crud = crud.NotificationsCRUD(db)
 
-    notifications = notif_crud.get_user_unread(user_id=user_id)
+    notifications = notif_crud.get_user_notifications(user_id=user_id, unread_only=unread_only)
 
     return notifications

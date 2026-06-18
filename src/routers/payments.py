@@ -50,6 +50,19 @@ def get_payment(request: Request, payment_id: int, db: Session = Depends(databas
     return payment
 
 
+@router.get("/user/{user_id}", response_model=List[schemas.PaymentsResponse])
+@limiter.limit("30/minute")
+def get_user_payments(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    if current_user.role != "admin" and current_user.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    return crud.PaymentsCRUD(db).get_payments_by_user(user_id=user_id)
+
+
 @router.get("/owner/{owner_id}", response_model=List[schemas.PaymentsResponse])
 def get_owner_payments(
     owner_id: int,
