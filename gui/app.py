@@ -4,8 +4,28 @@ from PIL import Image
 import os
 import base64
 import json
+import sys
 from datetime import datetime, timezone
 from dataclasses import dataclass
+
+if sys.platform.startswith("linux"):
+    from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
+
+    def _linux_scroll_handler(self, event):
+        if self.check_if_master_is_canvas(event.widget):
+            if self._parent_canvas.yview() != (0.0, 1.0):
+                if event.num == 4:
+                    self._parent_canvas.yview("scroll", -1, "units")
+                elif event.num == 5:
+                    self._parent_canvas.yview("scroll", 1, "units")
+
+    CTkScrollableFrame._linux_scroll_handler = _linux_scroll_handler
+    _orig_init = CTkScrollableFrame.__init__
+    def _patched_init(self, *args, **kwargs):
+        _orig_init(self, *args, **kwargs)
+        self.bind_all("<Button-4>", lambda e: self._linux_scroll_handler(e), add="+")
+        self.bind_all("<Button-5>", lambda e: self._linux_scroll_handler(e), add="+")
+    CTkScrollableFrame.__init__ = _patched_init
 
 from gui.api_client import APIClient
 from src.logger import logger
@@ -17,8 +37,7 @@ from gui.screens.dashboard import DashboardMixin
 from gui.screens.owner_dashboard import OwnerDashboardMixin
 from gui.screens.register_skeleton import RegisterSkeletonMixin
 from gui.screens.forgot_password import ForgotPasswordMixin
-from gui.screens.profile import ProfileMixin
-from gui.screens.change_password import ChangePasswordMixin
+from gui.screens.account_settings import AccountSettingsMixin
 from gui.screens.admin_dashboard import AdminDashboardMixin
 from gui.screens.notifications import NotificationsMixin
 
@@ -38,7 +57,7 @@ class Theme:
 class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                        RegisterSkeletonMixin,
                        EmailVerifyMixin, DashboardMixin, OwnerDashboardMixin,
-                       ForgotPasswordMixin, ProfileMixin, ChangePasswordMixin,
+                       ForgotPasswordMixin, AccountSettingsMixin,
                        NotificationsMixin, AdminDashboardMixin):
     def __init__(self):
         super().__init__()
@@ -53,6 +72,8 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.current_user = None
         self.access_token = None
         self._screen_active = True
+        self._menu_showing = False
+        self.bind("<Button-1>", self._on_global_menu_click)
 
         # --- API Client ---
         self.api = APIClient()
@@ -84,13 +105,14 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.landlord_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "Frame.png")), size=(25, 25))
         self.hamburg_menu_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "menu.png")), size=(25, 15))
         self.pfp_placeholder = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(40, 40))
+        self.pfp_placeholder_sm = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(32, 32))
         self.search_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "search.png")), size=(30, 30))
         self.bookmark_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(25, 25))
         self.upload_image_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "upload_image.png")), size=(60, 60))
 
         self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
         self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(18, 18))
-        self.menu_lock_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "info.png")), size=(18, 18))
+        self.menu_lock_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "close_eye_pass_icon.png")), size=(18, 18))
         self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(18, 18))
         self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(18, 18))
 
@@ -218,6 +240,7 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
             return False
 
     def clear_container(self):
+        self._hide_user_menu()
         if not getattr(self, "_building_under_skeleton", False):
             if hasattr(self, "_stop_skeleton"):
                 self._stop_skeleton()
@@ -375,6 +398,135 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         if combobox.get() == placeholder_text:
             combobox.set("")
 
+    def _make_dropdown(self, attach, **kwargs):
+        from CTkScrollableDropdown import CTkScrollableDropdown
+        defaults = dict(
+            fg_color=self.fg_color,
+            button_color=self.secondary_color,
+            text_color=self.text_color,
+            hover_color=self.hover_color,
+            button_height=36,
+            font=self.body_light_font,
+            frame_corner_radius=10,
+            frame_border_width=1,
+            frame_border_color=self.entry_border,
+            scrollbar_button_color=self.primary_color,
+            scrollbar_button_hover_color=self.hover_color,
+        )
+        defaults.update(kwargs)
+        return CTkScrollableDropdown(attach, **defaults)
+
     def restore_placeholder(self, event, combobox, placeholder_text):
         if not combobox.get().strip():
             combobox.set(placeholder_text)
+
+    # ── Shared User Menu ────────────────────────────────────────────
+
+    def _show_user_menu(self, parent, anchor, form_container, items):
+        """Single implementation used by all three dashboards."""
+        self._hide_user_menu()
+
+        menu = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                            corner_radius=8, border_width=2,
+                            border_color=self.entry_border, width=240)
+        self._user_menu = menu
+
+        ax = anchor.winfo_rootx() - form_container.winfo_rootx()
+        ay = anchor.winfo_rooty() - form_container.winfo_rooty()
+        ah = anchor.winfo_height()
+        menu.place(x=ax + anchor.winfo_width() - 240, y=ay + ah + 6)
+        menu.lift()
+
+        user = getattr(self, 'current_user', {})
+        email = user.get('email', '')
+        role = user.get('role', 'tenant').capitalize()
+
+        header = ctk.CTkFrame(menu, fg_color="transparent")
+        header.pack(fill="x", padx=14, pady=(14, 8))
+
+        if email:
+            ctk.CTkLabel(header, text=email, font=ctk.CTkFont(size=12),
+                         text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(header, text=role, font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color="white", fg_color=self.primary_color,
+                     corner_radius=4, padx=6).pack(anchor="w", pady=(3, 0))
+
+        ctk.CTkFrame(menu, height=1, fg_color=self.entry_border).pack(fill="x", padx=10, pady=6)
+
+        for item in items:
+            if item is None:
+                ctk.CTkFrame(menu, height=1, fg_color=self.entry_border).pack(fill="x", padx=10, pady=2)
+                continue
+            text, icon, cmd = item
+            btn = ctk.CTkButton(menu, text=text, image=icon,
+                                font=self.body_paragraph_font,
+                                fg_color="transparent", text_color=self.text_color,
+                                hover_color=self.hover_color, anchor="w",
+                                height=36)
+            btn.pack(fill="x", padx=5, pady=2)
+            btn.configure(command=lambda cb=cmd: self._execute_menu_action(cb))
+            btn.bind("<Button-3>", lambda e, t=text, cb=cmd: self._debug_menu_item(t, cb))
+
+        menu.focus_set()
+        menu.bind("<Escape>", lambda e: self._hide_user_menu())
+        self._menu_anchor = anchor
+        self._menu_showing = True
+
+    def _debug_menu_item(self, text, callback):
+        print(f"\n[DEBUG] ===== Right-click on menu item: '{text}' =====")
+        import inspect
+        cb_name = getattr(callback, '__name__', str(callback))
+        cb_module = getattr(callback, '__self__', '')
+        print(f"[DEBUG]   callback: {cb_name}, self: {cb_module}")
+        print(f"[DEBUG]   inspect: {inspect.getsource(callback)[:200] if callable(callback) else 'N/A'}")
+        print(f"[DEBUG]   current container children: {len(self.container.winfo_children())}")
+        print(f"[DEBUG] ======================================\n")
+        self.show_toast(f"Right-click: {text}", is_error=False)
+
+    def _execute_menu_action(self, callback):
+        """Hide menu then invoke the callback."""
+        cb_name = getattr(callback, '__name__', str(callback))
+        print(f"\n[DEBUG] _execute_menu_action: callback={cb_name}")
+        print(f"[DEBUG]   container children before hide: {len(self.container.winfo_children())}")
+        self._hide_user_menu()
+        print(f"[DEBUG]   container children after hide: {len(self.container.winfo_children())}")
+        try:
+            callback()
+            print(f"[DEBUG]   callback completed OK")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[DEBUG]   callback FAILED: {e}")
+            self.after(0, lambda: self.show_toast(f"Navigation error: {e}", is_error=True))
+
+    def _hide_user_menu(self):
+        """Destroy menu and overlay. Shared by all dashboards."""
+        self._menu_showing = False
+        if hasattr(self, '_user_menu') and self._user_menu:
+            try:
+                self._user_menu.destroy()
+            except Exception:
+                pass
+            self._user_menu = None
+        self._reset_chevrons()
+
+    def _on_global_menu_click(self, event):
+        if not self._menu_showing:
+            return
+        menu = getattr(self, '_user_menu', None)
+        anchor = getattr(self, '_menu_anchor', None)
+        w = event.widget
+        while w:
+            if w is menu or (anchor and w is anchor):
+                return
+            w = w.master if w.master else None
+        self._hide_user_menu()
+
+    def _reset_chevrons(self):
+        """Set all known chevron labels back to ▾."""
+        for attr in ('profile_chevron', 'owner_profile_chevron'):
+            if hasattr(self, attr):
+                try:
+                    getattr(self, attr).configure(text="▾")
+                except Exception:
+                    pass

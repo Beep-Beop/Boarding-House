@@ -83,29 +83,26 @@ class AdminDashboardMixin:
         )
         self._admin_notif_badge.place(x=18, y=-2)
 
-        profile_frame = ctk.CTkFrame(nav, fg_color="transparent")
-        profile_frame.pack(side="right", padx=25, pady=10)
+        self._admin_profile_frame = ctk.CTkFrame(nav, fg_color="transparent")
+        self._admin_profile_frame.pack(side="right", padx=25, pady=10)
 
-        ctk.CTkLabel(profile_frame, text=None, image=self.pfp_placeholder,
+        ctk.CTkLabel(self._admin_profile_frame, text=None, image=self.pfp_placeholder,
                       width=25, height=25).pack(side="left", padx=(0, 12))
 
-        text_frame = ctk.CTkFrame(profile_frame, fg_color="transparent")
+        text_frame = ctk.CTkFrame(self._admin_profile_frame, fg_color="transparent")
         text_frame.pack(side="left")
 
         user_name = getattr(self, "current_user", {}).get("name", "Admin")
-        user_id = getattr(self, "current_user", {}).get("user_id", "?")
 
         ctk.CTkLabel(text_frame, text=user_name, font=self.body_light_font,
-                      text_color=self.text_color).grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(text_frame, text=f"UID: {user_id}", font=self.body_light_font,
-                      text_color=self.text_color).grid(row=1, column=0, sticky="w")
+                      text_color=self.text_color).pack(side="left")
 
         ctk.CTkLabel(text_frame, text="▾", font=self.body_light_font,
-                      text_color=self.text_color).grid(row=0, column=1, padx=(4, 0), sticky="w")
+                      text_color=self.text_color).pack(side="left", padx=(4, 0))
 
-        profile_frame.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
-        profile_frame.configure(cursor="hand2")
-        for child in profile_frame.winfo_children():
+        self._admin_profile_frame.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
+        self._admin_profile_frame.configure(cursor="hand2")
+        for child in self._admin_profile_frame.winfo_children():
             child.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
 
         self._admin_nav_bar = nav
@@ -215,79 +212,21 @@ class AdminDashboardMixin:
     # ── User Menu ──
 
     def _admin_toggle_user_menu(self):
-        if hasattr(self, "_admin_user_menu") and self._admin_user_menu and self._admin_user_menu.winfo_ismapped():
-            self._admin_hide_user_menu()
+        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_ismapped():
+            self._hide_user_menu()
         else:
-            self._admin_show_user_menu()
-
-    def _admin_show_user_menu(self):
-        self._admin_hide_user_menu()
-        menu = ctk.CTkFrame(
-            self._admin_form_container, fg_color=self.secondary_color,
-            corner_radius=6, border_width=1, border_color=self.entry_border, width=200,
-        )
-        self._admin_user_menu = menu
-
-        px = self._admin_nav_bar.winfo_rootx() - self._admin_form_container.winfo_rootx()
-        py = self._admin_nav_bar.winfo_rooty() - self._admin_form_container.winfo_rooty()
-        ph = self._admin_nav_bar.winfo_height()
-        menu.place(x=px + self._admin_nav_bar.winfo_width() - 200, y=py + ph + 5)
-        menu.lift()
-
-        items = [
-            ("View Profile", self.menu_profile_icon, lambda: self._admin_menu_action(self.show_profile)),
-            ("Change Password", self.menu_lock_icon, lambda: self._admin_menu_action(self.show_change_password)),
-            ("Notifications", self.notification_icon, lambda: self._admin_menu_action(self.show_notifications_page)),
-            None,
-            ("Logout", self.menu_logout_icon, lambda: self._admin_menu_action(self._handle_logout)),
-        ]
-        for item in items:
-            if item is None:
-                ctk.CTkFrame(menu, height=1, fg_color=self.entry_border).pack(fill="x", padx=10, pady=5)
-                continue
-            text, icon, cmd = item
-            ctk.CTkButton(
-                menu, text=text, image=icon, font=self.body_paragraph_font,
-                fg_color="transparent", text_color=self.text_color,
-                hover_color=self.hover_color, anchor="w", height=36, command=cmd,
-            ).pack(fill="x", padx=5, pady=2)
-
-        self.bind_all("<Button-1>", self._admin_dismiss_user_menu, add="+")
-
-    def _admin_hide_user_menu(self):
-        if hasattr(self, "_admin_user_menu") and self._admin_user_menu:
-            try:
-                self._admin_user_menu.destroy()
-            except Exception:
-                pass
-            self._admin_user_menu = None
-        try:
-            self.unbind_all("<Button-1>")
-        except Exception:
-            pass
-
-    def _admin_dismiss_user_menu(self, event):
-        if not hasattr(self, "_admin_user_menu") or not self._admin_user_menu:
-            return
-        x, y = event.x_root, event.y_root
-        widget = self.winfo_containing(x, y)
-        if widget and (self._admin_user_menu == widget or self._admin_user_menu in self._admin_get_all_children(widget)):
-            return
-        self._admin_hide_user_menu()
-
-    def _admin_get_all_children(self, widget):
-        children = []
-        try:
-            for child in widget.winfo_children():
-                children.append(child)
-                children.extend(self._admin_get_all_children(child))
-        except Exception:
-            pass
-        return children
-
-    def _admin_menu_action(self, callback):
-        self._admin_hide_user_menu()
-        callback()
+            self._show_user_menu(
+                parent=self._admin_form_container,
+                anchor=self._admin_profile_frame,
+                form_container=self._admin_form_container,
+                items=[
+                    ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
+                    None,
+                    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+                    None,
+                    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+                ],
+            )
 
     # ── Helper: Stat Card Row ──
 
@@ -366,7 +305,9 @@ class AdminDashboardMixin:
                 font=self.body_paragraph_font, fg_color=self.fg_color,
                 border_color=self.entry_border, border_width=1,
                 button_color=self.primary_color, button_hover_color=self.hover_color,
-                dropdown_fg_color=self.fg_color, text_color=self.text_color,
+                dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+                dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+                text_color=self.text_color,
                 state="readonly")
             combo.pack(side="right", padx=(0, 15))
             combo.set("All")
@@ -955,7 +896,9 @@ class AdminDashboardMixin:
             font=self.body_light_font, fg_color=self.fg_color,
             border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
-            dropdown_fg_color=self.fg_color, text_color=self.text_color,
+            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+            text_color=self.text_color,
             width=140, height=35, state="readonly")
         self._admin_bookings_filter_status.pack(side="left", padx=(0, 10))
         self._admin_bookings_filter_status.set("All")
@@ -1450,7 +1393,9 @@ class AdminDashboardMixin:
             font=self.body_light_font, fg_color=self.fg_color,
             border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
-            dropdown_fg_color=self.fg_color, text_color=self.text_color,
+            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+            text_color=self.text_color,
             width=160, height=35, state="readonly",
             command=lambda c: self._admin_refresh_reports())
         self._admin_reports_filter.pack(side="left")
@@ -1609,7 +1554,9 @@ class AdminDashboardMixin:
             font=self.body_light_font, fg_color=self.fg_color,
             border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
-            dropdown_fg_color=self.fg_color, text_color=self.text_color,
+            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+            text_color=self.text_color,
             width=160, height=35, state="readonly",
             command=lambda c: self._admin_refresh_permits())
         self._admin_permit_filter.pack(side="left")

@@ -4,7 +4,6 @@ import customtkinter as ctk
 from tkinter import filedialog
 from urllib.parse import unquote, urlparse, quote
 from PIL import Image
-from CTkScrollableDropdown import CTkScrollableDropdown
 import tkinterdnd2
 
 
@@ -377,26 +376,18 @@ class OwnerDashboardMixin:
         self.owner_profile_text_frame.pack(side="left")
 
         user_name = getattr(self, 'current_user', {}).get('name', 'Owner')
-        user_id = getattr(self, 'current_user', {}).get('user_id', '?')
 
         self.owner_name_label = ctk.CTkLabel(self.owner_profile_text_frame,
                                              text=user_name,
                                              font=self.body_light_font,
                                              text_color=self.text_color
                                              )
-        self.owner_name_label.grid(row=0, column=0, sticky="w")
-
-        self.owner_uid_label = ctk.CTkLabel(self.owner_profile_text_frame,
-                                            text=f"UID: {user_id}",
-                                            font=self.body_light_font,
-                                            text_color=self.text_color
-                                            )
-        self.owner_uid_label.grid(row=1, column=0, sticky="w")
+        self.owner_name_label.pack(side="left")
 
         # Chevron indicator
         self.owner_profile_chevron = ctk.CTkLabel(self.owner_profile_text_frame, text="▾",
                                                   font=self.body_light_font, text_color=self.text_color)
-        self.owner_profile_chevron.grid(row=0, column=1, padx=(4, 0), sticky="w")
+        self.owner_profile_chevron.pack(side="left", padx=(4, 0))
 
         # Make clickable
         self.owner_profile_frame.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
@@ -1182,6 +1173,9 @@ class OwnerDashboardMixin:
                                     button_color=self.primary_color,
                                     button_hover_color=self.hover_color,
                                     dropdown_fg_color=self.fg_color,
+                                    dropdown_text_color=self.text_color,
+                                    dropdown_hover_color=self.hover_color,
+                                    dropdown_font=self.body_light_font,
                                     text_color=self.text_color)
                 w.pack(fill="x")
                 w.set(default)
@@ -1329,7 +1323,9 @@ class OwnerDashboardMixin:
             width=140, height=32, font=self.body_paragraph_font,
             fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
-            dropdown_fg_color=self.fg_color, text_color=self.text_color,
+            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+            text_color=self.text_color,
             command=self._on_booking_filter_change
         )
         self._booking_filter_combo.pack(side="left", padx=(0, 10))
@@ -1834,10 +1830,6 @@ class OwnerDashboardMixin:
         right = ctk.CTkFrame(two_col, fg_color="transparent")
         right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
 
-        if hasattr(container, "_parent_canvas"):
-            container._parent_canvas.bind("<Button-4>", lambda e: container._parent_canvas.yview("scroll", -1, "units"))
-            container._parent_canvas.bind("<Button-5>", lambda e: container._parent_canvas.yview("scroll", 1, "units"))
-
         self._build_details_frame(left)
         self._build_location_frame(right)
 
@@ -1865,6 +1857,9 @@ class OwnerDashboardMixin:
                                     button_color=self.primary_color,
                                     button_hover_color=self.hover_color,
                                     dropdown_fg_color=self.fg_color,
+                                    dropdown_text_color=self.text_color,
+                                    dropdown_hover_color=self.hover_color,
+                                    dropdown_font=self.body_light_font,
                                     text_color=self.text_color)
                 w.pack(fill="x")
                 w.set("Select...")
@@ -1925,6 +1920,9 @@ class OwnerDashboardMixin:
                                       button_color=self.primary_color,
                                       button_hover_color=self.hover_color,
                                       dropdown_fg_color=self.fg_color,
+                                      dropdown_text_color=self.text_color,
+                                      dropdown_hover_color=self.hover_color,
+                                      dropdown_font=self.body_light_font,
                                       text_color=self.text_color)
         price_combo.pack(fill="x")
         price_combo.set("Select...")
@@ -1945,6 +1943,9 @@ class OwnerDashboardMixin:
                                         button_color=self.primary_color,
                                         button_hover_color=self.hover_color,
                                         dropdown_fg_color=self.fg_color,
+                                        dropdown_text_color=self.text_color,
+                                        dropdown_hover_color=self.hover_color,
+                                        dropdown_font=self.body_light_font,
                                         text_color=self.text_color)
         minstay_combo.pack(fill="x")
         minstay_combo.set("Select...")
@@ -2281,6 +2282,9 @@ class OwnerDashboardMixin:
                                              button_color=self.primary_color,
                                              button_hover_color=self.hover_color,
                                              dropdown_fg_color=self.fg_color,
+                                             dropdown_text_color=self.text_color,
+                                             dropdown_hover_color=self.hover_color,
+                                             dropdown_font=self.body_light_font,
                                              text_color=self.text_color,
                                              command=self.on_province_selected)
         self.province_menu.pack(fill="x")
@@ -2289,8 +2293,8 @@ class OwnerDashboardMixin:
         self.province_menu._entry.bind("<FocusIn>", lambda e: self.province_menu.set("")
                                       if self.province_menu.get() == "Select Province..." else None)
         self.province_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.province_menu, "Select Province..."))
-        self.province_dropdown = CTkScrollableDropdown(self.province_menu, values=["Select Province..."],
-                                                        autocomplete=True, command=self.on_province_selected)
+        self.province_dropdown = self._make_dropdown(self.province_menu, values=["Select Province..."],
+                                                      autocomplete=True, command=self.on_province_selected)
         self.province_err = ctk.CTkLabel(prov_frame, text="", height=14, font=self.inline_error_font,
                                          text_color=self.error_red)
         self.province_err.pack(anchor="w", padx=5)
@@ -2315,6 +2319,9 @@ class OwnerDashboardMixin:
                                          button_color=self.primary_color,
                                          button_hover_color=self.hover_color,
                                          dropdown_fg_color=self.fg_color,
+                                         dropdown_text_color=self.text_color,
+                                         dropdown_hover_color=self.hover_color,
+                                         dropdown_font=self.body_light_font,
                                          text_color=self.text_color,
                                          command=self.on_city_selected)
         self.city_menu.pack(fill="x")
@@ -2322,8 +2329,8 @@ class OwnerDashboardMixin:
         self.city_menu._entry.bind("<FocusIn>", lambda e: self.city_menu.set("")
                                    if self.city_menu.get() == "Select City..." else None)
         self.city_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.city_menu, "Select City..."))
-        self.city_dropdown = CTkScrollableDropdown(self.city_menu, values=["Select City..."],
-                                                    autocomplete=True, command=self.on_city_selected)
+        self.city_dropdown = self._make_dropdown(self.city_menu, values=["Select City..."],
+                                                  autocomplete=True, command=self.on_city_selected)
         self.city_err = ctk.CTkLabel(city_frame, text="", height=14, font=self.inline_error_font,
                                      text_color=self.error_red)
         self.city_err.pack(anchor="w", padx=5)
@@ -2339,6 +2346,9 @@ class OwnerDashboardMixin:
                                              button_color=self.primary_color,
                                              button_hover_color=self.hover_color,
                                              dropdown_fg_color=self.fg_color,
+                                             dropdown_text_color=self.text_color,
+                                             dropdown_hover_color=self.hover_color,
+                                             dropdown_font=self.body_light_font,
                                              text_color=self.text_color,
                                              command=lambda c: self.barangay_menu.set(c))
         self.barangay_menu.pack(fill="x")
@@ -2346,9 +2356,9 @@ class OwnerDashboardMixin:
         self.barangay_menu._entry.bind("<FocusIn>", lambda e: self.barangay_menu.set("")
                                        if self.barangay_menu.get() == "Select Barangay..." else None)
         self.barangay_menu.bind("<FocusOut>", lambda event: self.restore_placeholder(event, self.barangay_menu, "Select Barangay..."))
-        self.barangay_dropdown = CTkScrollableDropdown(self.barangay_menu, values=["Select Barangay..."],
-                                                       autocomplete=True,
-                                                       command=lambda c: self.barangay_menu.set(c))
+        self.barangay_dropdown = self._make_dropdown(self.barangay_menu, values=["Select Barangay..."],
+                                                     autocomplete=True,
+                                                     command=lambda c: self.barangay_menu.set(c))
         self.barangay_err = ctk.CTkLabel(brgy_frame, text="", height=14, font=self.inline_error_font,
                                          text_color=self.error_red)
         self.barangay_err.pack(anchor="w", padx=5)
@@ -2744,74 +2754,21 @@ class OwnerDashboardMixin:
                 self.owner_notif_badge.configure(text="")
 
     def _owner_toggle_user_menu(self):
-        if hasattr(self, '_owner_user_menu') and self._owner_user_menu and self._owner_user_menu.winfo_ismapped():
-            self._owner_hide_user_menu()
+        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_ismapped():
+            self._hide_user_menu()
         else:
-            self._owner_show_user_menu()
-
-    def _owner_show_user_menu(self):
-        self._owner_hide_user_menu()
-
-        menu = ctk.CTkFrame(self.form_container, fg_color=self.secondary_color,
-                            corner_radius=6, border_width=1, border_color=self.entry_border,
-                            width=200)
-        self._owner_user_menu = menu
-
-        profile_x = self.owner_profile_frame.winfo_rootx() - self.form_container.winfo_rootx()
-        profile_y = self.owner_profile_frame.winfo_rooty() - self.form_container.winfo_rooty()
-        profile_h = self.owner_profile_frame.winfo_height()
-        menu_x = profile_x + self.owner_profile_frame.winfo_width() - 200
-        menu_y = profile_y + profile_h + 5
-
-        menu.place(x=menu_x, y=menu_y)
-        menu.lift()
-
-        items = [
-            ("View Profile", self.menu_profile_icon, lambda: self._owner_menu_action(self.show_profile)),
-            ("Change Password", self.menu_lock_icon, lambda: self._owner_menu_action(self.show_change_password)),
-            ("Notifications", self.notification_icon, lambda: self._owner_menu_action(self.show_notifications_page)),
-            ("My Bookings", self.menu_bookings_icon, lambda: self._owner_menu_action(self.show_owner_bookings)),
-            None,
-            ("Logout", self.menu_logout_icon, lambda: self._owner_menu_action(self._handle_logout)),
-        ]
-
-        for item in items:
-            if item is None:
-                sep = ctk.CTkFrame(menu, height=1, fg_color=self.entry_border)
-                sep.pack(fill="x", padx=10, pady=5)
-                continue
-            text, icon, cmd = item
-            btn = ctk.CTkButton(menu, text=text, image=icon,
-                                font=self.body_paragraph_font,
-                                fg_color="transparent", text_color=self.text_color,
-                                hover_color=self.hover_color, anchor="w",
-                                height=36, command=cmd)
-            btn.pack(fill="x", padx=5, pady=2)
-
-        self.bind_all("<Button-1>", self._owner_dismiss_user_menu, add="+")
-
-    def _owner_hide_user_menu(self):
-        if hasattr(self, '_owner_user_menu') and self._owner_user_menu:
-            try:
-                self._owner_user_menu.destroy()
-            except Exception:
-                pass
-            self._owner_user_menu = None
-        try:
-            self.unbind_all("<Button-1>")
-        except Exception:
-            pass
-
-    def _owner_dismiss_user_menu(self, event):
-        if not hasattr(self, '_owner_user_menu') or not self._owner_user_menu:
-            return
-        x = event.x_root
-        y = event.y_root
-        widget = self.winfo_containing(x, y)
-        if widget and (self._owner_user_menu == widget or self._owner_user_menu in self._get_all_children(widget)):
-            return
-        self._owner_hide_user_menu()
-
-    def _owner_menu_action(self, callback):
-        self._owner_hide_user_menu()
-        callback()
+            self._show_user_menu(
+                parent=self.form_container,
+                anchor=self.owner_profile_frame,
+                form_container=self.form_container,
+                items=[
+                    ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
+                    None,
+                    ("My Bookings",    self.menu_bookings_icon, self.show_owner_bookings),
+                    ("Notifications",  self.notification_icon,  self.show_notifications_page),
+                    None,
+                    ("Logout",         self.menu_logout_icon,   self._handle_logout),
+                ],
+            )
+            if hasattr(self, 'owner_profile_chevron'):
+                self.owner_profile_chevron.configure(text="▴")
