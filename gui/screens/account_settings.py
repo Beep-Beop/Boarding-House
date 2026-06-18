@@ -882,3 +882,213 @@ class AccountSettingsMixin:
         """Handle successful ID upload."""
         self.show_toast("ID document uploaded!", is_error=False)
         self._verify_file_label.configure(text=f"Current file: {filename}")
+
+    def _build_documents_tab(self, parent):
+        """Build the Documents tab (Owner only — business permit)."""
+        user = getattr(self, 'current_user', {}) or {}
+        permit_url = user.get('permit_url', '')
+        is_verified = user.get('is_verified', False)
+
+        if is_verified:
+            status_color = ("#2E7D32", "#4CAF50")
+            status_text = "✓ Verified"
+            status_detail = "Your business permit is verified. Your listings show the Verified badge."
+        elif permit_url:
+            status_color = self.hover_color
+            status_text = "● Pending Review"
+            status_detail = "Your permit is being reviewed by an admin."
+        else:
+            status_color = self.hover_color
+            status_text = "○ Not Uploaded"
+            status_detail = "Upload your business permit to get your listings verified."
+
+        status_card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                                   border_width=1, border_color=status_color,
+                                   corner_radius=6)
+        status_card.pack(fill="x", padx=10, pady=(15, 10))
+
+        ctk.CTkLabel(status_card, text=status_text,
+                     font=self.body_paragraph_font,
+                     text_color=status_color).pack(anchor="w", padx=15, pady=(10, 2))
+        ctk.CTkLabel(status_card, text=status_detail,
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
+
+        ctk.CTkLabel(parent, text="Business Permit",
+                     font=self.body_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+
+        upload_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        upload_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        self._doc_upload_btn = ctk.CTkButton(upload_frame,
+                                             text="📤  Upload Business Permit",
+                                             font=self.body_light_font,
+                                             fg_color=self.primary_color,
+                                             hover_color=self.hover_color,
+                                             text_color=("white", "white"),
+                                             command=self._pick_permit)
+        self._doc_upload_btn.pack(side="left")
+
+        ctk.CTkLabel(upload_frame,
+                     text="Accepted: JPG, PNG, PDF (max 10MB)",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(side="left", padx=(10, 0))
+
+        self._doc_file_label = ctk.CTkLabel(parent, text="",
+                                            font=self.body_light_font,
+                                            text_color=self.text_color)
+        self._doc_file_label.pack(anchor="w", padx=10)
+        if permit_url:
+            filename = permit_url.split("/")[-1] if "/" in permit_url else permit_url
+            self._doc_file_label.configure(text=f"Current file: {filename}")
+
+        self._doc_progress = ctk.CTkProgressBar(parent, mode="indeterminate",
+                                                 fg_color=self.entry_border,
+                                                 progress_color=self.primary_color)
+        self._doc_error = ctk.CTkLabel(parent, text="",
+                                       text_color=self.error_red,
+                                       font=self.inline_error_font)
+        self._doc_error.pack(anchor="w", padx=10, pady=(5, 0))
+
+        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
+            fill="x", padx=10, pady=10)
+
+        ctk.CTkLabel(parent, text="Linked Accounts",
+                     font=self.body_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(0, 8))
+
+        auth_provider = user.get('auth_provider', 'email')
+        self._build_linked_account_card(parent, auth_provider)
+
+    def _build_linked_account_card(self, parent, auth_provider):
+        """Build the linked accounts card (Google only)."""
+        has_google = auth_provider in ("google", "both")
+        user = getattr(self, 'current_user', {}) or {}
+        email = user.get('email', '')
+
+        card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                            corner_radius=6, border_width=1,
+                            border_color=self.entry_border)
+        card.pack(fill="x", padx=10, pady=(0, 10))
+
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=15, pady=10)
+
+        ctk.CTkLabel(row, text="Google",
+                     font=self.body_paragraph_font,
+                     text_color=self.text_color).pack(side="left")
+
+        if has_google:
+            ctk.CTkLabel(row, text="● Connected",
+                         font=self.body_description_font,
+                         fg_color=("#2E7D32", "#4CAF50"), text_color=("white", "white"),
+                         corner_radius=4, padx=6).pack(side="right")
+
+            ctk.CTkButton(row, text="Unlink",
+                          font=self.body_description_font,
+                          fg_color="transparent",
+                          text_color=self.error_red,
+                          hover_color=self.hover_color,
+                          width=60, height=28,
+                          command=self._unlink_google).pack(side="right", padx=(0, 8))
+        else:
+            ctk.CTkLabel(row, text="○ Not linked",
+                         font=self.body_description_font,
+                         text_color=self.text_color).pack(side="right")
+
+            ctk.CTkButton(row, text="Link",
+                          font=self.body_description_font,
+                          fg_color=self.secondary_color,
+                          text_color=self.text_color,
+                          border_width=1, border_color=self.entry_border,
+                          state="disabled",
+                          width=60, height=28).pack(side="right", padx=(0, 8))
+
+        ctk.CTkLabel(card, text=email,
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
+
+    def _unlink_google(self):
+        """Unlink Google account from user."""
+        from customtkinter import CTkInputDialog
+        dialog = CTkInputDialog(
+            text="Unlink your Google account? You can still log in with your email.",
+            title="Unlink Google"
+        )
+        result = dialog.get_input()
+        if result is None:
+            return
+
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            return
+
+        def _do():
+            try:
+                resp = self.api.patch(f"/users/{user_id}",
+                                      json={"auth_provider": "email"}, timeout=10)
+                if resp.status_code == 200:
+                    if self.current_user:
+                        self.current_user["auth_provider"] = "email"
+                    self.after(0, lambda: self.show_toast("Google account unlinked", is_error=False))
+                    self.after(0, lambda: self._close_account_overlay())
+                    self.after(100, self.show_account_settings)
+                else:
+                    err = resp.json().get("detail", "Failed to unlink")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _pick_permit(self):
+        """Open file dialog to select a business permit."""
+        file_path = filedialog.askopenfilename(
+            title="Select Business Permit",
+            filetypes=[("Images/PDF", "*.jpg *.jpeg *.png *.pdf")]
+        )
+        if not file_path:
+            return
+
+        import os
+        if os.path.getsize(file_path) > 10 * 1024 * 1024:
+            self._doc_error.configure(text="File must be under 10MB")
+            return
+
+        self._doc_error.configure(text="")
+        self._doc_progress.pack(fill="x", padx=10, pady=(5, 0))
+        self._doc_progress.start()
+
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self._doc_error.configure(text="Not logged in")
+            return
+
+        def _do():
+            try:
+                with open(file_path, "rb") as f:
+                    files = {"file": (os.path.basename(file_path), f, "application/octet-stream")}
+                    resp = self.api.post(f"/users/{user_id}/upload-permit", files=files, timeout=30)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    url = data.get("url", "")
+                    if self.current_user:
+                        self.current_user["permit_url"] = url
+                    self.after(0, lambda: self._on_permit_uploaded(os.path.basename(file_path)))
+                else:
+                    err = resp.json().get("detail", "Upload failed")
+                    self.after(0, lambda: self._doc_error.configure(text=err))
+            except Exception:
+                self.after(0, lambda: self._doc_error.configure(
+                    text="Cannot connect to server"))
+            finally:
+                self.after(0, lambda: self._doc_progress.stop())
+                self.after(0, lambda: self._doc_progress.pack_forget())
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_permit_uploaded(self, filename):
+        """Handle successful permit upload."""
+        self.show_toast("Business permit uploaded!", is_error=False)
+        self._doc_file_label.configure(text=f"Current file: {filename}")
