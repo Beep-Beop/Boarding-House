@@ -30,8 +30,8 @@ class AccountSettingsMixin:
         # Card
         card = ctk.CTkFrame(overlay, fg_color=self.secondary_color,
                             corner_radius=12, border_width=1,
-                            border_color=self.entry_border, width=580)
-        card.place(relx=0.5, rely=0.5, anchor="center")
+                            border_color=self.entry_border)
+        card.place(x=40, y=40, relwidth=1, relheight=1, width=-80, height=-80)
 
         # Close button
         close_btn = ctk.CTkButton(card, text="✕", width=32, height=32,
@@ -59,13 +59,12 @@ class AccountSettingsMixin:
             tab_names = ["Profile", "Security", "Verification"]
 
         # Tabview
-        tabview = ctk.CTkTabview(card, width=540, height=460,
-                                 fg_color="transparent",
+        tabview = ctk.CTkTabview(card, fg_color="transparent",
                                  segmented_button_fg_color=self.fg_color,
                                  segmented_button_selected_color=self.primary_color,
                                  segmented_button_unselected_color=self.hover_color_text,
                                  text_color=self.text_color)
-        tabview.pack(padx=20, pady=(0, 20))
+        tabview.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
         # Create tabs
         self._account_tabs = {}
