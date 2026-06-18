@@ -149,7 +149,7 @@ class AccountSettingsMixin:
         if email_verified:
             ctk.CTkLabel(badges_frame, text="✓ Email Verified",
                          font=self.body_description_font,
-                         fg_color="green", text_color=("white", "white"),
+                         fg_color=("#2E7D32", "#4CAF50"), text_color=("white", "white"),
                          corner_radius=4, padx=6).pack(side="left", padx=(0, 4))
         else:
             ctk.CTkLabel(badges_frame, text="○ Unverified",
@@ -382,17 +382,22 @@ class AccountSettingsMixin:
         month = self._profile_dob_month.get()
         day = self._profile_dob_day.get()
         year = self._profile_dob_year.get()
-        if month != "Jan" and day and year:
+        dob_changed = False
+        if day and year:
             month_map = {"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04",
                          "May": "05", "Jun": "06", "Jul": "07", "Aug": "08",
                          "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"}
             month_num = month_map.get(month, "01")
             try:
                 day_int = int(day)
-                dob_str = f"{year}-{month_num}-{day_int:02d}"
+                new_dob_str = f"{year}-{month_num}-{day_int:02d}"
                 from datetime import datetime
-                datetime.strptime(dob_str, "%Y-%m-%d")  # validate
-                payload["date_of_birth"] = dob_str
+                datetime.strptime(new_dob_str, "%Y-%m-%d")  # validate
+                # Check if actually changed
+                current_dob = getattr(self, 'current_user', {}).get('date_of_birth', '')
+                if current_dob != new_dob_str:
+                    payload["date_of_birth"] = new_dob_str
+                    dob_changed = True
             except (ValueError, TypeError):
                 self._profile_error.configure(text="Invalid date of birth")
                 return
@@ -409,8 +414,10 @@ class AccountSettingsMixin:
                 resp = self.api.patch(f"/users/{user_id}", json=payload, timeout=10)
                 if resp.status_code == 200:
                     updated = resp.json()
-                    if self.current_user:
-                        self.current_user["name"] = updated.get("name", self.current_user.get("name"))
+                    if self.current_user and isinstance(updated, dict):
+                        for key in ("name", "phone", "street", "date_of_birth", "email"):
+                            if key in updated:
+                                self.current_user[key] = updated[key]
                     self.after(0, lambda: self._on_profile_saved())
                 else:
                     err = resp.json().get("detail", "Update failed")
