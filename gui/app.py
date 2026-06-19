@@ -60,7 +60,7 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                        EmailVerifyMixin, DashboardMixin, OwnerDashboardMixin,
                        ForgotPasswordMixin, AccountSettingsMixin,
                        NotificationsMixin, AdminDashboardMixin):
-    def __init__(self):
+    def __init__(self, no_session=False):
         super().__init__()
         require_dnd(self)
 
@@ -101,26 +101,28 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                 except Exception as e:
                     logger.warning("Could not load %s. Error: %s", file_path, e)
 
-        self.design = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "design.png")), size=(180, 160))
-        self.tenant_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "icons.png")), size=(25, 25))
-        self.landlord_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "Frame.png")), size=(25, 25))
-        self.hamburg_menu_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "menu.png")), size=(25, 15))
-        self.pfp_placeholder = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(40, 40))
-        self.pfp_placeholder_sm = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(32, 32))
-        self.pfp_placeholder_lg = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(100, 100))
-        self.search_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "search.png")), size=(30, 30))
-        self.bookmark_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(25, 25))
-        self.upload_image_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "upload_image.png")), size=(60, 60))
-
-        self.yellow_star = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "yellow_star.png")), size=(16, 16))
-        self.grey_star = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "grey_star.png")), size=(16, 16))
-
-        self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
-        self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(22, 22))
-        self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(22, 22))
-        self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(22, 22))
-
-        self.logo = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "logo.png")), size=(140, 32))
+        _image_specs = [
+            ("design", "design.png", (180, 160)),
+            ("tenant_icon", "icons.png", (25, 25)),
+            ("landlord_icon", "Frame.png", (25, 25)),
+            ("hamburg_menu_icon", "menu.png", (25, 15)),
+            ("pfp_placeholder", "pfp_placeholder.png", (40, 40)),
+            ("pfp_placeholder_sm", "pfp_placeholder.png", (32, 32)),
+            ("pfp_placeholder_lg", "pfp_placeholder.png", (100, 100)),
+            ("search_icon", "search.png", (30, 30)),
+            ("bookmark_icon", "bookmark.png", (25, 25)),
+            ("upload_image_icon", "upload_image.png", (60, 60)),
+            ("yellow_star", "yellow_star.png", (16, 16)),
+            ("grey_star", "grey_star.png", (16, 16)),
+            ("notification_icon", "notification.png", (22, 22)),
+            ("menu_profile_icon", "pfp_placeholder.png", (22, 22)),
+            ("menu_bookings_icon", "bookmark.png", (22, 22)),
+            ("menu_logout_icon", "bk_btn.png", (22, 22)),
+            ("logo", "logo.png", (140, 32)),
+        ]
+        for attr, filename, size in _image_specs:
+            path = os.path.join(parent_dir, "assets", filename)
+            setattr(self, attr, ctk.CTkImage(Image.open(path), size=size))
         raw_google = Image.open(os.path.join(parent_dir, "assets", "google.png"))
         orig_w, orig_h = raw_google.size
         padded_google = Image.new("RGBA", (orig_w + 40, orig_h + 40), (255, 255, 255, 0))
@@ -198,7 +200,9 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.container.pack(side="top", fill="both", expand=True)
 
         # --- Try loading saved session ---
-        saved = self._load_session()
+        saved = None
+        if not no_session:
+            saved = self._load_session()
         if saved and saved.get("access_token"):
             token = saved["access_token"]
             if not self._is_token_valid(token):
@@ -337,6 +341,44 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                 self.current_toast = None
 
         animate_in()
+
+    def _enable_scroll_refresh(self, scroll_frame, refresh_cb):
+        canvas = getattr(scroll_frame, "_parent_canvas", None)
+        if not canvas:
+            return
+        if sys.platform.startswith("linux"):
+            canvas.bind("<Button-4>", lambda e: refresh_cb()
+                         if canvas.yview()[0] <= 0.0 else None, add="+")
+        else:
+            canvas.bind("<MouseWheel>", lambda e: refresh_cb()
+                         if canvas.yview()[0] <= 0.0 and e.delta > 0 else None, add="+")
+
+    def _animate_sidebar_shared(self, sidebar_frame, width_attr, expanded_attr, content_wrapper, on_done=None):
+        target = 0 if getattr(self, expanded_attr) else 250
+        step = -30 if getattr(self, expanded_attr) else 30
+        current = getattr(self, width_attr, 250)
+
+        if target > 0 and not sidebar_frame.winfo_ismapped():
+            sidebar_frame.pack(side="left", fill="y", before=content_wrapper)
+
+        def _step():
+            nonlocal current
+            current += step
+            if (step > 0 and current >= target) or (step < 0 and current <= target):
+                current = target
+                sidebar_frame.configure(width=current)
+                if current == 0:
+                    sidebar_frame.pack_forget()
+                setattr(self, expanded_attr, not getattr(self, expanded_attr))
+                setattr(self, width_attr, current)
+                if on_done:
+                    on_done()
+                return
+            sidebar_frame.configure(width=current)
+            self.after(16, _step)
+
+        setattr(self, width_attr, current)
+        _step()
 
     def _animate_eye(self, label, frames, idx=0):
         if idx == 0:

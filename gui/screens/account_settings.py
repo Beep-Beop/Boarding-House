@@ -528,10 +528,10 @@ class AccountSettingsMixin:
         ctk.CTkButton(danger_card, text="Delete Account",
                       font=self.body_paragraph_font,
                       fg_color=self.error_red,
-                      hover_color="#c9302c",
-                      text_color="white",
-                      command=self._confirm_delete_account).pack(
-                          anchor="w", padx=15, pady=(0, 12))
+                       hover_color=self.error_red,
+                       text_color="white",
+                       command=self._confirm_delete_account).pack(
+                           anchor="w", padx=15, pady=(0, 12))
 
     def _make_pw_row(self, parent, label_text):
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -987,7 +987,7 @@ class AccountSettingsMixin:
             ctk.CTkButton(row, text="Unlink",
                           font=self.body_description_font,
                           fg_color=self.error_red,
-                          hover_color="#c9302c",
+                          hover_color=self.error_red,
                           text_color="white",
                           width=60, height=28,
                           command=self._unlink_google).pack(

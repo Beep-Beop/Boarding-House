@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
-from src.routers import users, photos, social, notifications, auth, search, boarding_house, rooms, bookings, payments, reports, location, amenities, favorites, booking_history, maintenance, viewings
+from src.routers import users, photos, social, notifications, auth, search, boarding_house, rooms, bookings, payments, reports, location, amenities, favorites, booking_history, maintenance, viewings, admin_logs
 from src.database import engine, SessionLocal
 from src import crud
 from src.cache import CacheService
@@ -47,6 +47,7 @@ app.include_router(favorites.router)
 app.include_router(booking_history.router)
 app.include_router(maintenance.router)
 app.include_router(viewings.router)
+app.include_router(admin_logs.router)
 
 @app.on_event("startup")
 def startup():

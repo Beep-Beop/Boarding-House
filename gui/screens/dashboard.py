@@ -74,27 +74,6 @@ class DashboardMixin:
         self.bg_logo = ctk.CTkLabel(self.nav_bar_frame, text=None, image=self.logo)
         self.bg_logo.pack(side="left", pady=(15, 20))
 
-        self.search_bg_frame = ctk.CTkFrame(self.nav_bar_frame,
-                                            height=40, width=40,
-                                            fg_color="transparent")
-        self.search_bg_frame.place(relx=0.5, rely=0.5, anchor="center")
-        self.search_bg_frame.pack_propagate(False)
-
-        self.search_btn = ctk.CTkButton(self.search_bg_frame, text=None,
-                                        image=self.search_icon,
-                                        width=40, height=40,
-                                        fg_color="transparent",
-                                        hover_color=self.hover_color,
-                                        command=self.animate_search_bar)
-        self.search_btn.pack(side="left")
-
-        self.search_entry = ctk.CTkEntry(self.search_bg_frame,
-                                         placeholder_text="Search for boarding houses, cities",
-                                         font=self.body_light_font,
-                                         height=40, border_width=0,
-                                         fg_color="transparent")
-        self.search_entry.bind("<Return>", lambda e: self._do_search())
-
         self.notif_bell_frame = ctk.CTkFrame(self.nav_bar_frame, fg_color="transparent")
         self.notif_bell_frame.pack(side="right", padx=(0, 5))
 
@@ -265,26 +244,26 @@ class DashboardMixin:
                             elif key == "favorites":
                                 favorites = result
                         except Exception:
-                            pass
+                            self.after(0, lambda k=key: self.show_toast(f"Failed to load {k}. Check your connection.", is_error=True))
             except Exception:
                 try:
                     resp = self.api.get(f"/bookings/user/{user_id}", timeout=5)
                     if resp.status_code == 200:
                         bookings = resp.json()
                 except Exception:
-                    pass
+                    self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
                 try:
                     resp = self.api.get(f"/payments/user/{user_id}", timeout=5)
                     if resp.status_code == 200:
                         payments = resp.json()
                 except Exception:
-                    pass
+                    self.after(0, lambda: self.show_toast("Failed to load payments. Check your connection.", is_error=True))
                 try:
                     resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
                     if resp.status_code == 200:
                         favorites = resp.json()
                 except Exception:
-                    pass
+                    self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
 
             active = [b for b in bookings if b.get("status") == "active"]
             pending_b = [b for b in bookings if b.get("status") == "pending"]
@@ -542,6 +521,29 @@ class DashboardMixin:
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w")
 
+        # Search bar (Explore tab only)
+        self.search_bg_frame = ctk.CTkFrame(wrapper,
+                                             height=40,
+                                             fg_color=self.fg_color,
+                                             corner_radius=6)
+        self.search_bg_frame.pack(fill="x", pady=(0, 15))
+
+        self.search_entry = ctk.CTkEntry(self.search_bg_frame,
+                                         placeholder_text="Search for boarding houses, cities",
+                                         font=self.body_light_font,
+                                         height=40, border_width=0,
+                                         fg_color="transparent")
+        self.search_entry.pack(side="left", fill="x", expand=True, padx=(15, 5))
+        self.search_entry.bind("<Return>", lambda e: self._do_search())
+
+        self.search_btn = ctk.CTkButton(self.search_bg_frame, text=None,
+                                        image=self.search_icon,
+                                        width=40, height=40,
+                                        fg_color="transparent",
+                                        hover_color=self.hover_color,
+                                        command=self._do_search)
+        self.search_btn.pack(side="right", padx=(0, 5))
+
         stats_row_frame = ctk.CTkFrame(wrapper, fg_color="transparent")
         stats_row_frame.pack(fill="x", pady=(0, 15))
         stats_row_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="explorestats")
@@ -622,6 +624,7 @@ class DashboardMixin:
 
         self._load_initial_dashboard()
         self._fetch_dashboard_stats()
+        self._enable_scroll_refresh(self.main_content_frame, self._refresh_explore)
 
     # ── Bookings Content (in-page) ─────────────────────────────────
 
@@ -650,7 +653,7 @@ class DashboardMixin:
                 if resp.status_code == 200:
                     bookings = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
             self.after(0, lambda: self._populate_tenant_bookings(bookings))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -704,7 +707,7 @@ class DashboardMixin:
             if b.get("status") == "pending":
                 cancel_btn = ctk.CTkButton(card, text="Cancel Booking",
                                            fg_color=self.error_red,
-                                           hover_color="#c9302c",
+                                           hover_color=self.error_red,
                                            text_color="white",
                                            font=self.body_paragraph_font,
                                            width=120, height=32,
@@ -735,7 +738,7 @@ class DashboardMixin:
                 if resp.status_code == 200:
                     items = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
             self.after(0, lambda: self._show_favorites(items))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -817,7 +820,7 @@ class DashboardMixin:
                 if resp.status_code == 200:
                     viewings = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load viewings. Check your connection.", is_error=True))
             self.after(0, lambda: self._on_viewings_fetched(viewings))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -1118,19 +1121,19 @@ class DashboardMixin:
                 if resp.status_code == 200:
                     listing_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load property details. Check your connection.", is_error=True))
             try:
-                resp = self.api.get(f"/boarding-houses/{listing_id}/reviews", timeout=5)
+                resp = self.api.get(f"/social/reviews/listing/{listing_id}", timeout=5)
                 if resp.status_code == 200:
                     reviews_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load reviews. Check your connection.", is_error=True))
             try:
                 resp = self.api.get(f"/photos/listing/{listing_id}", timeout=5)
                 if resp.status_code == 200:
                     photos_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load photos. Check your connection.", is_error=True))
             self.after(0, lambda: self._populate_property_panel(listing_data, reviews_data, photos_data))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -1329,31 +1332,11 @@ class DashboardMixin:
     # ── Animation ──────────────────────────────────────────────────
 
     def animate_sidebar(self):
-        target = 0 if self.is_sidebar_expanded else 250
-        step = -30 if self.is_sidebar_expanded else 30
-        current = getattr(self, '_sidebar_width', 250)
-
-        if target > 0 and not self.sidebar_main_frame.winfo_ismapped():
-            self.sidebar_main_frame.pack(side="left", fill="y", before=self.content_wrapper)
-
-        def _step():
-            nonlocal current
-            current += step
-            if (step > 0 and current >= target) or (step < 0 and current <= target):
-                current = target
-                self.sidebar_main_frame.configure(width=current)
-                if current == 0:
-                    self.sidebar_main_frame.pack_forget()
-                self.is_sidebar_expanded = not self.is_sidebar_expanded
-                self._sidebar_width = current
-                if hasattr(self, 'reflow_cards'):
-                    self.reflow_cards()
-                return
-            self.sidebar_main_frame.configure(width=current)
-            self.after(16, _step)
-
-        self._sidebar_width = current
-        _step()
+        self._animate_sidebar_shared(
+            self.sidebar_main_frame, '_sidebar_width', 'is_sidebar_expanded',
+            self.content_wrapper,
+            on_done=lambda: self.reflow_cards() if hasattr(self, 'reflow_cards') else None
+        )
 
     def animate_search_bar(self):
         current_width = self.search_bg_frame.cget("width")
@@ -1525,6 +1508,18 @@ class DashboardMixin:
                     "Can't connect to the server right now. Check your connection and try again."))
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def _refresh_explore(self):
+        for card in self.cards_list:
+            try:
+                card.destroy()
+            except Exception:
+                pass
+        self.cards_list = []
+        if hasattr(self, '_error_frame') and self._error_frame:
+            self._error_frame.destroy()
+            self._error_frame = None
+        self._load_initial_dashboard()
 
     def _populate_initial_cards(self, houses):
         if hasattr(self, '_explore_progress') and self._explore_progress:
@@ -1833,14 +1828,14 @@ class DashboardMixin:
                     bookings = resp.json()
                     bookings_count = str(len(bookings))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
             try:
                 resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
                 if resp.status_code == 200:
                     favorites = resp.json()
                     favorites_count = str(len(favorites))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
             self.after(0, lambda: self._update_stat_labels(bookings_count, favorites_count, "0"))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -1884,31 +1879,31 @@ class DashboardMixin:
                 if resp.status_code == 200:
                     listing_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load property details. Check your connection.", is_error=True))
 
             try:
                 resp = self.api.get(f"/photos/listing/{listing_id}", timeout=8)
                 if resp.status_code == 200:
                     photos_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load photos. Check your connection.", is_error=True))
 
             try:
                 resp = self.api.get(f"/social/reviews/listing/{listing_id}", timeout=8)
                 if resp.status_code == 200:
                     reviews_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load reviews. Check your connection.", is_error=True))
 
             if listing_data:
                 owner_id = listing_data.get("owner_id")
                 if owner_id:
                     try:
-                        resp = self.api.get(f"/users/{owner_id}", timeout=5)
+                        resp = self.api.get(f"/users/{owner_id}/public", timeout=5)
                         if resp.status_code == 200:
                             owner_data = resp.json()
                     except Exception:
-                        pass
+                        self.after(0, lambda: self.show_toast("Failed to load owner info. Check your connection.", is_error=True))
 
             self.after(0, lambda: self._build_property_details_ui(
                 loading, listing_data, photos_data, reviews_data, owner_data
@@ -2835,7 +2830,7 @@ class DashboardMixin:
                 ctk_img = ctk.CTkImage(pil_img, size=size)
                 self.after(0, lambda: label.configure(image=ctk_img, text=""))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load photo. Check your connection.", is_error=True))
         threading.Thread(target=_do, daemon=True).start()
 
     # ── SUBMIT REVIEW ──────────────────────────────────────────────

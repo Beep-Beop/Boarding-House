@@ -39,9 +39,11 @@ class NotificationsMixin:
         self._notif_scroll = ctk.CTkScrollableFrame(self.form_container, fg_color="transparent")
         self._notif_scroll.pack(fill="both", expand=True, padx=30, pady=20)
 
-        self._notif_loading = ctk.CTkLabel(self._notif_scroll, text="Loading notifications...",
-                                           font=self.body_paragraph_font, text_color=self.text_color)
-        self._notif_loading.pack(pady=40)
+        self._notif_loading = ctk.CTkProgressBar(self._notif_scroll, mode="indeterminate",
+                                                  fg_color=self.entry_border,
+                                                  progress_color=self.primary_color)
+        self._notif_loading.pack(fill="x", padx=40, pady=40)
+        self._notif_loading.start()
 
         self._notif_data = []
         self._notif_widgets = {}
@@ -51,7 +53,8 @@ class NotificationsMixin:
     def _fetch_notifications(self):
         user_id = getattr(self, 'current_user', {}).get('user_id')
         if not user_id:
-            self._notif_loading.configure(text="Please log in to view notifications")
+            self._notif_loading.stop()
+            self._notif_loading.pack_forget()
             return
 
         def _do():
@@ -65,6 +68,7 @@ class NotificationsMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_notifications(self, data):
+        self._notif_loading.stop()
         self._notif_loading.pack_forget()
 
         if data is None:
@@ -121,7 +125,7 @@ class NotificationsMixin:
             try:
                 self.api.patch(f"/notifications/{notif_id}/read", timeout=5)
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to mark notification as read. Check your connection.", is_error=True))
             self.after(0, lambda: self._update_notif_read_ui(notif_id))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -143,7 +147,7 @@ class NotificationsMixin:
                 try:
                     self.api.patch(f"/notifications/{notif_id}/read", timeout=5)
                 except Exception:
-                    pass
+                    self.after(0, lambda: self.show_toast("Failed to mark notifications as read. Check your connection.", is_error=True))
             self.after(0, self._update_all_read_ui)
 
         threading.Thread(target=_do, daemon=True).start()

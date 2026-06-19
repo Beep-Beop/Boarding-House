@@ -198,7 +198,7 @@ class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
                 try:
                     self.api.post("/auth/send-verification", json={"email": email}, timeout=15)
                 except Exception:
-                    pass
+                    self.show_toast("Failed to send verification email. Check your connection.", is_error=True)
                 self.show_email_verification_page(email=email)
             elif response.status_code == 400:
                 error_msg = response.json().get("detail", "Registration failed.")

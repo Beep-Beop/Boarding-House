@@ -81,6 +81,21 @@ def get_user(request: Request, user_id: int, db: Session = Depends(database.get_
 
     return schemas.UserResponse.model_validate(user)
 
+@router.get("/{user_id}/public", response_model=schemas.PublicUserResponse)
+@limiter.limit("30/minute")
+def get_user_public(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.TokenData = Depends(get_current_user),
+):
+    """Public profile endpoint — any authenticated user can view name, email, phone."""
+    user_crud = crud.UsersCRUD(db)
+    user = user_crud.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return schemas.PublicUserResponse.model_validate(user)
+
 @router.patch("/{user_id}", response_model=schemas.UserResponse)
 def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     if current_user.user_id != user_id and current_user.role != "admin":

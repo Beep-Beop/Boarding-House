@@ -44,6 +44,8 @@ class OwnerDashboardMixin:
         self.main_content = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
         self.main_content.pack(fill="both", expand=True, padx=20, pady=10)
 
+        self._show_owner_loading(self.main_content)
+
         # Quick Actions bar
         quick_actions = ctk.CTkFrame(self.main_content, fg_color="transparent")
         quick_actions.pack(fill="x", pady=(0, 15))
@@ -167,20 +169,20 @@ class OwnerDashboardMixin:
                     self._owner_dashboard_cards_data["total_listings"] = str(len(listings))
                     self._owner_dashboard_cards_data["pending_review"] = str(sum(1 for l in listings if l.get('status') == 'pending'))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load listings. Check your connection.", is_error=True))
             try:
                 resp2 = self.api.get(f"/bookings/owner/{owner_id}", timeout=5)
                 if resp2.status_code == 200:
                     bookings = resp2.json()
                     self._owner_dashboard_cards_data["recent_booking"] = str(len(bookings))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
             try:
                 resp3 = self.api.get(f"/maintenance/owner/{owner_id}", timeout=5)
                 if resp3.status_code == 200:
                     self._owner_dashboard_cards_data["maint_items"] = resp3.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load maintenance requests. Check your connection.", is_error=True))
             try:
                 resp4 = self.api.get(f"/payments/owner/{owner_id}", timeout=5)
                 if resp4.status_code == 200:
@@ -191,13 +193,14 @@ class OwnerDashboardMixin:
                     )
                     self._owner_dashboard_cards_data["total_income"] = f"\u20B1{total_income:,.0f}"
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load payments. Check your connection.", is_error=True))
             self.after(0, self._populate_owner_dashboard_cards)
 
         threading.Thread(target=_do, daemon=True).start()
         self._owner_fetch_notif_count()
 
     def _populate_owner_dashboard_cards(self):
+        self._hide_owner_loading()
         data = self._owner_dashboard_cards_data
         for key in ("total_listings", "pending_review", "total_income", "recent_booking"):
             if key in self._owner_stat_labels and self._owner_stat_labels[key].winfo_exists():
@@ -297,29 +300,10 @@ class OwnerDashboardMixin:
             status_lbl.grid(row=row, column=2, padx=15, pady=(7, bottom_pady), sticky="w")
 
     def animate_sidebar(self):
-        target = 0 if self.is_sidebar_expanded else 250
-        step = -30 if self.is_sidebar_expanded else 30
-        current = getattr(self, '_sidebar_width', 250)
-
-        if target > 0 and not self.sidebar_main_frame.winfo_ismapped():
-            self.sidebar_main_frame.pack(side="left", fill="y", before=self.content_wrapper)
-
-        def _step():
-            nonlocal current
-            current += step
-            if (step > 0 and current >= target) or (step < 0 and current <= target):
-                current = target
-                self.sidebar_main_frame.configure(width=current)
-                if current == 0:
-                    self.sidebar_main_frame.pack_forget()
-                self.is_sidebar_expanded = not self.is_sidebar_expanded
-                self._sidebar_width = current
-                return
-            self.sidebar_main_frame.configure(width=current)
-            self.after(16, _step)
-
-        self._sidebar_width = current
-        _step()
+        self._animate_sidebar_shared(
+            self.sidebar_main_frame, '_sidebar_width', 'is_sidebar_expanded',
+            self.content_wrapper
+        )
 
     def toggle_maint_detail(self, request_name):
         frame = self.maint_detail_frames.get(request_name)
@@ -523,9 +507,7 @@ class OwnerDashboardMixin:
             table_frame.grid_columnconfigure(j, weight=1)
 
         self._tenants_table_frame = table_frame
-        self._loading_tenants_label = ctk.CTkLabel(table_frame, text="Loading tenants...",
-                                                   font=self.body_paragraph_font, text_color=self.text_color)
-        self._loading_tenants_label.grid(row=1, column=0, columnspan=6, padx=15, pady=20, sticky="w")
+        self._show_owner_loading(table_frame)
 
         owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
 
@@ -544,7 +526,7 @@ class OwnerDashboardMixin:
                             b.get('status', 'Pending').capitalize(),
                         ))
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load tenants. Check your connection.", is_error=True))
             self.after(0, lambda: self._populate_tenants_table(tenant_data))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -555,9 +537,7 @@ class OwnerDashboardMixin:
         table_frame = self._tenants_table_frame
         if not table_frame.winfo_exists():
             return
-        if hasattr(self, '_loading_tenants_label') and self._loading_tenants_label:
-            self._loading_tenants_label.destroy()
-            self._loading_tenants_label = None
+        self._hide_owner_loading()
 
         if not tenant_data:
             tenant_data = [
@@ -653,8 +633,22 @@ class OwnerDashboardMixin:
         self._prop_main_content.pack(fill="both", expand=True, padx=20, pady=10)
         self._prop_listings = []
 
-        self._show_loading(self._prop_main_content, text="Loading properties...")
+        self._show_owner_loading(self._prop_main_content)
 
+        owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
+
+        def _do():
+            try:
+                resp = self.api.get(f"/boarding-houses/owner/{owner_id}", timeout=5)
+                listings = resp.json() if resp.status_code == 200 else []
+            except Exception:
+                listings = []
+            self.after(0, lambda: self._populate_property_content(listings))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _refresh_properties(self):
+        self._show_owner_loading(self._prop_main_content)
         owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
 
         def _do():
@@ -747,7 +741,7 @@ class OwnerDashboardMixin:
             del_btn.pack(side="left")
 
     def _populate_property_content(self, listings):
-        self._hide_loading()
+        self._hide_owner_loading()
         for widget in self._prop_main_content.winfo_children():
             widget.destroy()
 
@@ -781,6 +775,7 @@ class OwnerDashboardMixin:
         self._property_main.pack(fill="both", expand=True)
         self._property_list_data = listings
         self._render_property_cards(listings)
+        self._enable_scroll_refresh(self._property_main, self._refresh_properties)
 
     def _show_property_empty_state(self):
         empty_frame = ctk.CTkFrame(self._prop_main_content, fg_color="transparent")
@@ -815,7 +810,7 @@ class OwnerDashboardMixin:
         self._property_detail_main = main_content
         self._property_detail_id = listing_id
 
-        self._show_loading(text="Loading property details...")
+        self._show_owner_loading()
 
         def _do():
             property_data = None
@@ -825,19 +820,19 @@ class OwnerDashboardMixin:
                 if resp.status_code == 200:
                     property_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load property details. Check your connection.", is_error=True))
             try:
                 resp = self.api.get(f"/rooms/listing/{listing_id}", timeout=5)
                 if resp.status_code == 200:
                     rooms_data = resp.json()
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load rooms. Check your connection.", is_error=True))
             self.after(0, lambda: self._populate_property_detail(property_data, rooms_data))
 
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_property_detail(self, property_data, rooms_data):
-        self._hide_loading()
+        self._hide_owner_loading()
         main_content = self._property_detail_main
         if not property_data:
             ctk.CTkLabel(main_content, text="Failed to load property details.",
@@ -1015,7 +1010,7 @@ class OwnerDashboardMixin:
         self._edit_left = left
         self._edit_right = right
 
-        self._show_loading(text="Loading property data...")
+        self._show_owner_loading()
 
         def _do():
             try:
@@ -1028,7 +1023,7 @@ class OwnerDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_edit_form(self, data):
-        self._hide_loading()
+        self._hide_owner_loading()
         if not data:
             self.show_toast("Failed to load property data", is_error=True)
             self.show_owner_property()
@@ -1356,11 +1351,18 @@ class OwnerDashboardMixin:
                          text_color=self.text_color).grid(row=0, column=j, padx=10, pady=(15, 10), sticky="w")
             table_frame.grid_columnconfigure(j, weight=1)
 
-        self._booking_loading_label = ctk.CTkLabel(table_frame, text="Loading bookings...",
-                                                   font=self.body_paragraph_font, text_color=self.text_color)
-        self._booking_loading_label.grid(row=1, column=0, columnspan=8, padx=15, pady=20, sticky="w")
+        self._booking_scrollable = ctk.CTkScrollableFrame(table_frame, fg_color="transparent")
+        self._booking_scrollable.grid(row=1, column=0, columnspan=8, sticky="ew")
+        self._booking_scrollable.grid_columnconfigure(0, weight=1)
+
+        self._booking_loading_label = ctk.CTkProgressBar(self._booking_scrollable, mode="indeterminate",
+                                                          fg_color=self.entry_border,
+                                                          progress_color=self.primary_color)
+        self._booking_loading_label.grid(row=0, column=0, padx=15, pady=20, sticky="ew")
+        self._booking_loading_label.start()
 
         self._reload_bookings()
+        self._enable_scroll_refresh(self._booking_scrollable, self._reload_bookings)
 
     def _reload_bookings(self):
         if self._booking_is_loading:
@@ -1370,7 +1372,8 @@ class OwnerDashboardMixin:
         fetch_id = self._booking_fetch_id
 
         if self._booking_loading_label:
-            self._booking_loading_label.grid()
+            self._booking_loading_label.grid(row=0, column=0, padx=15, pady=20, sticky="ew")
+            self._booking_loading_label.start()
         if hasattr(self, '_booking_table_rows'):
             for row_widgets in self._booking_table_rows:
                 for w in row_widgets:
@@ -1418,6 +1421,7 @@ class OwnerDashboardMixin:
         self._booking_is_loading = False
 
         if hasattr(self, '_booking_loading_label') and self._booking_loading_label and self._booking_loading_label.winfo_exists():
+            self._booking_loading_label.stop()
             self._booking_loading_label.grid_remove()
 
         self._booking_data = enriched
@@ -1428,7 +1432,7 @@ class OwnerDashboardMixin:
                 if k in self._booking_stats_labels and self._booking_stats_labels[k].winfo_exists():
                     self._booking_stats_labels[k].configure(text=str(stats.get(f"{k}_count" if k != "total" else "total_bookings", 0)))
 
-        table_frame = self._booking_table_frame if hasattr(self, '_booking_table_frame') else None
+        table_frame = self._booking_scrollable if hasattr(self, '_booking_scrollable') else None
         if table_frame is None or not table_frame.winfo_exists():
             return
         if hasattr(self, '_booking_table_rows'):
@@ -1578,7 +1582,7 @@ class OwnerDashboardMixin:
         self._booking_detail_main = main_content
         self._booking_detail_id = booking_id
 
-        self._show_loading(text="Loading booking details...")
+        self._show_owner_loading()
 
         def _do():
             try:
@@ -1591,7 +1595,7 @@ class OwnerDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_booking_detail(self, data):
-        self._hide_loading()
+        self._hide_owner_loading()
         main_content = self._booking_detail_main
         if not data:
             ctk.CTkLabel(main_content, text="Failed to load booking details.",
@@ -1782,26 +1786,24 @@ class OwnerDashboardMixin:
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _show_loading(self, parent=None, text="Please wait..."):
-        self._hide_loading()
+    def _show_owner_loading(self, parent=None):
+        self._hide_owner_loading()
         target = parent or self.content_wrapper
-        overlay = ctk.CTkFrame(target, fg_color=("white", "#1a1a1a"), corner_radius=0)
-        overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
-        overlay.lift()
-        inner = ctk.CTkFrame(overlay, fg_color="transparent")
-        inner.place(relx=0.5, rely=0.5, anchor="center")
-        loading_lbl = ctk.CTkLabel(inner, text=text, font=self.body_paragraph_font,
-                                   text_color=self.text_color)
-        loading_lbl.pack()
-        self._loading_overlay = overlay
+        self._owner_progress = ctk.CTkProgressBar(target, mode="indeterminate",
+                                                   fg_color=self.entry_border,
+                                                   progress_color=self.primary_color)
+        self._owner_progress.pack(fill="x", pady=(0, 10))
+        self._owner_progress.start()
 
-    def _hide_loading(self):
-        if hasattr(self, '_loading_overlay') and self._loading_overlay:
+    def _hide_owner_loading(self):
+        p = getattr(self, '_owner_progress', None)
+        if p:
             try:
-                self._loading_overlay.destroy()
+                p.stop()
+                p.pack_forget()
             except Exception:
                 pass
-            self._loading_overlay = None
+            self._owner_progress = None
 
     def show_add_property_form(self):
         for widget in self.content_wrapper.winfo_children():
@@ -2120,7 +2122,7 @@ class OwnerDashboardMixin:
                         self.after(0, lambda: self._build_amenity_chips(names))
                         return
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load amenities. Check your connection.", is_error=True))
             self.after(0, lambda: self._show_amenity_error())
 
         threading.Thread(target=fetch, daemon=True).start()
@@ -2540,7 +2542,7 @@ class OwnerDashboardMixin:
                                 self.province_dropdown.configure(values=options)
                         self.after(0, update)
             except Exception:
-                pass
+                self.after(0, lambda: self.show_toast("Failed to load provinces. Check your connection.", is_error=True))
 
         threading.Thread(target=fetch, daemon=True).start()
 
@@ -2726,7 +2728,7 @@ class OwnerDashboardMixin:
         if hasattr(self, '_prop_create_btn') and self._prop_create_btn:
             self._prop_create_btn.configure(text="CREATING...", state="disabled")
 
-        self._show_loading(text="Creating property...")
+        self._show_owner_loading()
 
         def _reenable():
             self._prop_is_submitting = False
@@ -2792,7 +2794,7 @@ class OwnerDashboardMixin:
                     except Exception:
                         pass
                     self._cleanup_uploads()
-                    self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Failed to create location: {detail}", is_error=True)))
+                    self.after(0, lambda: (self._hide_owner_loading(), _reenable(), self.show_toast(f"Failed to create location: {detail}", is_error=True)))
                     return
                 location_id = loc_resp.json().get("location_id")
 
@@ -2813,7 +2815,7 @@ class OwnerDashboardMixin:
                     except Exception:
                         pass
                     self._cleanup_uploads()
-                    self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Failed to create property: {detail}", is_error=True)))
+                    self.after(0, lambda: (self._hide_owner_loading(), _reenable(), self.show_toast(f"Failed to create property: {detail}", is_error=True)))
                     return
                 listing_id = bh_resp.json().get("listing_id")
 
@@ -2847,14 +2849,14 @@ class OwnerDashboardMixin:
                                 "availability": True,
                             })
                         except Exception:
-                            pass
+                            self.after(0, lambda: self.show_toast("Failed to create a room. Check your connection.", is_error=True))
 
-                self.after(0, lambda: (self._hide_loading(), self.show_toast("Property created successfully!", is_error=False)))
+                self.after(0, lambda: (self._hide_owner_loading(), self.show_toast("Property created successfully!", is_error=False)))
                 self.after(500, self.show_owner_property)
 
             except Exception as e:
                 self._cleanup_uploads()
-                self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Error: {str(e)}", is_error=True)))
+                self.after(0, lambda: (self._hide_owner_loading(), _reenable(), self.show_toast(f"Error: {str(e)}", is_error=True)))
 
         threading.Thread(target=_do, daemon=True).start()
 

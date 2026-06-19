@@ -1,4 +1,5 @@
 import re
+import threading
 import customtkinter as ctk
 from requests.exceptions import ConnectionError
 
@@ -72,11 +73,11 @@ class ForgotPasswordMixin:
                                            font=self.inline_error_font)
         self.fp_email_error.pack(anchor="w", padx=(15, 0))
 
-        send_btn = ctk.CTkButton(self.step1_frame, text="SEND CODE", width=400, height=45,
-                                 corner_radius=6, font=self.body_bold_font,
-                                 fg_color=self.primary_color, hover_color=self.hover_color,
-                                 text_color="#FFFFFF", command=self._send_reset_code)
-        send_btn.pack(pady=(25, 0))
+        self.fp_send_btn = ctk.CTkButton(self.step1_frame, text="SEND CODE", width=400, height=45,
+                                          corner_radius=6, font=self.body_bold_font,
+                                          fg_color=self.primary_color, hover_color=self.hover_color,
+                                          text_color="#FFFFFF", command=self._send_reset_code)
+        self.fp_send_btn.pack(pady=(25, 0))
 
     def _build_step2(self):
         self.step2_frame = ctk.CTkFrame(self.step_container, fg_color="transparent")
@@ -255,8 +256,9 @@ class ForgotPasswordMixin:
             self.fp_email_fake_entry.configure(border_color=self.error_red)
             return
 
-        try:
-            resp = self.api.post("/auth/forgot-password", json={"email": email}, timeout=15)
+        self.fp_send_btn.configure(state="disabled", text="SENDING...")
+
+        def _handle_send_result(resp):
             if resp.status_code == 200:
                 self._reset_data["email"] = email
                 self.show_toast("Reset code sent!", is_error=False)
@@ -268,9 +270,17 @@ class ForgotPasswordMixin:
             else:
                 self.fp_email_error.configure(text=resp.json().get("detail", "Failed to send code."))
                 self.fp_email_fake_entry.configure(border_color=self.error_red)
-        except ConnectionError:
-            self.fp_email_error.configure(text="Cannot connect to server.")
-            self.fp_email_fake_entry.configure(border_color=self.error_red)
+
+        def _do():
+            try:
+                resp = self.api.post("/auth/forgot-password", json={"email": email}, timeout=15)
+                self.after(0, lambda: _handle_send_result(resp))
+            except ConnectionError:
+                self.after(0, lambda: self.fp_email_error.configure(text="Cannot connect to server."))
+            finally:
+                self.after(0, lambda: self.fp_send_btn.configure(state="normal", text="SEND CODE"))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def _verify_code(self):
         code = self.fp_code_entry.get().strip()
@@ -287,8 +297,7 @@ class ForgotPasswordMixin:
             self._show_step(1)
             return
 
-        try:
-            resp = self.api.post("/auth/verify-reset-code", json={"email": email, "code": code}, timeout=5)
+        def _handle_verify_result(resp):
             if resp.status_code == 200:
                 self._reset_data["code"] = code
                 self.fp_new_pwd_entry.delete(0, "end")
@@ -302,9 +311,15 @@ class ForgotPasswordMixin:
             else:
                 self.fp_code_error.configure(text=resp.json().get("detail", "Invalid code."))
                 self.fp_code_fake_entry.configure(border_color=self.error_red)
-        except ConnectionError:
-            self.fp_code_error.configure(text="Cannot connect to server.")
-            self.fp_code_fake_entry.configure(border_color=self.error_red)
+
+        def _do():
+            try:
+                resp = self.api.post("/auth/verify-reset-code", json={"email": email, "code": code}, timeout=5)
+                self.after(0, lambda: _handle_verify_result(resp))
+            except ConnectionError:
+                self.after(0, lambda: self.fp_code_error.configure(text="Cannot connect to server."))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def _validate_pwd_strength(self, event=None):
         password = self.fp_new_pwd_entry.get()
@@ -380,18 +395,23 @@ class ForgotPasswordMixin:
         email = self._reset_data.get("email", "")
         code = self._reset_data.get("code", "")
 
-        try:
-            resp = self.api.post("/auth/reset-password", json={
-                "email": email,
-                "code": code,
-                "new_password": new_pwd
-            }, timeout=5)
+        def _handle_reset_result(resp):
             if resp.status_code == 200:
                 self.show_toast("Password reset successfully!", is_error=False)
                 self.after(2000, self.show_login_page)
             else:
                 self.fp_new_pwd_error.configure(text=resp.json().get("detail", "Failed to reset password."))
                 self.fp_new_pwd_fake_entry.configure(border_color=self.error_red)
-        except ConnectionError:
-            self.fp_new_pwd_error.configure(text="Cannot connect to server.")
-            self.fp_new_pwd_fake_entry.configure(border_color=self.error_red)
+
+        def _do():
+            try:
+                resp = self.api.post("/auth/reset-password", json={
+                    "email": email,
+                    "code": code,
+                    "new_password": new_pwd
+                }, timeout=5)
+                self.after(0, lambda: _handle_reset_result(resp))
+            except ConnectionError:
+                self.after(0, lambda: self.fp_new_pwd_error.configure(text="Cannot connect to server."))
+
+        threading.Thread(target=_do, daemon=True).start()

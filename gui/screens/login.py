@@ -5,6 +5,27 @@ from gui.screens.google_auth import GoogleAuthHandler
 
 
 class LoginMixin:
+    def _make_fake_entry(self, parent, placeholder, entry_kwargs=None):
+        frame = ctk.CTkFrame(parent, width=400, height=40,
+                             fg_color=self.fg_color,
+                             border_color=self.entry_border,
+                             border_width=1, corner_radius=6)
+        frame.pack()
+        frame.pack_propagate(False)
+        kwargs = {
+            "placeholder_text": placeholder,
+            "height": 24,
+            "font": self.body_light_font,
+            "fg_color": "transparent",
+            "border_width": 0,
+            "text_color": self.text_color,
+        }
+        if entry_kwargs:
+            kwargs.update(entry_kwargs)
+        entry = ctk.CTkEntry(frame, **kwargs)
+        entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        return frame, entry
+
     def show_login_page(self):
         print("[DEBUG] Showing: Login Page")
         self.clear_container()
@@ -65,26 +86,9 @@ class LoginMixin:
         self.email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
         # THE "FAKE" ENTRY (Visual box user sees)
-        self.email_fake_entry = ctk.CTkFrame(email_frame,
-                                      width=400,
-                                      height=40,
-                                      fg_color=self.fg_color,
-                                      border_color=self.entry_border,
-                                      border_width=1,
-                                      corner_radius=6
-                                      )
-        self.email_fake_entry.pack()
-        self.email_fake_entry.pack_propagate(False)
-
-        self.email_entry = ctk.CTkEntry(self.email_fake_entry,
-                                        placeholder_text="example@gmail.com",
-                                        height=24,
-                                        font=self.body_light_font,
-                                        fg_color="transparent",
-                                        border_width=0,
-                                        text_color=self.text_color
-                                        )
-        self.email_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.email_fake_entry, self.email_entry = self._make_fake_entry(
+            email_frame, "example@gmail.com"
+        )
 
         self.login_email_error = ctk.CTkLabel(email_frame,
                                               text="",
@@ -104,27 +108,11 @@ class LoginMixin:
                                            )
         self.password_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        self.password_fake_entry = ctk.CTkFrame(password_frame,
-                                         width=400,
-                                         height=40,
-                                         fg_color=self.fg_color,
-                                         border_color=self.entry_border,
-                                         border_width=1,
-                                         corner_radius=6
-                                         )
-        self.password_fake_entry.pack()
-        self.password_fake_entry.pack_propagate(False)
-
-        self.password_entry = ctk.CTkEntry(self.password_fake_entry,
-                                           placeholder_text="Password",
-                                           height=24,
-                                           show="\u2022",
-                                           font=self.body_light_font,
-                                           fg_color="transparent",
-                                           border_width=0,
-                                           text_color=self.text_color
-                                           )
-        self.password_entry.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+        self.password_fake_entry, self.password_entry = self._make_fake_entry(
+            password_frame, "Password", {"show": "\u2022"}
+        )
+        self.password_entry.place_configure(relx=0.46, relwidth=0.82)
+        self.password_entry.bind("<Return>", lambda e: self.attempt_login())
 
         self.password_eye = ctk.CTkLabel(self.password_fake_entry,
                                          image=self.closed_eye_icon,
@@ -209,6 +197,13 @@ class LoginMixin:
                                        )
         self.google_btn.pack(pady=(0, 0))
         self.google_btn.bind("<Button-1>", lambda event: self.start_google_login())
+
+        self._google_hint_label = ctk.CTkLabel(
+            self.form_container,
+            text="",
+            font=self.body_paragraph_font,
+            text_color=self.primary_color,
+        )
 
         register_frame = ctk.CTkFrame(self.form_container,
                                       fg_color="transparent"
@@ -298,14 +293,8 @@ class LoginMixin:
                     self.password_fake_entry.configure(border_color=self.entry_border)
                     self.google_btn.configure(fg_color=self.error_red)
                     self.after(2000, lambda: self.google_btn.configure(fg_color="transparent"))
-                    if not hasattr(self, "_google_hint_label") or not self._google_hint_label.winfo_exists():
-                        self._google_hint_label = ctk.CTkLabel(
-                            self.form_container,
-                            text="\u2b06 Sign in with Google above",
-                            font=self.body_paragraph_font,
-                            text_color=self.primary_color,
-                        )
-                        self._google_hint_label.pack(pady=(0, 5))
+                    self._google_hint_label.configure(text="\u2b06 Sign in with Google above")
+                    self._google_hint_label.pack(pady=(0, 5))
                     self.email_entry.bind("<Key>", self._clear_google_hint, add="+")
                     self.password_entry.bind("<Key>", self._clear_google_hint, add="+")
                 else:
@@ -380,8 +369,8 @@ class LoginMixin:
         if getattr(self, "_google_hint_cleared", False):
             return
         self._google_hint_cleared = True
-        if hasattr(self, "_google_hint_label") and self._google_hint_label.winfo_exists():
-            self._google_hint_label.destroy()
+        self._google_hint_label.pack_forget()
+        self._google_hint_label.configure(text="")
         self.google_btn.configure(fg_color="transparent")
 
     def forgot_password(self):

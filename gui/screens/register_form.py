@@ -35,6 +35,25 @@ class RegisterFormMixin:
         self._screen_active = True
         self.load_provinces()
 
+    def _make_dob_combo(self, parent, attr, values, width, initial_text, padx):
+        combo = ctk.CTkComboBox(parent, values=values, width=width,
+                                fg_color=self.fg_color, border_width=0,
+                                button_color=self.primary_color,
+                                button_hover_color=self.hover_color,
+                                dropdown_fg_color=self.fg_color,
+                                text_color=self.text_color,
+                                dropdown_text_color=self.text_color,
+                                dropdown_hover_color=self.hover_color,
+                                dropdown_font=self.body_light_font)
+        combo.set(initial_text)
+        combo._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
+        combo.pack(side="left", pady=8, padx=padx)
+        dropdown = self._make_dropdown(combo, values=values,
+                                       autocomplete=True, command=combo.set)
+        setattr(self, attr, combo)
+        setattr(self, attr.replace("_box", "_dropdown"), dropdown)
+        return combo
+
     def _build_navbar(self):
         self.bk_btn_frame = ctk.CTkFrame(self.form_container,
                                   fg_color="transparent"
@@ -170,26 +189,7 @@ class RegisterFormMixin:
         self.dob_error_lbl = ctk.CTkLabel(dob_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.dob_error_lbl.pack(anchor="w", padx=100)
         months = [f"{i:02d}" for i in range(1, 13)]
-        self.month_box = ctk.CTkComboBox(self.dob_bg_frame,
-                                         values=months,
-                                         width=70,
-                                         fg_color=self.fg_color,
-                                         border_width=0,
-                                         button_color=self.primary_color,
-                                         button_hover_color=self.hover_color,
-                                         dropdown_fg_color=self.fg_color,
-                                         text_color=self.text_color,
-                                         dropdown_text_color=self.text_color,
-                                         dropdown_hover_color=self.hover_color,
-                                         dropdown_font=self.body_light_font
-                                         )
-        self.month_box.set("MM")
-        self.month_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
-        self.month_box.pack(side="left", padx=(35, 10), pady=8)
-        self.month_dropdown = self._make_dropdown(
-            self.month_box, values=months,
-            autocomplete=True, command=self.month_box.set
-        )
+        self._make_dob_combo(self.dob_bg_frame, "month_box", months, 70, "MM", (35, 10))
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
@@ -198,27 +198,7 @@ class RegisterFormMixin:
                      ).pack(side="left", padx=(25, 20))
 
         days = [f"{i:02d}" for i in range(1, 32)]
-        self.day_box = ctk.CTkComboBox(self.dob_bg_frame,
-                                       values=days,
-                                       width=65,
-                                       fg_color=self.fg_color,
-                                       border_width=0,
-                                       border_color=self.entry_border,
-                                       button_color=self.primary_color,
-                                       button_hover_color=self.hover_color,
-                                       dropdown_fg_color=self.fg_color,
-                                       text_color=self.text_color,
-                                       dropdown_text_color=self.text_color,
-                                       dropdown_hover_color=self.hover_color,
-                                       dropdown_font=self.body_light_font
-                                       )
-        self.day_box.set("DD")
-        self.day_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
-        self.day_box.pack(side="left", pady=8, padx=(0, 5))
-        self.day_dropdown = self._make_dropdown(
-            self.day_box, values=days,
-            autocomplete=True, command=self.day_box.set
-        )
+        self._make_dob_combo(self.dob_bg_frame, "day_box", days, 65, "DD", (0, 5))
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
@@ -228,27 +208,7 @@ class RegisterFormMixin:
 
         current_year = datetime.datetime.now().year
         years = [str(y) for y in range(current_year, 1949, -1)]
-        self.year_box = ctk.CTkComboBox(self.dob_bg_frame,
-                                        values=years,
-                                        width=95,
-                                        fg_color=self.fg_color,
-                                        border_width=0,
-                                        border_color=self.entry_border,
-                                        button_color=self.primary_color,
-                                        button_hover_color=self.hover_color,
-                                        dropdown_fg_color=self.fg_color,
-                                        text_color=self.text_color,
-                                        dropdown_text_color=self.text_color,
-                                        dropdown_hover_color=self.hover_color,
-                                        dropdown_font=self.body_light_font
-                                        )
-        self.year_box.set("YYYY")
-        self.year_box._entry.bind("<Key>", lambda e: None if e.keysym == "Tab" else "break")
-        self.year_box.pack(side="left", pady=8, padx=(0, 35))
-        self.year_dropdown = self._make_dropdown(
-            self.year_box, values=years,
-            autocomplete=True, command=self.year_box.set
-        )
+        self._make_dob_combo(self.dob_bg_frame, "year_box", years, 95, "YYYY", (0, 35))
 
         # Email
         self.email_frame = ctk.CTkFrame(self.form_container,
@@ -381,14 +341,7 @@ class RegisterFormMixin:
         self.province_error_lbl = ctk.CTkLabel(province_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.province_error_lbl.pack(anchor="w", padx=15)
 
-        def _province_blur(e=None):
-            def check():
-                val = self.province_menu.get().strip()
-                opts = getattr(self, "province_options", [])
-                if opts and val and val not in opts and not val.startswith("Select"):
-                    self.province_menu.set("Select Province...")
-            self.after(300, check)
-        self.province_menu._entry.bind("<FocusOut>", _province_blur, add="+")
+        self.province_menu._entry.bind("<FocusOut>", self._on_province_blur, add="+")
 
         # City
         city_frame = ctk.CTkFrame(self.form_container,
@@ -431,14 +384,7 @@ class RegisterFormMixin:
         self.city_error_lbl = ctk.CTkLabel(city_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.city_error_lbl.pack(anchor="w", padx=15)
 
-        def _city_blur(e=None):
-            def check():
-                val = self.city_menu.get().strip()
-                opts = getattr(self, "city_options", [])
-                if opts and val and val not in opts and not val.startswith("Select") and not val.startswith("Loading") and not val.startswith("No "):
-                    self.city_menu.set("Select City...")
-            self.after(300, check)
-        self.city_menu._entry.bind("<FocusOut>", _city_blur, add="+")
+        self.city_menu._entry.bind("<FocusOut>", self._on_city_blur, add="+")
 
         # Barangay
         barangay_frame = ctk.CTkFrame(self.form_container,
@@ -481,14 +427,7 @@ class RegisterFormMixin:
         self.barangay_error_lbl = ctk.CTkLabel(barangay_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.barangay_error_lbl.pack(anchor="w", padx=15)
 
-        def _barangay_blur(e=None):
-            def check():
-                val = self.barangay_menu.get().strip()
-                opts = getattr(self, "barangay_options", [])
-                if opts and val and val not in opts and not val.startswith("Select") and not val.startswith("Loading") and not val.startswith("No "):
-                    self.barangay_menu.set("Select Barangay...")
-            self.after(300, check)
-        self.barangay_menu._entry.bind("<FocusOut>", _barangay_blur, add="+")
+        self.barangay_menu._entry.bind("<FocusOut>", self._on_barangay_blur, add="+")
 
         # Street
         street_frame = ctk.CTkFrame(self.form_container,
@@ -731,6 +670,30 @@ class RegisterFormMixin:
                                              command=self.attempt_register
                                              )
         self.create_acc_btn.pack(pady=(10, 40))
+
+    def _on_province_blur(self, event=None):
+        def check():
+            val = self.province_menu.get().strip()
+            opts = getattr(self, "province_options", [])
+            if opts and val and val not in opts and not val.startswith("Select"):
+                self.province_menu.set("Select Province...")
+        self.after(300, check)
+
+    def _on_city_blur(self, event=None):
+        def check():
+            val = self.city_menu.get().strip()
+            opts = getattr(self, "city_options", [])
+            if opts and val and val not in opts and not val.startswith("Select") and not val.startswith("Loading") and not val.startswith("No "):
+                self.city_menu.set("Select City...")
+        self.after(300, check)
+
+    def _on_barangay_blur(self, event=None):
+        def check():
+            val = self.barangay_menu.get().strip()
+            opts = getattr(self, "barangay_options", [])
+            if opts and val and val not in opts and not val.startswith("Select") and not val.startswith("Loading") and not val.startswith("No "):
+                self.barangay_menu.set("Select Barangay...")
+        self.after(300, check)
 
     def load_provinces(self):
         cached = getattr(self, "_cached_provinces", None)
