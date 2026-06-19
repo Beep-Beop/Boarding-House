@@ -193,6 +193,25 @@ class AccountSettingsMixin:
         else:
             self.show_tenant_dashboard()
 
+    def _show_section_progress(self, section_key):
+        """Show and start the indeterminate progress bar for a section."""
+        section = self._accordion_sections.get(section_key)
+        if not section:
+            return
+        progress = section["progress"]
+        header = section["header"]
+        progress.pack(fill="x", padx=15, pady=(0, 2))
+        progress.start()
+
+    def _hide_section_progress(self, section_key):
+        """Stop and hide the progress bar for a section."""
+        section = self._accordion_sections.get(section_key)
+        if not section:
+            return
+        progress = section["progress"]
+        progress.stop()
+        progress.pack_forget()
+
     def _build_settings_card(self, parent, heading=None):
         """Create a card frame with optional heading. Returns the inner content frame."""
         card = ctk.CTkFrame(parent, fg_color=self.fg_color,
@@ -526,6 +545,7 @@ class AccountSettingsMixin:
 
         self._profile_save_btn.configure(state="disabled", text="SAVING...")
         self._profile_error.configure(text="")
+        self._show_section_progress("Profile")
 
         def _do():
             try:
@@ -546,6 +566,7 @@ class AccountSettingsMixin:
             finally:
                 self.after(0, lambda: self._profile_save_btn.configure(
                     state="normal", text="SAVE CHANGES"))
+                self.after(0, lambda: self._hide_section_progress("Profile"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -793,6 +814,7 @@ class AccountSettingsMixin:
 
         self._sec_error.configure(text="")
         self._sec_update_btn.configure(state="disabled", text="UPDATING...")
+        self._show_section_progress("Security")
 
         def _do():
             try:
@@ -811,6 +833,7 @@ class AccountSettingsMixin:
             finally:
                 self.after(0, lambda: self._sec_update_btn.configure(
                     state="normal", text="UPDATE PASSWORD"))
+                self.after(0, lambda: self._hide_section_progress("Security"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -945,6 +968,7 @@ class AccountSettingsMixin:
             return
 
         self._verify_error.configure(text="")
+        self._show_section_progress("Verification")
         self._verify_progress.pack(fill="x", padx=10, pady=(5, 0))
         self._verify_progress.start()
 
@@ -974,6 +998,7 @@ class AccountSettingsMixin:
             finally:
                 self.after(0, lambda: self._verify_progress.stop())
                 self.after(0, lambda: self._verify_progress.pack_forget())
+                self.after(0, lambda: self._hide_section_progress("Verification"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1140,6 +1165,7 @@ class AccountSettingsMixin:
             return
 
         self._doc_error.configure(text="")
+        self._show_section_progress("Documents")
         self._doc_progress.pack(fill="x", padx=10, pady=(5, 0))
         self._doc_progress.start()
 
@@ -1168,6 +1194,7 @@ class AccountSettingsMixin:
             finally:
                 self.after(0, lambda: self._doc_progress.stop())
                 self.after(0, lambda: self._doc_progress.pack_forget())
+                self.after(0, lambda: self._hide_section_progress("Documents"))
 
         threading.Thread(target=_do, daemon=True).start()
 
