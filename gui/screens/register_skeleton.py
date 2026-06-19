@@ -13,6 +13,7 @@ class RegisterSkeletonMixin:
         self._stop_skeleton()
         self.clear_container()
         self.geometry("630x700")
+        self.resizable(False, False)
 
         self._sk_blocks = []
         self._fade_step = 0

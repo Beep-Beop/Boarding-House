@@ -1,6 +1,10 @@
+import io
 import threading
+import requests
 import customtkinter as ctk
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from PIL import Image
 
 
 class AdminDashboardMixin:
@@ -31,13 +35,17 @@ class AdminDashboardMixin:
         self._admin_form_container.pack(pady=0, fill="both", expand=True)
 
         self._build_admin_nav()
+
+        self._admin_body_frame = ctk.CTkFrame(self._admin_form_container, fg_color="transparent")
+        self._admin_body_frame.pack(fill="both", expand=True)
+
         self._build_admin_sidebar()
 
         self._admin_content_wrapper = ctk.CTkFrame(
-            self._admin_form_container, fg_color="transparent"
+            self._admin_body_frame, fg_color="transparent"
         )
         self._admin_content_wrapper.pack(
-            fill="both", expand=True, padx=(260, 10), pady=20
+            side="left", fill="both", expand=True, padx=(10, 10), pady=20
         )
 
         self._set_active_admin_sidebar_btn("dashboard")
@@ -112,47 +120,36 @@ class AdminDashboardMixin:
 
     def _build_admin_sidebar(self):
         sidebar = ctk.CTkFrame(
-            self._admin_form_container,
+            self._admin_body_frame,
             fg_color="transparent",
             width=250,
             corner_radius=0,
             border_color=self.entry_border,
             border_width=1,
         )
-        sidebar.place(x=0, y=0, relheight=1.0)
+        sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
         self._admin_sidebar = sidebar
-
-        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        logo_frame.pack(fill="x", pady=(20, 0))
-
-        ctk.CTkButton(
-            logo_frame, image=self.hamburg_menu_icon, text=None,
-            fg_color="transparent", hover_color=self.hover_color,
-            width=25, height=15, command=self._admin_animate_sidebar,
-        ).pack(side="left", padx=15)
-
-        ctk.CTkLabel(logo_frame, text=None, image=self.logo).pack(side="left")
 
         menu_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         menu_frame.pack(fill="both", expand=True, pady=20)
 
         items = [
-            ("dashboard", "Dashboard", self._build_admin_dashboard_content),
-            ("users", "Manage User", self._build_admin_users_content),
-            ("listings", "Manage Boarding Houses", self._build_admin_listings_content),
-            ("bookings", "Bookings", self._build_admin_bookings_content),
-            ("reviews", "Reviews & Feedback", self._build_admin_reviews_content),
-            ("reports", "Reports", self._build_admin_reports_content),
-            ("permits", "Permit Verifier", self._build_admin_permit_content),
-            ("logs", "Admin Logs", self._build_admin_logs_content),
-            ("admins", "Admin Account Creation", self._build_admin_management_content),
+            ("dashboard", "Dashboard",                   self._build_admin_dashboard_content),
+            ("users",     "Manage User",                 self._build_admin_users_content),
+            ("listings",  "Manage\nBoarding Houses",     self._build_admin_listings_content),
+            ("bookings",  "Bookings",                    self._build_admin_bookings_content),
+            ("reviews",   "Reviews &\nFeedback",         self._build_admin_reviews_content),
+            ("reports",   "Reports",                     self._build_admin_reports_content),
+            ("logs",      "Admin Logs",                  self._build_admin_logs_content),
+            ("admins",    "Admin\nAccount Creation",     self._build_admin_management_content),
         ]
 
         self._admin_sidebar_btns = {}
         for i, (key, text, cmd) in enumerate(items):
+            is_multi = "\n" in text
             btn = ctk.CTkButton(
-                menu_frame, text=text, width=230, height=40,
+                menu_frame, text=text, width=230, height=50 if is_multi else 40,
                 hover_color=self.hover_color, fg_color="transparent",
                 text_color=self.text_color, font=self.body_big_font,
                 command=lambda k=key, cb=cmd: (
@@ -160,18 +157,10 @@ class AdminDashboardMixin:
                     self._admin_clear_content(),
                     cb(),
                 ),
-                anchor="w",
+                anchor="center",
             )
             btn.grid(row=i, column=0, padx=10, pady=(0, 10), sticky="ew")
             self._admin_sidebar_btns[key] = btn
-
-        logout_btn = ctk.CTkButton(
-            menu_frame, text="Logout", width=230, height=40,
-            hover_color=self.hover_color, fg_color="transparent",
-            text_color=self.text_color, font=self.body_big_font,
-            command=self._handle_logout, anchor="w",
-        )
-        logout_btn.grid(row=len(items), column=0, padx=10, pady=(30, 0), sticky="ew")
 
     def _set_active_admin_sidebar_btn(self, active):
         for name, btn in self._admin_sidebar_btns.items():
@@ -187,27 +176,29 @@ class AdminDashboardMixin:
     # ── Sidebar Animation ──
 
     def _admin_animate_sidebar(self):
-        current_width = self._admin_sidebar.cget("width")
+        target = 0 if self._admin_is_sidebar_expanded else 250
+        step = -30 if self._admin_is_sidebar_expanded else 30
+        current = getattr(self, '_admin_sidebar_width', 250)
 
-        if self._admin_is_sidebar_expanded:
-            if current_width > 0:
-                new_width = max(0, current_width - 20)
-                self._admin_sidebar.configure(width=new_width)
-                self._admin_content_wrapper.pack_configure(padx=(new_width + 10, 10))
-                self.after(10, self._admin_animate_sidebar)
-            else:
-                self._admin_sidebar.place_forget()
-                self._admin_is_sidebar_expanded = False
-        else:
-            if not self._admin_sidebar.winfo_ismapped():
-                self._admin_sidebar.place(x=0, y=0, relheight=1.0)
-            if current_width < 250:
-                new_width = min(250, current_width + 20)
-                self._admin_sidebar.configure(width=new_width)
-                self._admin_content_wrapper.pack_configure(padx=(new_width + 10, 10))
-                self.after(10, self._admin_animate_sidebar)
-            else:
-                self._admin_is_sidebar_expanded = True
+        if target > 0 and not self._admin_sidebar.winfo_ismapped():
+            self._admin_sidebar.pack(side="left", fill="y", before=self._admin_content_wrapper)
+
+        def _step():
+            nonlocal current
+            current += step
+            if (step > 0 and current >= target) or (step < 0 and current <= target):
+                current = target
+                self._admin_sidebar.configure(width=current)
+                if current == 0:
+                    self._admin_sidebar.pack_forget()
+                self._admin_is_sidebar_expanded = not self._admin_is_sidebar_expanded
+                self._admin_sidebar_width = current
+                return
+            self._admin_sidebar.configure(width=current)
+            self.after(16, _step)
+
+        self._admin_sidebar_width = current
+        _step()
 
     # ── User Menu ──
 
@@ -278,6 +269,26 @@ class AdminDashboardMixin:
             parent, text=status.capitalize(), font=self.body_description_font,
             fg_color=color, text_color="white", corner_radius=4, padx=8, pady=2, **kwargs)
         return lbl
+
+    # ── Loading Helpers ──
+
+    def _admin_show_loading(self, parent):
+        self._admin_hide_loading()
+        self._admin_progress = ctk.CTkProgressBar(
+            parent, mode="indeterminate",
+            fg_color=self.entry_border, progress_color=self.primary_color)
+        self._admin_progress.pack(fill="x", pady=(0, 10))
+        self._admin_progress.start()
+
+    def _admin_hide_loading(self):
+        p = getattr(self, '_admin_progress', None)
+        if p:
+            try:
+                p.stop()
+                p.pack_forget()
+            except Exception:
+                pass
+            self._admin_progress = None
 
     # ── Helper: Confirmation Dialog ──
 
@@ -353,6 +364,8 @@ class AdminDashboardMixin:
         ctk.CTkLabel(inner, text=today_str, font=self.body_light_font,
                       text_color=self.text_color).pack(anchor="w")
 
+        self._admin_show_loading(main)
+
         stats_cards = [
             ("Total Users", "total_users", self.primary_color),
             ("Total Listings", "total_listings", self.hover_color),
@@ -393,52 +406,67 @@ class AdminDashboardMixin:
         def _do():
             data = {"total_users": "0", "total_listings": "0",
                     "active_bookings": "0", "pending_reports": "0", "pending_permits": "0"}
+            bookings = []
+            logs = []
             try:
-                resp = self.api.get("/users/", timeout=5)
-                if resp.status_code == 200:
-                    users = resp.json()
-                    data["total_users"] = str(len(users))
-                    data["pending_permits"] = str(sum(
-                        1 for u in users if u.get("status") == "active"))
-            except Exception:
-                pass
-            try:
-                resp = self.api.get("/boarding-houses/feed/dashboard?limit=500", timeout=5)
-                if resp.status_code == 200:
-                    listings = resp.json()
-                    data["total_listings"] = str(len(listings))
-                    data["pending_permits"] = str(sum(
-                        1 for l in listings if not l.get("is_verified")))
-            except Exception:
-                pass
-            try:
-                resp = self.api.get("/bookings/stats", timeout=5)
-                if resp.status_code == 200:
-                    stats = resp.json()
-                    data["active_bookings"] = str(stats.get("active_count", "0"))
-            except Exception:
-                pass
-            try:
-                resp = self.api.get("/reports/", timeout=5)
-                if resp.status_code == 200:
-                    reports = resp.json()
-                    data["pending_reports"] = str(sum(
-                        1 for r in reports if r.get("status") == "pending"))
-            except Exception:
-                pass
-            self.after(0, lambda: self._admin_populate_dash_stats(data))
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    f_users = pool.submit(lambda: self.api.get("/users/", timeout=5))
+                    f_listings = pool.submit(lambda: self.api.get("/boarding-houses/admin/listings", timeout=5))
+                    f_bookings = pool.submit(lambda: self.api.get("/bookings/stats", timeout=5))
+                    f_reports = pool.submit(lambda: self.api.get("/reports/", timeout=5))
 
-            try:
-                resp_b = self.api.get("/bookings/all?limit=5", timeout=5)
-                bookings = resp_b.json().get("bookings", []) if resp_b.status_code == 200 else []
+                    try:
+                        resp = f_users.result()
+                        if resp.status_code == 200:
+                            users = resp.json()
+                            data["total_users"] = str(len(users))
+                            data["pending_permits"] = str(sum(1 for u in users if u.get("status") == "active"))
+                    except Exception:
+                        pass
+
+                    try:
+                        resp = f_listings.result()
+                        if resp.status_code == 200:
+                            listings = resp.json()
+                            data["total_listings"] = str(len(listings))
+                            data["pending_permits"] = str(sum(1 for l in listings if not l.get("is_verified")))
+                    except Exception:
+                        pass
+
+                    try:
+                        resp = f_bookings.result()
+                        if resp.status_code == 200:
+                            stats = resp.json()
+                            data["active_bookings"] = str(stats.get("active_count", "0"))
+                    except Exception:
+                        pass
+
+                    try:
+                        resp = f_reports.result()
+                        if resp.status_code == 200:
+                            reports = resp.json()
+                            data["pending_reports"] = str(sum(1 for r in reports if r.get("status") == "pending"))
+                    except Exception:
+                        pass
+
+                try:
+                    resp_b = self.api.get("/bookings/all?limit=5", timeout=5)
+                    bookings = resp_b.json().get("bookings", []) if resp_b.status_code == 200 else []
+                except Exception:
+                    pass
+                try:
+                    resp_l = self.api.get("/admin-logs/", timeout=5)
+                    logs = resp_l.json()[:5] if resp_l.status_code == 200 else []
+                except Exception:
+                    pass
             except Exception:
-                bookings = []
-            try:
-                resp_l = self.api.get("/admin-logs/", timeout=5)
-                logs = resp_l.json()[:5] if resp_l.status_code == 200 else []
-            except Exception:
-                logs = []
-            self.after(0, lambda: self._admin_populate_dash_recent(bookings, logs))
+                pass
+
+            self.after(0, lambda: (
+                self._admin_hide_loading(),
+                self._admin_populate_dash_stats(data),
+                self._admin_populate_dash_recent(bookings, logs),
+            ))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -451,8 +479,11 @@ class AdminDashboardMixin:
                 pass
 
     def _admin_populate_dash_recent(self, bookings, logs):
-        for w in self._admin_dash_bookings_container.winfo_children():
-            w.destroy()
+        try:
+            for w in self._admin_dash_bookings_container.winfo_children():
+                w.destroy()
+        except Exception:
+            return
         if bookings:
             for b in bookings[:5]:
                 text = f"#{b.get('booking_id')} - {b.get('tenant_name', '?')} ({b.get('status', '?')})"
@@ -463,8 +494,11 @@ class AdminDashboardMixin:
             ctk.CTkLabel(self._admin_dash_bookings_container, text="No recent bookings",
                           font=self.body_light_font, text_color=self.text_color).pack(anchor="w")
 
-        for w in self._admin_dash_logs_container.winfo_children():
-            w.destroy()
+        try:
+            for w in self._admin_dash_logs_container.winfo_children():
+                w.destroy()
+        except Exception:
+            return
         if logs:
             for log in logs[:5]:
                 ts = str(log.get("performed_at", "") or "")[:16]
@@ -504,9 +538,7 @@ class AdminDashboardMixin:
         scroll = ctk.CTkScrollableFrame(self._admin_users_table_container, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
-        loading = ctk.CTkLabel(scroll, text="Loading users...", font=self.body_paragraph_font,
-                                text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(scroll)
 
         def _do():
             users = []
@@ -530,6 +562,7 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_users(self, scroll, users):
+        self._admin_hide_loading()
         for w in scroll.winfo_children():
             w.destroy()
 
@@ -601,7 +634,7 @@ class AdminDashboardMixin:
         self._admin_refresh_users()
 
     # ════════════════════════════════════
-    #  SECTION 3: LISTINGS
+    #  SECTION 3: LISTINGS + PERMIT VERIFIER (COMBINED)
     # ════════════════════════════════════
 
     def _build_admin_listings_content(self):
@@ -610,7 +643,8 @@ class AdminDashboardMixin:
         main = ctk.CTkFrame(scroll, fg_color="transparent")
         main.pack(fill="both", expand=True, padx=20, pady=10)
 
-        ctk.CTkLabel(main, text="Boarding House Management", font=self.body_bold_font,
+        ctk.CTkLabel(main, text="Manage Boarding Houses & Permits",
+                      font=self.body_bold_font,
                       text_color=self.text_color).pack(anchor="w", pady=(0, 10))
 
         self._admin_listings_search_entry, self._admin_listings_filter = \
@@ -630,14 +664,12 @@ class AdminDashboardMixin:
         scroll = ctk.CTkScrollableFrame(self._admin_listings_container, fg_color="transparent")
         scroll.pack(fill="both", expand=True)
 
-        loading = ctk.CTkLabel(scroll, text="Loading listings...", font=self.body_paragraph_font,
-                                text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(scroll)
 
         def _do():
             listings = []
             try:
-                resp = self.api.get("/boarding-houses/feed/dashboard?limit=500", timeout=5)
+                resp = self.api.get("/boarding-houses/admin/listings", timeout=5)
                 if resp.status_code == 200:
                     listings = resp.json()
             except Exception:
@@ -661,12 +693,13 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_listings(self, scroll, listings):
+        self._admin_hide_loading()
         for w in scroll.winfo_children():
             w.destroy()
 
         if not listings:
-            ctk.CTkLabel(scroll, text="No listings found.", font=self.body_paragraph_font,
-                          text_color=self.text_color).pack(pady=30)
+            ctk.CTkLabel(scroll, text="No listings found.",
+                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=30)
             return
 
         for listing in listings:
@@ -676,6 +709,7 @@ class AdminDashboardMixin:
             card.bind("<Enter>", lambda e, c=card: c.configure(fg_color=self.hover_color))
             card.bind("<Leave>", lambda e, c=card: c.configure(fg_color=self.secondary_color))
 
+            # Top row: name + status badges
             top = ctk.CTkFrame(card, fg_color="transparent")
             top.pack(fill="x", padx=15, pady=(10, 2))
             name = listing.get("name", listing.get("bh_name", "Untitled"))
@@ -686,22 +720,45 @@ class AdminDashboardMixin:
             color = self._admin_status_colors.get(status, self.text_color)
             ctk.CTkLabel(top, text=status.capitalize(), font=self.body_description_font,
                           fg_color=color, text_color="white", corner_radius=4,
-                          padx=8, pady=2).pack(side="right")
+                          padx=8, pady=2).pack(side="right", padx=(4, 0))
 
             verified = listing.get("is_verified", False)
-            if verified:
-                ctk.CTkLabel(top, text="Verified", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              corner_radius=4, padx=8, pady=2).pack(side="right", padx=(0, 5))
+            v_text = "Verified" if verified else "Unverified"
+            v_color = "green" if verified else self.hover_color
+            ctk.CTkLabel(top, text=v_text, font=self.body_description_font,
+                          fg_color=v_color, text_color="white",
+                          corner_radius=4, padx=8, pady=2).pack(side="right", padx=(4, 0))
 
+            # Mid row: listing ID + permit URL
+            mid = ctk.CTkFrame(card, fg_color="transparent")
+            mid.pack(fill="x", padx=15, pady=(2, 2))
+            lid = listing.get("id", listing.get("listing_id"))
+            ctk.CTkLabel(mid, text=f"ID: #{lid}", font=self.body_light_font,
+                          text_color=self.text_color).pack(side="left")
+            permit_url = listing.get("permit_url", "")
+            if permit_url:
+                ctk.CTkLabel(mid, text=f"Permit: {permit_url[:50]}...",
+                              font=self.body_description_font,
+                              text_color=self.text_color).pack(side="right")
+
+            # Bottom row: action buttons
             bottom = ctk.CTkFrame(card, fg_color="transparent")
             bottom.pack(fill="x", padx=15, pady=(2, 10))
-            lid = listing.get("id", listing.get("listing_id"))
+
+            # View Detail
             ctk.CTkButton(bottom, text="View Detail", font=self.body_description_font,
                           fg_color=self.primary_color, hover_color=self.hover_color,
                           text_color="white", width=90, height=28, cursor="hand2",
                           command=lambda lid=lid: self._admin_show_listing_detail(lid)
                           ).pack(side="left", padx=(0, 5))
+
+            # Status actions
+            if status == "pending":
+                ctk.CTkButton(bottom, text="Approve", font=self.body_description_font,
+                              fg_color="green", text_color="white",
+                              width=80, height=28, cursor="hand2",
+                              command=lambda lid=lid: self._admin_approve_listing(lid)
+                              ).pack(side="left", padx=(0, 5))
 
             if status != "banned":
                 ctk.CTkButton(bottom, text="Ban", font=self.body_description_font,
@@ -714,6 +771,25 @@ class AdminDashboardMixin:
                               fg_color="green", text_color="white",
                               width=60, height=28, cursor="hand2",
                               command=lambda lid=lid: self._admin_restore_listing(lid)
+                              ).pack(side="left", padx=(0, 5))
+
+            # Permit actions
+            if not verified:
+                ctk.CTkButton(bottom, text="Approve Permit", font=self.body_description_font,
+                              fg_color="green", text_color="white",
+                              width=110, height=28, cursor="hand2",
+                              command=lambda lid=lid: self._admin_approve_permit(lid)
+                              ).pack(side="left", padx=(0, 5))
+                ctk.CTkButton(bottom, text="Reject", font=self.body_description_font,
+                              fg_color=self.error_red, text_color="white",
+                              width=70, height=28, cursor="hand2",
+                              command=lambda lid=lid: self._admin_reject_permit(lid)
+                              ).pack(side="left", padx=(0, 5))
+            else:
+                ctk.CTkButton(bottom, text="Revoke", font=self.body_description_font,
+                              fg_color=self.hover_color, text_color="white",
+                              width=70, height=28, cursor="hand2",
+                              command=lambda lid=lid: self._admin_revoke_permit(lid)
                               ).pack(side="left", padx=(0, 5))
 
     def _admin_show_listing_detail(self, listing_id):
@@ -741,17 +817,24 @@ class AdminDashboardMixin:
 
         def _do():
             data = None
+            photos = []
             try:
                 resp = self.api.get(f"/boarding-houses/{listing_id}", timeout=5)
                 if resp.status_code == 200:
                     data = resp.json()
             except Exception:
                 pass
-            self.after(0, lambda: self._admin_populate_listing_detail(main, data))
+            try:
+                resp = self.api.get(f"/photos/listing/{listing_id}", timeout=5)
+                if resp.status_code == 200:
+                    photos = resp.json()
+            except Exception:
+                pass
+            self.after(0, lambda: self._admin_populate_listing_detail(main, data, photos))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_populate_listing_detail(self, parent, data):
+    def _admin_populate_listing_detail(self, parent, data, photos=None):
         for w in parent.winfo_children():
             w.destroy()
         if not data:
@@ -821,10 +904,26 @@ class AdminDashboardMixin:
         right.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=(0, 15))
         ctk.CTkLabel(right, text="Status & Info", font=self.body_big_font,
                       text_color=self.primary_color).pack(anchor="w", padx=15, pady=(15, 10))
+
+        photo_label = ctk.CTkLabel(right, text="[No Image]", font=self.body_paragraph_font,
+                                    text_color=self.text_color)
+        photo_label.pack(padx=15, pady=(0, 10))
+        if photos:
+            photo_url = photos[0].get("photo_url", "")
+            if photo_url:
+                def load_photo(lbl=photo_label, url=photo_url):
+                    try:
+                        img_data = requests.get(url, timeout=5).content
+                        pil_image = Image.open(io.BytesIO(img_data))
+                        ctk_image = ctk.CTkImage(pil_image, size=(260, 180))
+                        self.after(0, lambda: lbl.configure(image=ctk_image, text=""))
+                    except Exception:
+                        pass
+                threading.Thread(target=load_photo, daemon=True).start()
+
         for label, val in [
             ("Listing ID:", f"#{data.get('listing_id', 'N/A')}"),
             ("Owner ID:", f"#{data.get('owner_id', 'N/A')}"),
-            ("Permit URL:", data.get("permit_url", "N/A")),
             ("Created:", str(data.get("bh_created_at", ""))[:10] if data.get("bh_created_at") else "N/A"),
         ]:
             row_f = ctk.CTkFrame(right, fg_color="transparent")
@@ -858,6 +957,26 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast(f"Listing {listing_id} restored", is_error=False))
                 else:
                     self.after(0, lambda: self.show_toast("Failed to restore listing", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            self.after(0, self._build_admin_listings_content)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _admin_approve_listing(self, listing_id):
+        result = self._admin_confirm_action(
+            f"Type APPROVE to approve listing #{listing_id}:", "Approve Listing")
+        if result != "APPROVE":
+            return
+
+        def _do():
+            try:
+                resp = self.api.patch(f"/boarding-houses/{listing_id}",
+                                      json={"status": "active"}, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self.show_toast(
+                        f"Listing {listing_id} approved", is_error=False))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to approve listing", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
             self.after(0, self._build_admin_listings_content)
@@ -924,9 +1043,7 @@ class AdminDashboardMixin:
         for w in self._admin_bookings_table.winfo_children():
             w.destroy()
 
-        loading = ctk.CTkLabel(self._admin_bookings_table, text="Loading bookings...",
-                                font=self.body_paragraph_font, text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(self._admin_bookings_table)
 
         def _do():
             status_filter = self._admin_bookings_filter_status.get()
@@ -953,8 +1070,12 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_bookings(self, stats, bookings):
-        for w in self._admin_bookings_table.winfo_children():
-            w.destroy()
+        self._admin_hide_loading()
+        try:
+            for w in self._admin_bookings_table.winfo_children():
+                w.destroy()
+        except Exception:
+            return
 
         if "total_bookings" in self._admin_bookings_stat_labels:
             self._admin_bookings_stat_labels["total_bookings"].configure(
@@ -1287,9 +1408,7 @@ class AdminDashboardMixin:
         self._admin_reviews_container = ctk.CTkFrame(main, fg_color="transparent")
         self._admin_reviews_container.pack(fill="both", expand=True)
 
-        loading = ctk.CTkLabel(self._admin_reviews_container, text="Loading reviews...",
-                                font=self.body_paragraph_font, text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(self._admin_reviews_container)
 
         def _do():
             reviews = []
@@ -1304,6 +1423,7 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_reviews(self, reviews):
+        self._admin_hide_loading()
         for w in self._admin_reviews_container.winfo_children():
             w.destroy()
 
@@ -1410,9 +1530,7 @@ class AdminDashboardMixin:
         for w in self._admin_reports_container.winfo_children():
             w.destroy()
 
-        loading = ctk.CTkLabel(self._admin_reports_container, text="Loading reports...",
-                                font=self.body_paragraph_font, text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(self._admin_reports_container)
 
         def _do():
             reports = []
@@ -1434,6 +1552,7 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_reports(self, reports):
+        self._admin_hide_loading()
         for w in self._admin_reports_container.winfo_children():
             w.destroy()
 
@@ -1535,129 +1654,8 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
-    #  SECTION 7: PERMIT VERIFIER
+    #  PERMIT ACTION METHODS (used by combined listings)
     # ════════════════════════════════════
-
-    def _build_admin_permit_content(self):
-        scroll = ctk.CTkScrollableFrame(self._admin_content_wrapper, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
-        main = ctk.CTkFrame(scroll, fg_color="transparent")
-        main.pack(fill="both", expand=True, padx=20, pady=10)
-
-        ctk.CTkLabel(main, text="Permit Verifier", font=self.body_bold_font,
-                      text_color=self.text_color).pack(anchor="w", pady=(0, 10))
-
-        filter_frame = ctk.CTkFrame(main, fg_color="transparent")
-        filter_frame.pack(fill="x", pady=(0, 10))
-        self._admin_permit_filter = ctk.CTkComboBox(
-            filter_frame, values=["All", "Unverified", "Verified"],
-            font=self.body_light_font, fg_color=self.fg_color,
-            border_color=self.entry_border, border_width=1,
-            button_color=self.primary_color, button_hover_color=self.hover_color,
-            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
-            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
-            text_color=self.text_color,
-            width=160, height=35, state="readonly",
-            command=lambda c: self._admin_refresh_permits())
-        self._admin_permit_filter.pack(side="left")
-        self._admin_permit_filter.set("All")
-
-        self._admin_permits_container = ctk.CTkFrame(main, fg_color="transparent")
-        self._admin_permits_container.pack(fill="both", expand=True)
-
-        self._admin_refresh_permits()
-
-    def _admin_refresh_permits(self):
-        for w in self._admin_permits_container.winfo_children():
-            w.destroy()
-
-        loading = ctk.CTkLabel(self._admin_permits_container, text="Loading listings...",
-                                font=self.body_paragraph_font, text_color=self.text_color)
-        loading.pack(pady=20)
-
-        def _do():
-            listings = []
-            try:
-                resp = self.api.get("/boarding-houses/feed/dashboard?limit=500", timeout=5)
-                if resp.status_code == 200:
-                    listings = resp.json()
-            except Exception:
-                pass
-            filter_val = "All"
-            try:
-                filter_val = self._admin_permit_filter.get()
-            except Exception:
-                pass
-            if filter_val == "Unverified":
-                listings = [l for l in listings if not l.get("is_verified")]
-            elif filter_val == "Verified":
-                listings = [l for l in listings if l.get("is_verified")]
-            self.after(0, lambda: self._admin_populate_permits(listings))
-
-        threading.Thread(target=_do, daemon=True).start()
-
-    def _admin_populate_permits(self, listings):
-        for w in self._admin_permits_container.winfo_children():
-            w.destroy()
-
-        if not listings:
-            ctk.CTkLabel(self._admin_permits_container, text="No listings found.",
-                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=30)
-            return
-
-        scroll = ctk.CTkScrollableFrame(self._admin_permits_container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
-
-        for listing in listings:
-            verified = listing.get("is_verified", False)
-            name = listing.get("name", listing.get("bh_name", "Untitled"))
-            lid = listing.get("id", listing.get("listing_id"))
-
-            card = ctk.CTkFrame(scroll, fg_color=self.secondary_color, corner_radius=6,
-                                 border_width=1, border_color=self.entry_border)
-            card.pack(fill="x", pady=3)
-
-            top = ctk.CTkFrame(card, fg_color="transparent")
-            top.pack(fill="x", padx=15, pady=(10, 2))
-            ctk.CTkLabel(top, text=name, font=self.body_paragraph_font,
-                          text_color=self.text_color).pack(side="left")
-
-            status_text = "Verified" if verified else "Unverified"
-            status_color = "green" if verified else self.hover_color
-            ctk.CTkLabel(top, text=status_text, font=self.body_description_font,
-                          fg_color=status_color, text_color="white",
-                          corner_radius=4, padx=8, pady=2).pack(side="right")
-
-            mid = ctk.CTkFrame(card, fg_color="transparent")
-            mid.pack(fill="x", padx=15, pady=(2, 2))
-            ctk.CTkLabel(mid, text=f"Listing ID: #{lid}", font=self.body_light_font,
-                          text_color=self.text_color).pack(side="left")
-            permit_url = listing.get("permit_url", "")
-            if permit_url:
-                ctk.CTkLabel(mid, text=f"Permit: {permit_url[:60]}...",
-                              font=self.body_description_font,
-                              text_color=self.text_color).pack(side="right")
-
-            bottom = ctk.CTkFrame(card, fg_color="transparent")
-            bottom.pack(fill="x", padx=15, pady=(2, 10))
-
-            if not verified:
-                ctk.CTkButton(bottom, text="Approve Permit", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=120, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_approve_permit(lid)
-                              ).pack(side="left", padx=(0, 5))
-                ctk.CTkButton(bottom, text="Reject", font=self.body_description_font,
-                              fg_color=self.error_red, text_color="white",
-                              width=80, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_reject_permit(lid)
-                              ).pack(side="left")
-            else:
-                ctk.CTkButton(bottom, text="Revoke", font=self.body_description_font,
-                              fg_color=self.hover_color, text_color="white",
-                              width=80, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_revoke_permit(lid)
-                              ).pack(side="left")
 
     def _admin_approve_permit(self, listing_id):
         result = self._admin_confirm_action(
@@ -1676,7 +1674,7 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to approve permit", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
-            self.after(0, self._admin_refresh_permits)
+            self.after(0, self._admin_refresh_listings)
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1697,7 +1695,7 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to reject permit", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
-            self.after(0, self._admin_refresh_permits)
+            self.after(0, self._admin_refresh_listings)
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1718,7 +1716,7 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to revoke", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
-            self.after(0, self._admin_refresh_permits)
+            self.after(0, self._admin_refresh_listings)
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1738,9 +1736,7 @@ class AdminDashboardMixin:
         container = ctk.CTkFrame(main, fg_color="transparent")
         container.pack(fill="both", expand=True)
 
-        loading = ctk.CTkLabel(container, text="Loading admin logs...",
-                                font=self.body_paragraph_font, text_color=self.text_color)
-        loading.pack(pady=20)
+        self._admin_show_loading(container)
 
         def _do():
             logs = []
@@ -1755,6 +1751,7 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_logs(self, parent, logs):
+        self._admin_hide_loading()
         for w in parent.winfo_children():
             w.destroy()
 
@@ -1889,9 +1886,7 @@ class AdminDashboardMixin:
         for w in self._admin_list_frame.winfo_children():
             w.destroy()
 
-        loading = ctk.CTkLabel(self._admin_list_frame, text="Loading...",
-                                font=self.body_light_font, text_color=self.text_color)
-        loading.pack(pady=10)
+        self._admin_show_loading(self._admin_list_frame)
 
         def _do():
             admins = []
@@ -1907,6 +1902,7 @@ class AdminDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _admin_populate_admin_list(self, admins):
+        self._admin_hide_loading()
         for w in self._admin_list_frame.winfo_children():
             w.destroy()
 

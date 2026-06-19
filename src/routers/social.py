@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from src import crud, schemas, database
 from src.dependencies import get_current_user, limiter
+from typing import Optional
 
 router = APIRouter(prefix="/social", tags=["Social"])
 
@@ -48,3 +49,15 @@ def delete_review(request: Request, review_id: int, db: Session = Depends(databa
     review_crud.delete(review_id=review_id)
     
     return None
+
+@router.put("/reviews/{review_id}", response_model=schemas.ReviewsResponse)
+@limiter.limit("10/minute")
+def update_review(request: Request, review_id: int, body: schemas.ReviewsUpdate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    review_crud = crud.ReviewsCRUD(db)
+    review = review_crud.get(review_id=review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+    if current_user.role != "admin" and review.user_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own review")
+    updated = review_crud.update(review_id=review_id, **body.model_dump(exclude_none=True))
+    return updated

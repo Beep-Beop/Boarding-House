@@ -76,7 +76,7 @@ class BoardingHouse(Base):
     bh_name = Column(String(255), nullable=False)
     property_type = Column(String(100), nullable=True) # e.g., "Boarding House", "Dormitory", "Apartment"
     description = Column(Text) 
-    price_range = Column(String(100)) # e.g., "3000 - 5000"
+    price_range = Column(String(100), nullable=True) # Deprecated: computed from rooms
     status = Column(Enum('active', 'pending', 'banned'), default='pending')
     bh_created_at = Column(DateTime, server_default=func.now()) 
     is_verified = Column(Boolean, default=False) # Requires Admin to approve physical permits

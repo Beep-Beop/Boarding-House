@@ -96,6 +96,15 @@ def delete_boarding_house(request: Request, listing_id: int, db: Session = Depen
     bh_crud.delete(listing_id)
 
 
+@router.get("/admin/listings", response_model=List[schemas.AdminListingResponse])
+@limiter.limit("30/minute")
+def get_admin_listings(request: Request, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    bh_crud = crud.BoardingHousesCRUD(db)
+    return bh_crud.get_admin_listings()
+
 @router.get("/feed/dashboard", response_model=List[schemas.DashboardCardResponse])
 @limiter.limit("30/minute")
 def get_dashboard_feed(request: Request, limit: int = 20, offset: int = 0, db: Session = Depends(database.get_db)):

@@ -77,8 +77,10 @@ def login(request: Request, credentials: schemas.UserLogin, db: Session = Depend
             detail="Please verify your email before logging in."
         )
     
+    token_expiry = timedelta(days=7) if credentials.remember_me else None
     access_token = security.create_access_token(
-        data={"sub": str(user.user_id), "role": user.role}
+        data={"sub": str(user.user_id), "role": user.role},
+        expires_delta=token_expiry
     )
     
     return {

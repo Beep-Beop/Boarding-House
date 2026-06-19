@@ -62,6 +62,7 @@ class UserUpdate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr = Field(..., examples=["jmsarmiento0304@gmail.com"])
     password: str = Field(..., min_length=6, examples=["beepboop123"])
+    remember_me: bool = False
 
 
 # --- LOCATION ---
@@ -111,8 +112,8 @@ class BoardingHouseBase(BaseModel):
     bh_name: str = Field(..., max_length=255)
     property_type: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
-    price_range: str = Field(..., max_length=100)
-    permit_url: str = Field(..., max_length=255)
+    price_range: Optional[str] = Field(None, max_length=100)
+    permit_url: Optional[str] = Field(None, max_length=255)
     rules: Optional[str] = None
     min_stay_months: int = 1
 
@@ -128,6 +129,14 @@ class BoardingHouseResponse(BoardingHouseBase):
     is_verified: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        if hasattr(obj, 'rooms') and obj.rooms:
+            prices = [r.price_per_month for r in obj.rooms if r.price_per_month is not None]
+            if prices:
+                obj.price_range = f"₱{min(prices):,.0f} - ₱{max(prices):,.0f}"
+        return super().model_validate(obj, *args, **kwargs)
 
 class BoardingHouseUpdate(BaseModel):
     location_id: Optional[int] = None
@@ -423,6 +432,10 @@ class ReviewsCreate(ReviewsBase):
     listing_id: int
     booking_id: Optional[int] = None 
 
+class ReviewsUpdate(BaseModel):
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    comment: Optional[str] = None
+
 class ReviewsResponse(ReviewsBase):
     review_id: int
     user_id: int
@@ -430,6 +443,8 @@ class ReviewsResponse(ReviewsBase):
     booking_id: Optional[int]
     created_at: datetime
     is_verified: bool 
+    user_name: Optional[str] = None
+    user_profile_picture: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -533,5 +548,20 @@ class DashboardCardResponse(BaseModel):
     amenities: str
     desc: Optional[str] = None
     photo_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AdminListingResponse(BaseModel):
+    id: int
+    listing_id: int
+    name: str
+    bh_name: str
+    location: str
+    amenities: str
+    status: str
+    is_verified: bool
+    permit_url: Optional[str] = None
+    photo_url: Optional[str] = None
+    desc: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

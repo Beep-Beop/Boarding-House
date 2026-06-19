@@ -112,6 +112,9 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.bookmark_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(25, 25))
         self.upload_image_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "upload_image.png")), size=(60, 60))
 
+        self.yellow_star = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "yellow_star.png")), size=(16, 16))
+        self.grey_star = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "grey_star.png")), size=(16, 16))
+
         self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
         self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(22, 22))
         self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(22, 22))
@@ -376,6 +379,7 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.clear_container()
 
         self.geometry("1200x700")
+        self.resizable(False, False)
 
     # Main Container
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")

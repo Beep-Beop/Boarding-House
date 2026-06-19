@@ -18,9 +18,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     hashed_password_byte_enc = hashed_password.encode('utf-8')
     return bcrypt.checkpw(password_byte_enc, hashed_password_byte_enc)
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    if expires_delta is None:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    else:
+        expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({
         "exp": expire,
         "jti": str(uuid.uuid4())

@@ -8,6 +8,7 @@ class RegisterFormMixin:
     def show_register_page(self):
         self.clear_container()
         self.geometry("630x700")
+        self.resizable(False, False)
 
         # Tracking arrays
         self.province_options = []

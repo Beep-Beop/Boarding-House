@@ -8,6 +8,7 @@ class AccountTypeMixin:
         self.clear_container()
 
         self.geometry("1200x700")
+        self.resizable(False, False)
 
         if not hasattr(self, "selected_account_type"):
             self.selected_account_type = None

@@ -11,6 +11,7 @@ class OwnerDashboardMixin:
     def show_owner_dashboard(self):
         print("[DEBUG] Showing: Owner Dashboard")
         self.clear_container()
+        self._enable_debug_right_click()
 
         w, h = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{int(w * 0.85)}x{int(h * 0.85)}")
@@ -23,16 +24,20 @@ class OwnerDashboardMixin:
         self.form_container.pack(pady=(0, 0), fill="both", expand=True)
 
         self._build_owner_nav()
+
+        self.body_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
+        self.body_frame.pack(fill="both", expand=True)
+
         self._build_owner_sidebar()
 
         # Content wrapper for sidebar animation
-        self.content_wrapper = ctk.CTkFrame(self.form_container,
+        self.content_wrapper = ctk.CTkFrame(self.body_frame,
                                             fg_color="transparent"
                                             )
-        self.content_wrapper.pack(fill="both", expand=True, padx=(260, 10), pady=20)
+        self.content_wrapper.pack(side="left", fill="both", expand=True, padx=(10, 10), pady=20)
 
         # --- Dashboard Main Content ---
-        self._set_active_sidebar_btn("dashboard")
+        self._set_owner_sidebar_btn("dashboard")
         self.build_dashboard_content()
 
     def build_dashboard_content(self):
@@ -63,6 +68,7 @@ class OwnerDashboardMixin:
         self._owner_dashboard_cards_data = {
             "total_listings": "0",
             "pending_review": "0",
+            "total_income": "\u20B10",
             "recent_booking": "0",
             "maint_items": [],
         }
@@ -75,7 +81,7 @@ class OwnerDashboardMixin:
         card_info = [
             ("Total Listing", "total_listings"),
             ("Pending Review", "pending_review"),
-            ("Total Income", "\u20B10"),
+            ("Total Income", "total_income"),
             ("Recent Booking", "recent_booking"),
         ]
 
@@ -98,7 +104,7 @@ class OwnerDashboardMixin:
                                   corner_radius=0)
             accent.place(x=0, y=0, relwidth=1)
 
-            val = self._owner_dashboard_cards_data.get(key, "\u20B10") if key != "\u20B10" else "\u20B10"
+            val = self._owner_dashboard_cards_data.get(key, "\u20B10")
             ctk.CTkLabel(card, text=title, font=self.body_big_font,
                          text_color=self.primary_color).grid(row=1, column=0, padx=15, pady=(15, 0), sticky="w")
             val_lbl = ctk.CTkLabel(card, text=val, font=self.body_bold_paragraph_font,
@@ -179,6 +185,11 @@ class OwnerDashboardMixin:
                 resp4 = self.api.get(f"/payments/owner/{owner_id}", timeout=5)
                 if resp4.status_code == 200:
                     self._owner_dashboard_cards_data["payments"] = resp4.json()
+                    total_income = sum(
+                        p.get("amount", 0) for p in resp4.json()
+                        if p.get("status") == "completed"
+                    )
+                    self._owner_dashboard_cards_data["total_income"] = f"\u20B1{total_income:,.0f}"
             except Exception:
                 pass
             self.after(0, self._populate_owner_dashboard_cards)
@@ -188,14 +199,15 @@ class OwnerDashboardMixin:
 
     def _populate_owner_dashboard_cards(self):
         data = self._owner_dashboard_cards_data
-        if "total_listings" in self._owner_stat_labels:
-            self._owner_stat_labels["total_listings"].configure(text=data["total_listings"])
-        if "pending_review" in self._owner_stat_labels:
-            self._owner_stat_labels["pending_review"].configure(text=data["pending_review"])
-        if "recent_booking" in self._owner_stat_labels:
-            self._owner_stat_labels["recent_booking"].configure(text=data["recent_booking"])
+        for key in ("total_listings", "pending_review", "total_income", "recent_booking"):
+            if key in self._owner_stat_labels and self._owner_stat_labels[key].winfo_exists():
+                self._owner_stat_labels[key].configure(text=str(data.get(key, "\u20B10")))
 
         maint_items = data.get("maint_items", [])
+
+        # Guard against race condition: user may have navigated away
+        if not hasattr(self, '_maint_card') or not self._maint_card or not self._maint_card.winfo_exists():
+            return
         if not maint_items:
             ctk.CTkLabel(self._maint_card, text="No maintenance requests",
                          font=self.body_light_font, text_color=self.text_color).grid(row=2, column=0, padx=15, pady=(7, 12), sticky="w")
@@ -285,27 +297,29 @@ class OwnerDashboardMixin:
             status_lbl.grid(row=row, column=2, padx=15, pady=(7, bottom_pady), sticky="w")
 
     def animate_sidebar(self):
-        current_width = self.sidebar_main_frame.cget("width")
+        target = 0 if self.is_sidebar_expanded else 250
+        step = -30 if self.is_sidebar_expanded else 30
+        current = getattr(self, '_sidebar_width', 250)
 
-        if self.is_sidebar_expanded:
-            if current_width > 0:
-                new_width = max(0, current_width - 20)
-                self.sidebar_main_frame.configure(width=new_width)
-                self.content_wrapper.pack_configure(padx=(new_width + 10, 10))
-                self.after(10, self.animate_sidebar)
-            else:
-                self.sidebar_main_frame.place_forget()
-                self.is_sidebar_expanded = False
-        else:
-            if not self.sidebar_main_frame.winfo_ismapped():
-                self.sidebar_main_frame.place(x=0, y=0, relheight=1.0)
-            if current_width < 250:
-                new_width = min(250, current_width + 20)
-                self.sidebar_main_frame.configure(width=new_width)
-                self.content_wrapper.pack_configure(padx=(new_width + 10, 10))
-                self.after(10, self.animate_sidebar)
-            else:
-                self.is_sidebar_expanded = True
+        if target > 0 and not self.sidebar_main_frame.winfo_ismapped():
+            self.sidebar_main_frame.pack(side="left", fill="y", before=self.content_wrapper)
+
+        def _step():
+            nonlocal current
+            current += step
+            if (step > 0 and current >= target) or (step < 0 and current <= target):
+                current = target
+                self.sidebar_main_frame.configure(width=current)
+                if current == 0:
+                    self.sidebar_main_frame.pack_forget()
+                self.is_sidebar_expanded = not self.is_sidebar_expanded
+                self._sidebar_width = current
+                return
+            self.sidebar_main_frame.configure(width=current)
+            self.after(16, _step)
+
+        self._sidebar_width = current
+        _step()
 
     def toggle_maint_detail(self, request_name):
         frame = self.maint_detail_frames.get(request_name)
@@ -396,37 +410,15 @@ class OwnerDashboardMixin:
             child.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
 
     def _build_owner_sidebar(self):
-        self.sidebar_main_frame = ctk.CTkFrame(self.form_container,
+        self.sidebar_main_frame = ctk.CTkFrame(self.body_frame,
                                                fg_color="transparent",
                                                width=250,
                                                corner_radius=0,
                                                border_color=self.entry_border,
                                                border_width=1
                                                )
-        self.sidebar_main_frame.place(x=0, y=0, relheight=1.0)
+        self.sidebar_main_frame.pack(side="left", fill="y")
         self.sidebar_main_frame.pack_propagate(False)
-
-        self.sidebar_logo_frame = ctk.CTkFrame(self.sidebar_main_frame,
-                                               fg_color="transparent"
-                                               )
-        self.sidebar_logo_frame.pack(fill="x", pady=(20, 0))
-
-        self.sidebar_hamburger_btn = ctk.CTkButton(self.sidebar_logo_frame,
-                                                   image=self.hamburg_menu_icon,
-                                                   text=None,
-                                                   fg_color="transparent",
-                                                   hover_color=self.hover_color,
-                                                   width=25,
-                                                   height=15,
-                                                   command=self.animate_sidebar
-                                                   )
-        self.sidebar_hamburger_btn.pack(side="left", padx=15)
-
-        self.logo_image = ctk.CTkLabel(self.sidebar_logo_frame,
-                                       text=None,
-                                       image=self.logo
-                                       )
-        self.logo_image.pack(side="left")
 
         self.menu_btn_frame = ctk.CTkFrame(self.sidebar_main_frame,
                                            fg_color="transparent"
@@ -481,19 +473,7 @@ class OwnerDashboardMixin:
                                            )
         self.bookings_btn.grid(row=3, column=0, padx=10, pady=(0, 30))
 
-        self.logout_btn = ctk.CTkButton(self.menu_btn_frame,
-                                        text="Logout",
-                                        width=230,
-                                        height=40,
-                                        hover_color=self.hover_color,
-                                        fg_color="transparent",
-                                        text_color=self.text_color,
-                                        font=self.body_big_font,
-                                        command=self._handle_logout
-                                        )
-        self.logout_btn.grid(row=4, column=0, padx=10, pady=(30, 0))
-
-    def _set_active_sidebar_btn(self, active):
+    def _set_owner_sidebar_btn(self, active):
         buttons = {
             "dashboard": self.dashboard_btn,
             "tenants": self.tenant_btn,
@@ -509,7 +489,7 @@ class OwnerDashboardMixin:
     def show_owner_tenants(self):
         for widget in self.content_wrapper.winfo_children():
             widget.destroy()
-        self._set_active_sidebar_btn("tenants")
+        self._set_owner_sidebar_btn("tenants")
         self.build_tenants_content()
 
     def build_tenants_content(self):
@@ -570,6 +550,11 @@ class OwnerDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_tenants_table(self, tenant_data):
+        if not hasattr(self, '_tenants_table_frame'):
+            return
+        table_frame = self._tenants_table_frame
+        if not table_frame.winfo_exists():
+            return
         if hasattr(self, '_loading_tenants_label') and self._loading_tenants_label:
             self._loading_tenants_label.destroy()
             self._loading_tenants_label = None
@@ -578,8 +563,6 @@ class OwnerDashboardMixin:
             tenant_data = [
                 ("No tenants yet", "", "", "", ""),
             ]
-
-        table_frame = self._tenants_table_frame
         self.tenant_action_menus = {}
         self.tenant_action_btns = {}
 
@@ -662,43 +645,15 @@ class OwnerDashboardMixin:
     def show_owner_property(self):
         for widget in self.content_wrapper.winfo_children():
             widget.destroy()
-        self._set_active_sidebar_btn("property")
+        self._set_owner_sidebar_btn("property")
         self.build_property_content()
 
     def build_property_content(self):
-        main_content = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
-        main_content.pack(fill="both", expand=True, padx=20, pady=10)
+        self._prop_main_content = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        self._prop_main_content.pack(fill="both", expand=True, padx=20, pady=10)
+        self._prop_listings = []
 
-        header = ctk.CTkFrame(main_content, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 15))
-        ctk.CTkLabel(header, text="My Properties", font=self.title_font,
-                     text_color=self.text_color).pack(side="left")
-        ctk.CTkButton(header, text="+ Add Property", font=self.body_light_font,
-                      fg_color=self.primary_color, hover_color=self.hover_color,
-                      text_color="white", corner_radius=4, height=32, cursor="hand2",
-                      command=self.show_add_property_form).pack(side="right")
-
-        # Search bar
-        search_frame = ctk.CTkFrame(main_content, fg_color=self.secondary_color,
-                                    height=50, corner_radius=6)
-        search_frame.pack(fill="x", pady=(0, 20))
-        search_frame.pack_propagate(False)
-
-        search_icon_lbl = ctk.CTkLabel(search_frame, image=self.search_icon, text=None)
-        search_icon_lbl.pack(side="left", padx=(15, 10))
-
-        self._prop_search_entry = ctk.CTkEntry(search_frame,
-                                               placeholder_text="Search by property name...",
-                                               font=self.body_paragraph_font,
-                                               fg_color="transparent", border_width=0)
-        self._prop_search_entry.pack(side="left", fill="x", expand=True, padx=(0, 15))
-        self._prop_search_entry.bind("<KeyRelease>", lambda e: self._filter_property_list())
-
-        self._property_main = ctk.CTkScrollableFrame(main_content, fg_color="transparent")
-        self._property_main.pack(fill="both", expand=True)
-        self._property_list_data = []
-
-        self._show_loading(self._property_main, text="Loading properties...")
+        self._show_loading(self._prop_main_content, text="Loading properties...")
 
         owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
 
@@ -723,18 +678,6 @@ class OwnerDashboardMixin:
         if not listings:
             ctk.CTkLabel(self._property_main, text="No properties found.",
                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=40)
-            if not getattr(self, '_property_list_data', []):
-                empty_frame = ctk.CTkFrame(self._property_main, fg_color="transparent")
-                empty_frame.place(relx=0.5, rely=0.5, anchor="center")
-                add_btn = ctk.CTkButton(empty_frame, text="+", width=80, height=80,
-                                        font=self.title_font, fg_color=self.primary_color,
-                                        hover_color=self.hover_color, text_color="white",
-                                        corner_radius=40, command=self.show_add_property_form)
-                add_btn.pack(pady=(0, 15))
-                ctk.CTkLabel(empty_frame, text="Add Property",
-                             font=self.body_bold_paragraph_font, text_color=self.text_color).pack(pady=(0, 5))
-                ctk.CTkLabel(empty_frame, text="List your boarding house to start accepting tenants",
-                             font=self.body_paragraph_font, text_color=self.text_color).pack()
             return
 
         for listing in listings:
@@ -745,14 +688,21 @@ class OwnerDashboardMixin:
 
             card = ctk.CTkFrame(self._property_main, fg_color=self.secondary_color, corner_radius=6)
             card.pack(fill="x", pady=5)
-            card.bind("<Enter>", lambda e, c=card: c.configure(fg_color=self.hover_color))
-            card.bind("<Leave>", lambda e, c=card: c.configure(fg_color=self.secondary_color))
+
+            def _bind_hover(widget):
+                widget.bind("<Enter>", lambda e: card.configure(fg_color=self.hover_color))
+                widget.bind("<Leave>", lambda e: card.configure(fg_color=self.secondary_color))
+
+            _bind_hover(card)
 
             top_row = ctk.CTkFrame(card, fg_color="transparent")
             top_row.pack(fill="x", padx=15, pady=(10, 2))
+            _bind_hover(top_row)
 
-            ctk.CTkLabel(top_row, text=bh_name, font=self.body_big_font,
-                         text_color=self.text_color).pack(side="left")
+            name_lbl = ctk.CTkLabel(top_row, text=bh_name, font=self.body_big_font,
+                                    text_color=self.text_color)
+            name_lbl.pack(side="left")
+            _bind_hover(name_lbl)
 
             if status == "active":
                 status_fg = self.primary_color
@@ -760,11 +710,14 @@ class OwnerDashboardMixin:
                 status_fg = self.hover_color
             else:
                 status_fg = self.error_red
-            ctk.CTkLabel(top_row, text=status.capitalize(), font=self.body_description_font,
-                         fg_color=status_fg, text_color="white", corner_radius=4, padx=8, pady=2).pack(side="right")
+            status_lbl = ctk.CTkLabel(top_row, text=status.capitalize(), font=self.body_description_font,
+                                      fg_color=status_fg, text_color="white", corner_radius=4, padx=8, pady=2)
+            status_lbl.pack(side="right")
+            _bind_hover(status_lbl)
 
             bottom_row = ctk.CTkFrame(card, fg_color="transparent")
             bottom_row.pack(fill="x", padx=15, pady=(2, 10))
+            _bind_hover(bottom_row)
 
             info_parts = []
             if property_type:
@@ -772,11 +725,14 @@ class OwnerDashboardMixin:
             price_range = listing.get('price_range', '')
             if price_range:
                 info_parts.append(price_range)
-            ctk.CTkLabel(bottom_row, text=" | ".join(info_parts) if info_parts else "",
-                         font=self.body_light_font, text_color=self.text_color).pack(side="left")
+            info_lbl = ctk.CTkLabel(bottom_row, text=" | ".join(info_parts) if info_parts else "",
+                                    font=self.body_light_font, text_color=self.text_color)
+            info_lbl.pack(side="left")
+            _bind_hover(info_lbl)
 
             action_f = ctk.CTkFrame(bottom_row, fg_color="transparent")
             action_f.pack(side="right")
+            _bind_hover(action_f)
 
             view_btn = ctk.CTkButton(action_f, text="View", font=self.body_description_font,
                                      fg_color="transparent", text_color=self.primary_color,
@@ -792,8 +748,52 @@ class OwnerDashboardMixin:
 
     def _populate_property_content(self, listings):
         self._hide_loading()
+        for widget in self._prop_main_content.winfo_children():
+            widget.destroy()
+
+        if not listings:
+            self._show_property_empty_state()
+            return
+
+        header = ctk.CTkFrame(self._prop_main_content, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 15))
+        ctk.CTkLabel(header, text="My Properties", font=self.title_font,
+                     text_color=self.text_color).pack(side="left")
+        ctk.CTkButton(header, text="+ Add Property", font=self.body_light_font,
+                      fg_color=self.primary_color, hover_color=self.hover_color,
+                      text_color="white", corner_radius=4, height=32, cursor="hand2",
+                      command=self.show_add_property_form).pack(side="right")
+
+        search_frame = ctk.CTkFrame(self._prop_main_content, fg_color=self.secondary_color,
+                                    height=50, corner_radius=6)
+        search_frame.pack(fill="x", pady=(0, 20))
+        search_frame.pack_propagate(False)
+
+        ctk.CTkLabel(search_frame, image=self.search_icon, text=None).pack(side="left", padx=(15, 10))
+        self._prop_search_entry = ctk.CTkEntry(search_frame,
+                                               placeholder_text="Search by property name...",
+                                               font=self.body_paragraph_font,
+                                               fg_color="transparent", border_width=0)
+        self._prop_search_entry.pack(side="left", fill="x", expand=True, padx=(0, 15))
+        self._prop_search_entry.bind("<KeyRelease>", lambda e: self._filter_property_list())
+
+        self._property_main = ctk.CTkScrollableFrame(self._prop_main_content, fg_color="transparent")
+        self._property_main.pack(fill="both", expand=True)
         self._property_list_data = listings
         self._render_property_cards(listings)
+
+    def _show_property_empty_state(self):
+        empty_frame = ctk.CTkFrame(self._prop_main_content, fg_color="transparent")
+        empty_frame.place(relx=0.5, rely=0.5, anchor="center")
+        add_btn = ctk.CTkButton(empty_frame, text="+", width=80, height=80,
+                                font=self.title_font, fg_color=self.primary_color,
+                                hover_color=self.hover_color, text_color="white",
+                                corner_radius=40, command=self.show_add_property_form)
+        add_btn.pack(pady=(0, 15))
+        ctk.CTkLabel(empty_frame, text="Add Property",
+                     font=self.body_bold_paragraph_font, text_color=self.text_color).pack(pady=(0, 5))
+        ctk.CTkLabel(empty_frame, text="List your boarding house to start accepting tenants",
+                     font=self.body_paragraph_font, text_color=self.text_color).pack()
 
     def show_property_detail(self, listing_id):
         for widget in self.content_wrapper.winfo_children():
@@ -849,6 +849,10 @@ class OwnerDashboardMixin:
         property_type = property_data.get('property_type', 'N/A')
         description = property_data.get('description', '')
         price_range = property_data.get('price_range', '')
+        if not price_range and rooms_data:
+            prices = [r.get('price_per_month', 0) for r in rooms_data if r.get('price_per_month')]
+            if prices:
+                price_range = f"₱{min(prices):,.0f} - ₱{max(prices):,.0f}"
         min_stay = property_data.get('min_stay_months', 1)
         rules = property_data.get('rules', '')
         is_verified = property_data.get('is_verified', False)
@@ -1064,14 +1068,12 @@ class OwnerDashboardMixin:
         type_w, _ = self._prop_form_widgets.get("property_type", (None, None))
         name_w, _ = self._prop_form_widgets.get("bh_name", (None, None))
         desc_w, _ = self._prop_form_widgets.get("description", (None, None))
-        price_w, _ = self._prop_form_widgets.get("price_range", (None, None))
         minstay_w, _ = self._prop_form_widgets.get("min_stay", (None, None))
         rules_w, _ = self._prop_form_widgets.get("rules", (None, None))
 
         property_type = type_w.get().strip() if type_w else ""
         bh_name = name_w.get().strip() if name_w else ""
         description = desc_w.get("1.0", "end-1c").strip() if desc_w else ""
-        price_range = price_w.get().strip() if price_w else ""
         min_stay_str = minstay_w.get().strip() if minstay_w else "1"
         try:
             min_stay = int(min_stay_str)
@@ -1086,8 +1088,6 @@ class OwnerDashboardMixin:
             payload["property_type"] = property_type
         if description:
             payload["description"] = description
-        if price_range:
-            payload["price_range"] = price_range
         payload["min_stay_months"] = min_stay
         if rules:
             payload["rules"] = rules
@@ -1206,6 +1206,8 @@ class OwnerDashboardMixin:
                 self.show_toast("Capacity must be a number and price must be valid", is_error=True)
                 return
 
+            availability = room_status == "available"
+
             def _do():
                 try:
                     resp = self.api.post("/rooms/", json={
@@ -1213,7 +1215,7 @@ class OwnerDashboardMixin:
                         "room_type": room_type,
                         "capacity": capacity,
                         "price_per_month": price,
-                        "status": room_status,
+                        "availability": availability,
                     })
                     if resp.status_code == 201:
                         self.after(0, lambda: (dialog_frame.destroy(),
@@ -1266,7 +1268,7 @@ class OwnerDashboardMixin:
     def show_owner_bookings(self):
         for widget in self.content_wrapper.winfo_children():
             widget.destroy()
-        self._set_active_sidebar_btn("bookings")
+        self._set_owner_sidebar_btn("bookings")
         self.build_bookings_content()
 
     def build_bookings_content(self):
@@ -1408,24 +1410,27 @@ class OwnerDashboardMixin:
         threading.Thread(target=_do, daemon=True).start()
 
     def _populate_bookings_content(self, stats, enriched, fetch_id):
+        if not self.winfo_exists():
+            return
         if fetch_id != self._booking_fetch_id:
             self._booking_is_loading = False
             return
         self._booking_is_loading = False
 
-        if self._booking_loading_label:
+        if hasattr(self, '_booking_loading_label') and self._booking_loading_label and self._booking_loading_label.winfo_exists():
             self._booking_loading_label.grid_remove()
 
         self._booking_data = enriched
 
         # Update stats
-        if stats:
-            self._booking_stats_labels["total"].configure(text=str(stats.get("total_bookings", 0)))
-            self._booking_stats_labels["pending"].configure(text=str(stats.get("pending_count", 0)))
-            self._booking_stats_labels["active"].configure(text=str(stats.get("active_count", 0)))
-            self._booking_stats_labels["cancelled"].configure(text=str(stats.get("cancelled_count", 0)))
+        if stats and hasattr(self, '_booking_stats_labels'):
+            for k in ("total", "pending", "active", "cancelled"):
+                if k in self._booking_stats_labels and self._booking_stats_labels[k].winfo_exists():
+                    self._booking_stats_labels[k].configure(text=str(stats.get(f"{k}_count" if k != "total" else "total_bookings", 0)))
 
-        table_frame = self._booking_table_frame
+        table_frame = self._booking_table_frame if hasattr(self, '_booking_table_frame') else None
+        if table_frame is None or not table_frame.winfo_exists():
+            return
         if hasattr(self, '_booking_table_rows'):
             for row_widgets in self._booking_table_rows:
                 for w in row_widgets:
@@ -1826,15 +1831,57 @@ class OwnerDashboardMixin:
         two_col.grid_columnconfigure(1, weight=1, uniform="col")
 
         left = ctk.CTkFrame(two_col, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         right = ctk.CTkFrame(two_col, fg_color="transparent")
-        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        right.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
 
         self._build_details_frame(left)
         self._build_location_frame(right)
 
         self._load_provinces()
         self.after(200, self._start_poll_province)
+
+    def _enable_debug_right_click(self):
+        _last_time = [None]
+        def _show_debug(event):
+            if _last_time[0] == event.time:
+                return
+            _last_time[0] = event.time
+            w = event.widget
+            info = []
+            info.append(f"Class: {w.winfo_class()}")
+            try:
+                info.append(f"Geo: {w.winfo_geometry()}")
+            except Exception:
+                pass
+            try:
+                info.append(f"Req: {w.winfo_reqwidth()}x{w.winfo_reqheight()}")
+            except Exception:
+                pass
+            # walk up and find a _debug_tag + full chain
+            tag = getattr(w, '_debug_tag', '')
+            chain = [f"{w.winfo_class()}({w.winfo_name()})"]
+            if not tag:
+                try:
+                    p = w.winfo_parent()
+                    while p:
+                        pw = w._nametowidget(p)
+                        cls = pw.winfo_class()
+                        nm = pw.winfo_name()
+                        chain.append(f"{cls}({nm})")
+                        tag = getattr(pw, '_debug_tag', '')
+                        if tag:
+                            break
+                        p = pw.winfo_parent()
+                except Exception:
+                    pass
+            if tag:
+                info.append(f"Tag: {tag}")
+            info.append(f"Chain: {' ← '.join(chain)}")
+            msg = " | ".join(info)
+            print(f"[DEBUG] {msg}")
+
+        self.bind_all("<Button-3>", _show_debug, add="+")
 
     def _build_details_frame(self, parent, existing=None):
         ctk.CTkLabel(parent, text="Property Details", font=self.body_bold_paragraph_font,
@@ -1847,7 +1894,7 @@ class OwnerDashboardMixin:
         ]
         for key, label, ftype, opts in fields:
             f = ctk.CTkFrame(parent, fg_color="transparent")
-            f.pack(fill="x", pady=(0, 10))
+            f.pack(fill="x", pady=(0, 5))
             ctk.CTkLabel(f, text=label, font=self.body_light_font,
                          text_color=self.text_color).pack(anchor="w", pady=(0, 3))
             if ftype == "combo":
@@ -1877,22 +1924,49 @@ class OwnerDashboardMixin:
             err.pack(anchor="w", padx=5)
             self._prop_form_widgets[key] = (w, err)
 
-        amenities_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        amenities_frame.pack(fill="x", pady=(0, 10))
+        # ── Amenities (rewritten — clean grid layout) ──
+        amenities_frame = ctk.CTkFrame(parent, fg_color="transparent", border_color="#000000")
+        amenities_frame._debug_tag = "amenities_section"
+        amenities_frame.pack(fill="x")
+        amenities_frame.grid_columnconfigure(0, weight=1)
+
         ctk.CTkLabel(amenities_frame, text="Amenities", font=self.body_light_font,
-                     text_color=self.text_color).pack(anchor="w", pady=(0, 3))
+                     text_color=self.text_color).grid(row=0, column=0, sticky="w", pady=(0, 0))
+
         self._amenity_chips_frame = ctk.CTkFrame(amenities_frame, fg_color="transparent")
-        self._amenity_chips_frame.pack(fill="x")
+        self._amenity_chips_frame.grid(row=1, column=0, sticky="ew", pady=(0, 0))
+        self._amenity_chips_frame.grid_columnconfigure(0, weight=1)
+
         self._selected_amenities = []
-        self._amenity_chip_btns = {}
-        amenities_err = ctk.CTkLabel(amenities_frame, text="", height=14, font=self.inline_error_font,
+        self._amenity_chip_btns = dict()
+
+        # "Selected:" label + value — DIRECTLY below chips (row 2), zero gap
+        amenities_selected_frame = ctk.CTkFrame(amenities_frame, fg_color="transparent")
+        amenities_selected_frame.grid(row=2, column=0, sticky="ew", pady=(0, 0))
+        amenities_selected_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(amenities_selected_frame, text="Selected:",
+                     font=self.body_description_font,
+                     text_color=self.text_color).grid(row=0, column=0, sticky="w")
+        self._amenity_entry = ctk.CTkLabel(amenities_selected_frame, text=" ",
+                                           font=self.body_light_font,
+                                           text_color=self.text_color,
+                                           anchor="w", justify="left")
+        self._amenity_entry.grid(row=0, column=1, sticky="ew", padx=5)
+
+        # Error label — at the VERY BOTTOM (row 3)
+        amenities_err = ctk.CTkLabel(amenities_frame, text="", height=14,
+                                     font=self.inline_error_font,
                                      text_color=self.error_red)
-        amenities_err.pack(anchor="w", padx=5)
-        self._prop_form_widgets["amenities"] = (None, amenities_err)
+        amenities_err.grid(row=3, column=0, sticky="w", padx=5, pady=(0, 0))
+        self._prop_form_widgets["amenities"] = (self._amenity_entry, amenities_err)
         self._load_amenity_options()
 
+        if not existing:
+            self._build_initial_rooms_section(parent)
+
         desc_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        desc_frame.pack(fill="x", pady=(0, 10))
+        desc_frame._debug_tag = "description_section"
+        desc_frame.pack(fill="x", pady=(0, 5))
         ctk.CTkLabel(desc_frame, text="Description", font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
         desc_bg = ctk.CTkFrame(desc_frame, height=120, fg_color=self.fg_color,
@@ -1907,32 +1981,9 @@ class OwnerDashboardMixin:
         desc_err.pack(anchor="w", padx=5)
         self._prop_form_widgets["description"] = (desc_txt, desc_err)
 
-        # Price Range
-        price_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        price_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(price_frame, text="Price Range", font=self.body_light_font,
-                     text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        price_combo = ctk.CTkComboBox(price_frame, height=40,
-                                      values=["₱1,000 - ₱3,000", "₱3,000 - ₱5,000", "₱5,000 - ₱8,000",
-                                              "₱8,000 - ₱12,000", "₱12,000 - ₱20,000", "₱20,000+"],
-                                      font=self.body_light_font, fg_color=self.fg_color,
-                                      border_color=self.entry_border, border_width=1,
-                                      button_color=self.primary_color,
-                                      button_hover_color=self.hover_color,
-                                      dropdown_fg_color=self.fg_color,
-                                      dropdown_text_color=self.text_color,
-                                      dropdown_hover_color=self.hover_color,
-                                      dropdown_font=self.body_light_font,
-                                      text_color=self.text_color)
-        price_combo.pack(fill="x")
-        price_combo.set("Select...")
-        price_err = ctk.CTkLabel(price_frame, text="", height=14, font=self.inline_error_font,
-                                 text_color=self.error_red)
-        price_err.pack(anchor="w", padx=5)
-        self._prop_form_widgets["price_range"] = (price_combo, price_err)
-
         # Minimum Stay
         minstay_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        minstay_frame._debug_tag = "minstay_section"
         minstay_frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(minstay_frame, text="Minimum Stay (months)", font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
@@ -1956,6 +2007,7 @@ class OwnerDashboardMixin:
 
         # House Rules
         rules_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        rules_frame._debug_tag = "rules_section"
         rules_frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(rules_frame, text="House Rules", font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
@@ -1990,10 +2042,6 @@ class OwnerDashboardMixin:
                 if existing.get("description"):
                     w.delete("1.0", "end")
                     w.insert("1.0", existing["description"])
-            if "price_range" in self._prop_form_widgets:
-                w, _ = self._prop_form_widgets["price_range"]
-                if existing.get("price_range"):
-                    w.set(existing["price_range"])
             if "min_stay" in self._prop_form_widgets:
                 w, _ = self._prop_form_widgets["min_stay"]
                 if existing.get("min_stay_months"):
@@ -2004,45 +2052,112 @@ class OwnerDashboardMixin:
                     w.delete("1.0", "end")
                     w.insert("1.0", existing["rules"])
 
+    def _build_initial_rooms_section(self, parent):
+        rooms_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        rooms_frame._debug_tag = "initial_rooms_section"
+        rooms_frame.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(rooms_frame, text="Initial Rooms (optional)", font=self.body_bold_paragraph_font,
+                     text_color=self.primary_color).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(rooms_frame, text="Add room pricing now, or skip and add later",
+                     font=self.body_description_font, text_color=self.text_color).pack(anchor="w", pady=(0, 8))
+
+        room_headers = ctk.CTkFrame(rooms_frame, fg_color="transparent")
+        room_headers.pack(fill="x", pady=(0, 3))
+        room_headers.grid_columnconfigure((0, 1, 2), weight=1)
+        for j, h in enumerate(["Room Type", "Capacity", "Price/Month"]):
+            ctk.CTkLabel(room_headers, text=h, font=self.body_description_font,
+                         text_color=self.text_color).grid(row=0, column=j, padx=2)
+
+        room_types = ["Single", "Bed Space", "Private", "Shared", "Double Deck"]
+        self._initial_room_rows = []
+        for row_idx in range(3):
+            row_f = ctk.CTkFrame(rooms_frame, fg_color="transparent")
+            row_f.pack(fill="x", pady=3)
+            row_f.grid_columnconfigure((0, 1, 2), weight=1)
+
+            type_w = ctk.CTkComboBox(row_f, values=room_types, height=35,
+                                      font=self.body_light_font, fg_color=self.fg_color,
+                                      border_color=self.entry_border, border_width=1,
+                                      button_color=self.primary_color,
+                                      button_hover_color=self.hover_color,
+                                      dropdown_fg_color=self.fg_color,
+                                      dropdown_text_color=self.text_color,
+                                      dropdown_hover_color=self.hover_color,
+                                      dropdown_font=self.body_light_font,
+                                      text_color=self.text_color)
+            type_w.grid(row=0, column=0, padx=2)
+            type_w.set("")
+
+            cap_w = ctk.CTkEntry(row_f, placeholder_text="e.g. 2", height=35,
+                                  font=self.body_light_font, fg_color=self.fg_color,
+                                  border_color=self.entry_border, border_width=1,
+                                  text_color=self.text_color)
+            cap_w.grid(row=0, column=1, padx=2)
+
+            price_w = ctk.CTkEntry(row_f, placeholder_text="e.g. 5000", height=35,
+                                    font=self.body_light_font, fg_color=self.fg_color,
+                                    border_color=self.entry_border, border_width=1,
+                                    text_color=self.text_color)
+            price_w.grid(row=0, column=2, padx=2)
+
+            self._initial_room_rows.append({
+                "type": type_w, "capacity": cap_w, "price": price_w
+            })
+
     def _load_amenity_options(self):
-        common = [
-            "Wi-Fi", "Air Conditioning", "Pet Friendly", "Parking",
-            "CCTV", "Kitchen", "Laundry", "Water Included",
-            "Electricity Included", "Furnished", "Security Guard",
-            "Elevator", "Gym", "Pool", "Study Area", "Balcony"
-        ]
-        self.after(0, lambda: self._build_amenity_chips(common))
+        self._amenity_loading_lbl = ctk.CTkLabel(
+            self._amenity_chips_frame, text="Loading amenities...",
+            font=self.body_light_font, text_color=self.text_color)
+        self._amenity_loading_lbl.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        def fetch():
+            try:
+                resp = self.api.get("/amenities/", timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    names = [a.get("amenity_name", "") for a in data if a.get("amenity_name")]
+                    if names:
+                        self.after(0, lambda: self._build_amenity_chips(names))
+                        return
+            except Exception:
+                pass
+            self.after(0, lambda: self._show_amenity_error())
+
+        threading.Thread(target=fetch, daemon=True).start()
+
+    def _show_amenity_error(self):
+        if hasattr(self, '_amenity_chips_frame') and self._amenity_chips_frame.winfo_exists():
+            for w in self._amenity_chips_frame.winfo_children():
+                w.destroy()
+            ctk.CTkLabel(self._amenity_chips_frame, text="Failed to load amenities",
+                         font=self.body_light_font, text_color=self.error_red).grid(row=0, column=0, padx=5, pady=5)
 
     def _build_amenity_chips(self, amenities):
+        # Guard: user may have navigated away during async fetch
+        if not hasattr(self, '_amenity_chips_frame') or not self._amenity_chips_frame.winfo_exists():
+            return
+        # Destroy loading label
         for w in self._amenity_chips_frame.winfo_children():
             w.destroy()
-        row = ctk.CTkFrame(self._amenity_chips_frame, fg_color="transparent")
-        row.pack(fill="x", pady=(0, 5))
-        col_count = 0
-        for name in amenities:
-            chip = ctk.CTkButton(row, text=name, font=self.body_description_font,
+        # Build chip rows: 3 chips per row using grid
+        for idx, name in enumerate(amenities):
+            row = idx // 3
+            col = idx % 3
+            if col == 0:
+                # First chip in row: configure grid columns for this row
+                self._amenity_chips_frame.grid_rowconfigure(row, weight=0)
+            chip = ctk.CTkButton(self._amenity_chips_frame, text=name,
+                                 font=self.body_description_font,
                                  fg_color="transparent", text_color=self.text_color,
                                  border_width=1, border_color=self.entry_border,
                                  hover_color=self.hover_color, corner_radius=12,
-                                 height=28, command=lambda n=name: self._toggle_amenity_chip(n, None))
-            chip.pack(side="left", padx=(0, 6), pady=3)
+                                 height=26,
+                                 command=lambda n=name: self._toggle_amenity_chip(n, None))
+            chip.grid(row=row, column=col, padx=(0, 4), pady=2, sticky="w")
             self._amenity_chip_btns[name] = {"btn": chip, "id": None, "selected": False}
-            col_count += 1
-            if col_count >= 3:
-                row = ctk.CTkFrame(self._amenity_chips_frame, fg_color="transparent")
-                row.pack(fill="x", pady=(0, 5))
-                col_count = 0
-
-        entry_frame = ctk.CTkFrame(self._amenity_chips_frame.master, fg_color="transparent")
-        entry_frame.pack(fill="x", pady=(5, 0))
-        ctk.CTkLabel(entry_frame, text="Selected:", font=self.body_description_font,
-                     text_color=self.text_color).pack(anchor="w")
-        sel_lbl = ctk.CTkLabel(entry_frame, text="", font=self.body_light_font,
-                               text_color=self.text_color, anchor="w", justify="left",
-                               wraplength=380)
-        sel_lbl.pack(fill="x", padx=5, pady=3)
-        self._amenity_entry = sel_lbl
-        self._prop_form_widgets["amenities"] = (sel_lbl, self._prop_form_widgets["amenities"][1])
+        # Configure remaining grid columns for each row
+        for r in range((len(amenities) + 2) // 3):
+            self._amenity_chips_frame.grid_columnconfigure((0, 1, 2), weight=0)
 
     def _toggle_amenity_chip(self, name, aid):
         info = self._amenity_chip_btns.get(name)
@@ -2060,7 +2175,7 @@ class OwnerDashboardMixin:
             if name in self._selected_amenities:
                 self._selected_amenities.remove(name)
         if self._amenity_entry:
-            text = ", ".join(self._selected_amenities) if self._selected_amenities else ""
+            text = ", ".join(self._selected_amenities) if self._selected_amenities else " "
             self._amenity_entry.configure(text=text)
 
     def _build_upload_zone(self, parent, label_text, is_permit=False, max_files=1):
@@ -2634,7 +2749,6 @@ class OwnerDashboardMixin:
                 type_w, _ = self._prop_form_widgets.get("property_type", (None, None))
                 name_w, _ = self._prop_form_widgets.get("bh_name", (None, None))
                 desc_w, _ = self._prop_form_widgets.get("description", (None, None))
-                price_w, _ = self._prop_form_widgets.get("price_range", (None, None))
                 minstay_w, _ = self._prop_form_widgets.get("min_stay", (None, None))
                 rules_w, _ = self._prop_form_widgets.get("rules", (None, None))
                 prov_w, _ = self._prop_form_widgets.get("province", (None, None))
@@ -2646,7 +2760,6 @@ class OwnerDashboardMixin:
                 property_type = type_w.get().strip() if type_w else ""
                 bh_name = name_w.get().strip() if name_w else ""
                 description = desc_w.get("1.0", "end-1c").strip() if desc_w else ""
-                price_range = price_w.get().strip() if price_w else ""
                 min_stay_str = minstay_w.get().strip() if minstay_w else "1"
                 try:
                     min_stay = int(min_stay_str)
@@ -2678,6 +2791,7 @@ class OwnerDashboardMixin:
                         detail = loc_resp.json().get("detail", detail)
                     except Exception:
                         pass
+                    self._cleanup_uploads()
                     self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Failed to create location: {detail}", is_error=True)))
                     return
                 location_id = loc_resp.json().get("location_id")
@@ -2686,7 +2800,6 @@ class OwnerDashboardMixin:
                     "bh_name": bh_name,
                     "property_type": property_type if property_type != "Select..." else "",
                     "description": description,
-                    "price_range": price_range,
                     "permit_url": permit_url,
                     "min_stay_months": min_stay,
                     "rules": rules,
@@ -2699,6 +2812,7 @@ class OwnerDashboardMixin:
                         detail = bh_resp.json().get("detail", detail)
                     except Exception:
                         pass
+                    self._cleanup_uploads()
                     self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Failed to create property: {detail}", is_error=True)))
                     return
                 listing_id = bh_resp.json().get("listing_id")
@@ -2718,10 +2832,28 @@ class OwnerDashboardMixin:
                         "sort_order": i,
                     })
 
+                room_rows = getattr(self, '_initial_room_rows', [])
+                for row in room_rows:
+                    room_type = row["type"].get().strip()
+                    cap_str = row["capacity"].get().strip()
+                    price_str = row["price"].get().strip()
+                    if room_type and cap_str and price_str:
+                        try:
+                            self.api.post("/rooms/", json={
+                                "listing_id": listing_id,
+                                "room_type": room_type,
+                                "capacity": int(cap_str),
+                                "price_per_month": float(price_str),
+                                "availability": True,
+                            })
+                        except Exception:
+                            pass
+
                 self.after(0, lambda: (self._hide_loading(), self.show_toast("Property created successfully!", is_error=False)))
                 self.after(500, self.show_owner_property)
 
             except Exception as e:
+                self._cleanup_uploads()
                 self.after(0, lambda: (self._hide_loading(), _reenable(), self.show_toast(f"Error: {str(e)}", is_error=True)))
 
         threading.Thread(target=_do, daemon=True).start()

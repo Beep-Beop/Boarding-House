@@ -10,6 +10,7 @@ class LoginMixin:
         self.clear_container()
 
         self.geometry("630x700")
+        self.resizable(False, False)
 
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
         self.form_container.pack(pady=40, fill="both", expand=True)
@@ -262,7 +263,8 @@ class LoginMixin:
         try:
             login_data = {
                 "email": email,
-                "password": password
+                "password": password,
+                "remember_me": bool(self.remember_checkbox.get())
             }
 
             response = self.api.post("/auth/login", json=login_data)
@@ -319,7 +321,8 @@ class LoginMixin:
             self.login_email_error.configure(text="Error: Cannot connect to backend server")
             self.email_fake_entry.configure(border_color=self.error_red)
         finally:
-            self.login_btn.configure(state="normal", text="LOG IN")
+            if self.login_btn.winfo_exists():
+                self.login_btn.configure(state="normal", text="LOG IN")
 
     def _save_session(self, user_info):
         import json, os

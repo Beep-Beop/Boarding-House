@@ -1,5 +1,5 @@
 import secrets
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import desc, func
 from src.logger import logger
 from src.models import (Users, Photo, BoardingHouse, Location, 
@@ -219,6 +219,7 @@ class BoardingHousesCRUD:
         self.db = db
     
     def create(self, owner_id: int, location_id: int, bh_name: str, **kwargs) -> BoardingHouse:
+        kwargs.pop("price_range", None)
         bh = BoardingHouse(
             owner_id=owner_id,
             location_id=location_id,
@@ -231,14 +232,19 @@ class BoardingHousesCRUD:
         return bh
     
     def get(self, listing_id: int) -> BoardingHouse:
-        return self.db.query(BoardingHouse).filter(BoardingHouse.listing_id == listing_id).first()
+        return self.db.query(BoardingHouse).options(
+            selectinload(BoardingHouse.rooms)
+        ).filter(BoardingHouse.listing_id == listing_id).first()
     
     def get_by_owner(self, owner_id: int):
-        return self.db.query(BoardingHouse).filter(BoardingHouse.owner_id == owner_id).all()
+        return self.db.query(BoardingHouse).options(
+            selectinload(BoardingHouse.rooms)
+        ).filter(BoardingHouse.owner_id == owner_id).all()
     
     def update(self, listing_id: int, **kwargs) -> BoardingHouse:
         bh = self.get(listing_id)
         if bh:
+            kwargs.pop("price_range", None)
             for key, value in kwargs.items():
                 if hasattr(bh, key) and value is not None:
                     setattr(bh, key, value)
@@ -257,8 +263,8 @@ class BoardingHousesCRUD:
         if location_id is not None:
             query = query.filter(BoardingHouse.location_id == location_id)
 
-        if min_stay_months is not None:
-            query = query.filter(BoardingHouse.min_stay_months <= min_stay_months)
+        if min_stay_months is not None and min_stay_months > 0:
+            query = query.filter(BoardingHouse.min_stay_months >= min_stay_months)
 
         if min_price is not None or max_price is not None:
             room_sub = (
@@ -284,7 +290,7 @@ class BoardingHousesCRUD:
             )
             query = query.filter(amenity_sub.exists())
 
-        return query.distinct().offset(offset).limit(limit).all()
+        return query.options(selectinload(BoardingHouse.rooms)).distinct().offset(offset).limit(limit).all()
     
     def delete(self, listing_id: int) -> bool:
         bh = self.get(listing_id)
@@ -329,6 +335,44 @@ class BoardingHousesCRUD:
             
         return result
     
+    def get_admin_listings(self) -> list[dict]:
+        houses = self.db.query(BoardingHouse).options(
+            joinedload(BoardingHouse.listing_amenities).joinedload(ListingAmenities.amenity),
+            joinedload(BoardingHouse.location),
+            joinedload(BoardingHouse.photos)
+        ).all()
+
+        result = []
+        for house in houses:
+            house: BoardingHouse
+
+            amenities = []
+            if house.listing_amenities:
+                for la in house.listing_amenities:
+                    la: ListingAmenities
+                    amenities.append(la.amenity.amenity_name)
+
+            photo_url = None
+            if house.photos:
+                primary = next((p for p in house.photos if p.is_primary), None)
+                photo_url = (primary or house.photos[0]).photo_url
+
+            result.append({
+                "id": house.listing_id,
+                "listing_id": house.listing_id,
+                "name": house.bh_name,
+                "bh_name": house.bh_name,
+                "location": f"{house.location.city}, {house.location.province}" if house.location else "Unknown",
+                "amenities": " • ".join(amenities) if amenities else "Basic Room",
+                "desc": house.description,
+                "photo_url": photo_url,
+                "status": house.status,
+                "is_verified": house.is_verified,
+                "permit_url": house.permit_url,
+            })
+
+        return result
+
 class PhotosCRUD:
     def __init__(self, db: Session):
         self.db = db
@@ -818,9 +862,19 @@ class ReviewsCRUD:
         return self.db.query(Reviews).order_by(Reviews.created_at.desc()).all()
 
     def get_reviews_by_listing(self, listing_id: int):
-        return self.db.query(Reviews).filter(
+        from src.models import Users
+        results = self.db.query(Reviews, Users.name, Users.profile_photo).join(
+            Users, Reviews.user_id == Users.user_id
+        ).filter(
             Reviews.listing_id == listing_id
         ).order_by(Reviews.created_at.desc()).all()
+        out = []
+        for rev, uname, pphoto in results:
+            d = {c.name: getattr(rev, c.name) for c in rev.__table__.columns}
+            d["user_name"] = uname
+            d["user_profile_picture"] = pphoto
+            out.append(d)
+        return out
     
     def update(self, review_id: int, **kwargs) -> Reviews:
         review = self.get(review_id)

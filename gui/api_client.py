@@ -18,6 +18,9 @@ class APIClient:
     def post(self, endpoint, **kwargs):
         return requests.post(f"{self.base_url}{endpoint}", headers=self._headers(kwargs.pop("headers", None)), **kwargs)
 
+    def put(self, endpoint, **kwargs):
+        return requests.put(f"{self.base_url}{endpoint}", headers=self._headers(kwargs.pop("headers", None)), **kwargs)
+
     def patch(self, endpoint, **kwargs):
         return requests.patch(f"{self.base_url}{endpoint}", headers=self._headers(kwargs.pop("headers", None)), **kwargs)
 

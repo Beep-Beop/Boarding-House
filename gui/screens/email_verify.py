@@ -5,6 +5,7 @@ class EmailVerifyMixin:
     def show_email_verification_page(self, email: str = None):
         self.clear_container()
         self.geometry("630x700")
+        self.resizable(False, False)
 
         self._verify_email = email or ""
 

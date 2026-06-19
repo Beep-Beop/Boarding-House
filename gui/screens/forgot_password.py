@@ -7,6 +7,7 @@ class ForgotPasswordMixin:
     def show_forgot_password_page(self):
         self.clear_container()
         self.geometry("630x700")
+        self.resizable(False, False)
 
         self._reset_data = {}
 

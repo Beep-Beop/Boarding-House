@@ -59,7 +59,7 @@ async def upload_file(request: Request, file: UploadFile = File(...), current_us
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload file")
 
     public_url = storage_service.get_public_url(unique_filename, folder=folder)
-    return FileUploadResponse(url=public_url, filename=file.filename)
+    return FileUploadResponse(url=public_url, filename=unique_filename)
 
 @router.post("/", response_model=schemas.PhotoResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
