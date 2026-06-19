@@ -364,9 +364,9 @@ class OwnerDashboardMixin:
 
         self.owner_nav_pfp = ctk.CTkLabel(self.owner_profile_frame,
                                           text=None,
-                                          image=self.pfp_placeholder,
-                                          width=25,
-                                          height=25
+                                          image=self.pfp_placeholder_sm,
+                                          width=32,
+                                          height=32
                                           )
         self.owner_nav_pfp.pack(side="left", padx=(0, 12))
 

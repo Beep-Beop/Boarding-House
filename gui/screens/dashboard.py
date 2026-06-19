@@ -107,8 +107,8 @@ class DashboardMixin:
         self.profile_frame.pack(side="right", padx=25, pady=10)
 
         self.nav_pfp = ctk.CTkLabel(self.profile_frame, text=None,
-                                    image=self.pfp_placeholder,
-                                    width=25, height=25)
+                                    image=self.pfp_placeholder_sm,
+                                    width=32, height=32)
         self.nav_pfp.pack(side="left", padx=(0, 12))
 
         self.profile_text_frame = ctk.CTkFrame(self.profile_frame, fg_color="transparent")

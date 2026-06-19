@@ -86,8 +86,8 @@ class AdminDashboardMixin:
         self._admin_profile_frame = ctk.CTkFrame(nav, fg_color="transparent")
         self._admin_profile_frame.pack(side="right", padx=25, pady=10)
 
-        ctk.CTkLabel(self._admin_profile_frame, text=None, image=self.pfp_placeholder,
-                      width=25, height=25).pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(self._admin_profile_frame, text=None, image=self.pfp_placeholder_sm,
+                      width=32, height=32).pack(side="left", padx=(0, 12))
 
         text_frame = ctk.CTkFrame(self._admin_profile_frame, fg_color="transparent")
         text_frame.pack(side="left")

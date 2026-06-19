@@ -107,14 +107,15 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.hamburg_menu_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "menu.png")), size=(25, 15))
         self.pfp_placeholder = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(40, 40))
         self.pfp_placeholder_sm = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(32, 32))
+        self.pfp_placeholder_lg = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(100, 100))
         self.search_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "search.png")), size=(30, 30))
         self.bookmark_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(25, 25))
         self.upload_image_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "upload_image.png")), size=(60, 60))
 
         self.notification_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "notification.png")), size=(22, 22))
-        self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(18, 18))
-        self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(18, 18))
-        self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(18, 18))
+        self.menu_profile_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "pfp_placeholder.png")), size=(22, 22))
+        self.menu_bookings_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bookmark.png")), size=(22, 22))
+        self.menu_logout_icon = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "bk_btn.png")), size=(22, 22))
 
         self.logo = ctk.CTkImage(Image.open(os.path.join(parent_dir, "assets", "logo.png")), size=(140, 32))
         raw_google = Image.open(os.path.join(parent_dir, "assets", "google.png"))
@@ -425,28 +426,38 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         """Single implementation used by all three dashboards."""
         self._hide_user_menu()
 
+        menu_width = 240
         menu = ctk.CTkFrame(parent, fg_color=self.secondary_color,
                             corner_radius=8, border_width=2,
-                            border_color=self.entry_border, width=240)
+                            border_color=self.entry_border, width=menu_width)
         self._user_menu = menu
 
+        try:
+            scaling = float(self.tk.call('tk', 'scaling'))
+        except Exception:
+            scaling = 1.0
+        gap = max(6, int(6 * scaling))
         ax = anchor.winfo_rootx() - form_container.winfo_rootx()
         ay = anchor.winfo_rooty() - form_container.winfo_rooty()
         ah = anchor.winfo_height()
-        menu.place(x=ax + anchor.winfo_width() - 240, y=ay + ah + 6)
+        menu.place(x=ax + anchor.winfo_width() - menu_width, y=ay + ah + gap)
         menu.lift()
 
         user = getattr(self, 'current_user', {})
+        name = user.get('name', '')
         email = user.get('email', '')
         role = user.get('role', 'tenant').capitalize()
 
         header = ctk.CTkFrame(menu, fg_color="transparent")
         header.pack(fill="x", padx=14, pady=(14, 8))
 
-        if email:
-            ctk.CTkLabel(header, text=email, font=ctk.CTkFont(size=12),
+        if name:
+            ctk.CTkLabel(header, text=name, font=ctk.CTkFont(size=14, weight="bold"),
                          text_color=self.text_color).pack(anchor="w")
-        ctk.CTkLabel(header, text=role, font=ctk.CTkFont(size=10, weight="bold"),
+        if email:
+            ctk.CTkLabel(header, text=email, font=ctk.CTkFont(size=13),
+                         text_color=self.text_color).pack(anchor="w")
+        ctk.CTkLabel(header, text=role, font=ctk.CTkFont(size=12, weight="bold"),
                      text_color="white", fg_color=self.primary_color,
                      corner_radius=4, padx=6).pack(anchor="w", pady=(3, 0))
 
@@ -458,10 +469,10 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                 continue
             text, icon, cmd = item
             btn = ctk.CTkButton(menu, text=text, image=icon,
-                                font=self.body_paragraph_font,
+                                font=ctk.CTkFont(family="Poppins", size=14),
                                 fg_color="transparent", text_color=self.text_color,
                                 hover_color=self.hover_color, anchor="w",
-                                height=36)
+                                height=40)
             btn.pack(fill="x", padx=5, pady=2)
             btn.configure(command=lambda cb=cmd: self._execute_menu_action(cb))
             btn.bind("<Button-3>", lambda e, t=text, cb=cmd: self._debug_menu_item(t, cb))
