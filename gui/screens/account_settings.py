@@ -182,6 +182,17 @@ class AccountSettingsMixin:
             # Ensure content is visible
             section["content"].pack(fill="x", padx=15, pady=(0, 15))
 
+    def _go_back_from_settings(self):
+        """Return to the appropriate dashboard view."""
+        role = getattr(self.current_user, 'role', None) or \
+               (self.current_user or {}).get('role', 'student')
+        if role == "admin":
+            self.show_admin_dashboard()
+        elif role == "owner":
+            self.show_owner_dashboard()
+        else:
+            self.show_tenant_dashboard()
+
     def _build_settings_card(self, parent, heading=None):
         """Create a card frame with optional heading. Returns the inner content frame."""
         card = ctk.CTkFrame(parent, fg_color=self.fg_color,
