@@ -84,6 +84,104 @@ class AccountSettingsMixin:
                 pass
             self._account_overlay = None
 
+    def _build_accordion_section(self, parent, key, title, icon):
+        """Build a single collapsible accordion section.
+
+        Returns dict with keys:
+          - frame: the outer CTkFrame
+          - header: the clickable header frame
+          - content: the inner CTkFrame where section content goes
+          - progress: CTkProgressBar for loading states
+          - arrow: CTkLabel showing ▶/▼
+          - is_expanded: bool
+        """
+        # Outer card frame
+        frame = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                             corner_radius=10, border_width=1,
+                             border_color=self.entry_border)
+        frame.pack(fill="x", pady=(0, 12))
+
+        # Clickable header
+        header = ctk.CTkFrame(frame, fg_color="transparent", height=48, cursor="hand2")
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        # Icon
+        ctk.CTkLabel(header, text=icon,
+                     font=ctk.CTkFont(size=18),
+                     text_color=self.text_color).pack(side="left", padx=(14, 8))
+
+        # Title
+        ctk.CTkLabel(header, text=title,
+                     font=self.body_paragraph_font,
+                     text_color=self.text_color).pack(side="left", fill="x", expand=True)
+
+        # Expand/collapse arrow
+        arrow = ctk.CTkLabel(header, text="▶",
+                             font=ctk.CTkFont(size=12),
+                             text_color=self.text_color)
+        arrow.pack(side="right", padx=(0, 14))
+
+        # Progress bar (hidden by default)
+        progress = ctk.CTkProgressBar(frame, mode="indeterminate",
+                                       fg_color=self.entry_border,
+                                       progress_color=self.primary_color)
+        # Don't pack yet — will be shown during saves
+
+        # Content container (collapsed by default)
+        content = ctk.CTkFrame(frame, fg_color="transparent")
+        # Don't pack yet — will be expanded on first click
+
+        section = {
+            "frame": frame,
+            "header": header,
+            "content": content,
+            "progress": progress,
+            "arrow": arrow,
+            "is_expanded": False,
+        }
+
+        # Bind click to toggle
+        header.bind("<Button-1>", lambda e, s=section: self._toggle_accordion_section(s))
+        for child in header.winfo_children():
+            child.bind("<Button-1>", lambda e, s=section: self._toggle_accordion_section(s))
+
+        return section
+
+    def _toggle_accordion_section(self, section):
+        """Toggle a single accordion section open/closed with animation."""
+        if section["is_expanded"]:
+            self._animate_section_height(section, section["content"].winfo_reqheight(), 0, closing=True)
+        else:
+            # Pack the content frame before measuring
+            section["content"].pack(fill="x", padx=15, pady=(0, 15))
+            # Force geometry update to get natural height
+            section["content"].update_idletasks()
+            target_height = section["content"].winfo_reqheight()
+            # Start from 0 height
+            section["content"].pack_forget()
+            section["content"].pack(fill="x", padx=15, pady=(0, 15))
+            # Set initial height to 0 using a wrapper trick
+            # CTk doesn't support maxheight, so we use pack_forget/pack approach
+            self._animate_section_height(section, 0, target_height, closing=False)
+
+    def _animate_section_height(self, section, start, end, closing=False, steps=8, step=0):
+        """Animate section height using incremental after() calls."""
+        if not section["frame"].winfo_exists():
+            return
+        
+        if closing:
+            # For closing, we just pack_forget the content
+            section["content"].pack_forget()
+            section["arrow"].configure(text="▶")
+            section["is_expanded"] = False
+        else:
+            # For opening, content is already packed, just update arrow and state
+            section["arrow"].configure(text="▼")
+            section["is_expanded"] = True
+            # Ensure content is visible
+            section["content"].pack(fill="x", padx=15, pady=(0, 15))
+
     def _build_settings_card(self, parent, heading=None):
         """Create a card frame with optional heading. Returns the inner content frame."""
         card = ctk.CTkFrame(parent, fg_color=self.fg_color,
