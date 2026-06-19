@@ -12,75 +12,68 @@ from customtkinter import CTkInputDialog
 class AccountSettingsMixin:
 
     def show_account_settings(self):
-        """Build the unified Account Settings overlay with CTkTabview."""
-        # Determine which container to use (same pattern as existing overlays)
-        container = getattr(self, 'form_container', None) or \
-                    getattr(self, '_admin_form_container', None) or \
-                    self.container
+        """Build the accordion-style Account Settings in the dashboard content area."""
+        # Determine which content wrapper to use
+        content_wrapper = getattr(self, '_admin_content_wrapper', None) or \
+                          getattr(self, 'content_wrapper', None)
+        if not content_wrapper:
+            return
 
-        # Destroy any existing overlay
-        self._close_account_overlay()
+        # Clear any existing content
+        for widget in content_wrapper.winfo_children():
+            widget.destroy()
 
-        # Outer overlay
-        overlay = ctk.CTkFrame(container, fg_color=self.fg_color)
-        overlay.place(x=0, y=0, relwidth=1, relheight=1)
-        overlay.lift()
-        self._account_overlay = overlay
+        # Main scrollable container
+        scroll = ctk.CTkScrollableFrame(content_wrapper, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
 
-        # Card
-        card = ctk.CTkFrame(overlay, fg_color=self.secondary_color,
-                            corner_radius=12, border_width=1,
-                            border_color=self.entry_border)
-        card.pack(fill="both", expand=True, padx=40, pady=40)
+        main = ctk.CTkFrame(scroll, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Close button
-        close_btn = ctk.CTkButton(card, text="✕", width=32, height=32,
-                                  fg_color="transparent",
-                                  text_color=self.text_color,
-                                  hover_color=self.hover_color,
-                                  command=self._close_account_overlay)
-        close_btn.place(x=12, y=12)
+        # Header with back button
+        header = ctk.CTkFrame(main, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 20))
 
-        # Title
-        title = ctk.CTkLabel(card, text="ACCOUNT SETTINGS",
-                             font=self.alt_title_font,
-                             text_color=self.text_color)
-        title.pack(pady=(20, 10))
+        back_btn = ctk.CTkLabel(header, text="", image=self.bk_btn_icon, cursor="hand2")
+        back_btn.pack(side="left")
+        back_btn.bind("<Button-1>", lambda e: self._go_back_from_settings())
+        back_btn.bind("<Enter>", lambda e: back_btn.configure(image=self.bk_btn_hvr_icon))
+        back_btn.bind("<Leave>", lambda e: back_btn.configure(image=self.bk_btn_icon))
 
-        # Determine tabs based on role
+        ctk.CTkLabel(header, text="ACCOUNT SETTINGS",
+                     font=self.alt_title_font,
+                     text_color=self.text_color).pack(side="left", padx=10)
+
+        # Determine sections based on role
         role = getattr(self.current_user, 'role', None) or \
                (self.current_user or {}).get('role', 'student')
 
         if role == "admin":
-            tab_names = ["Profile", "Security"]
+            section_names = ["Profile", "Security"]
         elif role == "owner":
-            tab_names = ["Profile", "Security", "Documents"]
+            section_names = ["Profile", "Security", "Documents"]
         else:
-            tab_names = ["Profile", "Security", "Verification"]
+            section_names = ["Profile", "Security", "Verification"]
 
-        # Tabview
-        tabview = ctk.CTkTabview(card, fg_color="transparent",
-                                 segmented_button_fg_color=self.fg_color,
-                                 segmented_button_selected_color=self.primary_color,
-                                 segmented_button_unselected_color=self.hover_color_text,
-                                 text_color=self.text_color)
-        tabview.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        # Section config: (key, title, icon, builder_method)
+        section_configs = [
+            ("Profile", "Profile", "👤", "_build_profile_tab"),
+            ("Security", "Security", "🔒", "_build_security_tab"),
+        ]
+        if "Verification" in section_names:
+            section_configs.append(("Verification", "Verification", "📄", "_build_verification_tab"))
+        if "Documents" in section_names:
+            section_configs.append(("Documents", "Documents", "📋", "_build_documents_tab"))
 
-        # Create tabs
-        self._account_tabs = {}
-        for name in tab_names:
-            tab = tabview.add(name)
-            tab_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-            tab_scroll.pack(fill="both", expand=True)
-            self._account_tabs[name] = tab_scroll
+        # Store accordion state
+        self._accordion_sections = {}
 
-        # Build tab contents
-        self._build_profile_tab(self._account_tabs["Profile"])
-        self._build_security_tab(self._account_tabs["Security"])
-        if "Verification" in self._account_tabs:
-            self._build_verification_tab(self._account_tabs["Verification"])
-        if "Documents" in self._account_tabs:
-            self._build_documents_tab(self._account_tabs["Documents"])
+        for key, title, icon, builder_name in section_configs:
+            section = self._build_accordion_section(main, key, title, icon)
+            # Call the existing builder method with the section's content frame
+            builder = getattr(self, builder_name)
+            builder(section["content"])
+            self._accordion_sections[key] = section
 
     def _close_account_overlay(self):
         """Destroy the account settings overlay."""
@@ -90,6 +83,25 @@ class AccountSettingsMixin:
             except Exception:
                 pass
             self._account_overlay = None
+
+    def _build_settings_card(self, parent, heading=None):
+        """Create a card frame with optional heading. Returns the inner content frame."""
+        card = ctk.CTkFrame(parent, fg_color=self.fg_color,
+                            corner_radius=8, border_width=1,
+                            border_color=self.entry_border)
+        card.pack(fill="x", padx=15, pady=(0, 12))
+
+        if heading:
+            label = ctk.CTkLabel(card, text=heading,
+                                 font=self.body_paragraph_font,
+                                 text_color=self.primary_color)
+            label.pack(anchor="w", padx=15, pady=(12, 0))
+            ctk.CTkFrame(card, height=1, fg_color=self.entry_border).pack(
+                fill="x", padx=15, pady=(8, 0))
+
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=15, pady=15)
+        return inner
 
     def _build_profile_tab(self, parent):
         """Build the Profile tab — shared across all roles."""
@@ -105,14 +117,14 @@ class AccountSettingsMixin:
         avatar_frame.pack_propagate(False)
 
         self._profile_avatar = ctk.CTkLabel(avatar_frame, text="",
-                                            image=self.pfp_placeholder,
-                                            width=80, height=80,
-                                            corner_radius=40,
+                                            image=self.pfp_placeholder_lg,
+                                             width=100, height=100,
+                                             corner_radius=50,
                                             fg_color=self.fg_color)
         self._profile_avatar.pack(pady=(0, 5))
 
-        edit_photo_btn = ctk.CTkButton(avatar_frame, text="Edit",
-                                       font=self.body_description_font,
+        edit_photo_btn = ctk.CTkButton(avatar_frame, text="Edit Photo",
+                                       font=self.body_light_font,
                                        fg_color="transparent",
                                        text_color=self.primary_color,
                                        hover_color=self.hover_color,
@@ -121,7 +133,7 @@ class AccountSettingsMixin:
 
         # Right: name + email + badges
         info_frame = ctk.CTkFrame(avatar_row, fg_color="transparent")
-        info_frame.pack(side="left", fill="x", expand=True, padx=(15, 0))
+        info_frame.pack(side="left", fill="x", expand=True, padx=(15, 0), pady=(32, 0))
 
         name = user.get('name', 'User')
         email = user.get('email', '')
@@ -166,81 +178,89 @@ class AccountSettingsMixin:
                      fg_color=self.hover_color, text_color=("white", "white"),
                      corner_radius=4, padx=6).pack(side="left")
 
-        # ── Separator ───────────────────────────────────────────────
-        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
-            fill="x", padx=10, pady=5)
-
-        # ── Personal Information Section ────────────────────────────
-        ctk.CTkLabel(parent, text="Personal Information",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+        # ── Personal Information Card ────────────────────────────
+        pi_inner = self._build_settings_card(parent, "Personal Information")
 
         # Full Name
-        name_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        name_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(name_frame, text="Full Name",
+        ctk.CTkLabel(pi_inner, text="Full Name",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_name_entry = ctk.CTkEntry(name_frame, height=38,
+        self._profile_name_entry = ctk.CTkEntry(pi_inner, height=38,
                                                 font=self.body_light_font,
                                                 fg_color=self.fg_color,
                                                 border_color=self.entry_border,
                                                 border_width=1, corner_radius=6,
                                                 text_color=self.text_color,
-                                                placeholder_text="John Doe")
-        self._profile_name_entry.pack(fill="x")
+                                                placeholder_text="Enter your full name")
+        self._profile_name_entry.pack(fill="x", pady=(0, 12))
         self._profile_name_entry.insert(0, user.get('name', ''))
 
         # Phone
-        phone_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        phone_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(phone_frame, text="Phone Number",
+        ctk.CTkLabel(pi_inner, text="Phone Number",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_phone_entry = ctk.CTkEntry(phone_frame, height=38,
+        self._profile_phone_entry = ctk.CTkEntry(pi_inner, height=38,
                                                   font=self.body_light_font,
                                                   fg_color=self.fg_color,
                                                   border_color=self.entry_border,
                                                   border_width=1, corner_radius=6,
                                                   text_color=self.text_color,
                                                   placeholder_text="+63 912 345 6789")
-        self._profile_phone_entry.pack(fill="x")
+        self._profile_phone_entry.pack(fill="x", pady=(0, 12))
         self._profile_phone_entry.insert(0, user.get('phone', ''))
 
         # Street
-        street_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        street_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(street_frame, text="Street Address",
+        ctk.CTkLabel(pi_inner, text="Street Address",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
-        self._profile_street_entry = ctk.CTkEntry(street_frame, height=38,
+        self._profile_street_entry = ctk.CTkEntry(pi_inner, height=38,
                                                    font=self.body_light_font,
                                                    fg_color=self.fg_color,
                                                    border_color=self.entry_border,
                                                    border_width=1, corner_radius=6,
                                                    text_color=self.text_color,
                                                    placeholder_text="123 Mabini St, Barangay ...")
-        self._profile_street_entry.pack(fill="x")
+        self._profile_street_entry.pack(fill="x", pady=(0, 12))
         self._profile_street_entry.insert(0, user.get('street', ''))
 
         # Date of Birth
-        dob_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        dob_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(dob_frame, text="Date of Birth",
+        ctk.CTkLabel(pi_inner, text="Date of Birth",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
 
-        dob_picker = ctk.CTkFrame(dob_frame, fg_color="transparent")
-        dob_picker.pack(anchor="w")
+        dob_bg_frame = ctk.CTkFrame(pi_inner,
+                                     fg_color=self.fg_color,
+                                     corner_radius=6,
+                                     border_width=1,
+                                     border_color=self.entry_border)
+        dob_bg_frame.pack(anchor="w")
 
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         days = [str(i) for i in range(1, 32)]
         years = [str(i) for i in range(2025, 1949, -1)]
 
-        self._profile_dob_month = ctk.CTkOptionMenu(dob_picker, values=months,
-                                                     width=100, height=35,
-                                                     fg_color=self.fg_color,
+        self._profile_dob_month = ctk.CTkOptionMenu(dob_bg_frame, values=months,
+                                                       width=95, height=35,
+                                                       fg_color="transparent",
+                                                       button_color=self.primary_color,
+                                                       button_hover_color=self.hover_color,
+                                                       dropdown_fg_color=self.fg_color,
+                                                       text_color=self.text_color,
+                                                       dropdown_text_color=self.text_color,
+                                                       dropdown_hover_color=self.hover_color,
+                                                       font=self.body_light_font)
+        self._profile_dob_month.pack(side="left", padx=(30, 8), pady=8)
+
+        ctk.CTkLabel(dob_bg_frame,
+                     text="/",
+                     text_color=self.text_color,
+                     font=self.body_paragraph_font,
+                     width=10).pack(side="left")
+
+        self._profile_dob_day = ctk.CTkOptionMenu(dob_bg_frame, values=days,
+                                                     width=65, height=35,
+                                                     fg_color="transparent",
                                                      button_color=self.primary_color,
                                                      button_hover_color=self.hover_color,
                                                      dropdown_fg_color=self.fg_color,
@@ -248,31 +268,25 @@ class AccountSettingsMixin:
                                                      dropdown_text_color=self.text_color,
                                                      dropdown_hover_color=self.hover_color,
                                                      font=self.body_light_font)
-        self._profile_dob_month.pack(side="left", padx=(0, 6))
+        self._profile_dob_day.pack(side="left", padx=(20, 8), pady=8)
 
-        self._profile_dob_day = ctk.CTkOptionMenu(dob_picker, values=days,
-                                                   width=70, height=35,
-                                                   fg_color=self.fg_color,
-                                                   button_color=self.primary_color,
-                                                   button_hover_color=self.hover_color,
-                                                   dropdown_fg_color=self.fg_color,
-                                                   text_color=self.text_color,
-                                                   dropdown_text_color=self.text_color,
-                                                   dropdown_hover_color=self.hover_color,
-                                                   font=self.body_light_font)
-        self._profile_dob_day.pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(dob_bg_frame,
+                     text="/",
+                     text_color=self.text_color,
+                     font=self.body_paragraph_font,
+                     width=10).pack(side="left")
 
-        self._profile_dob_year = ctk.CTkOptionMenu(dob_picker, values=years,
-                                                    width=90, height=35,
-                                                    fg_color=self.fg_color,
-                                                    button_color=self.primary_color,
-                                                    button_hover_color=self.hover_color,
-                                                    dropdown_fg_color=self.fg_color,
-                                                    text_color=self.text_color,
-                                                    dropdown_text_color=self.text_color,
-                                                    dropdown_hover_color=self.hover_color,
-                                                    font=self.body_light_font)
-        self._profile_dob_year.pack(side="left")
+        self._profile_dob_year = ctk.CTkOptionMenu(dob_bg_frame, values=years,
+                                                      width=85, height=35,
+                                                      fg_color="transparent",
+                                                      button_color=self.primary_color,
+                                                      button_hover_color=self.hover_color,
+                                                      dropdown_fg_color=self.fg_color,
+                                                      text_color=self.text_color,
+                                                      dropdown_text_color=self.text_color,
+                                                      dropdown_hover_color=self.hover_color,
+                                                      font=self.body_light_font)
+        self._profile_dob_year.pack(side="left", padx=(20, 30), pady=8)
 
         # Pre-populate DOB
         dob_val = user.get('date_of_birth', '')
@@ -285,14 +299,25 @@ class AccountSettingsMixin:
                 self._profile_dob_day.set(str(int(parts[2])))
                 self._profile_dob_year.set(parts[0])
 
-        # ── Separator ───────────────────────────────────────────────
-        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
-            fill="x", padx=10, pady=5)
+        # Error label
+        self._profile_error = ctk.CTkLabel(pi_inner, text="",
+                                           text_color=self.error_red,
+                                           font=self.inline_error_font)
+        self._profile_error.pack(pady=(8, 0))
 
-        # ── Account Info Section (read-only) ────────────────────────
-        ctk.CTkLabel(parent, text="Account Info",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+        # Save button
+        self._profile_save_btn = ctk.CTkButton(pi_inner, text="SAVE CHANGES",
+                                               height=42,
+                                               corner_radius=6,
+                                               font=self.body_paragraph_font,
+                                               fg_color=self.primary_color,
+                                               hover_color=self.hover_color,
+                                               text_color=("white", "white"),
+                                               command=self._save_profile_tab)
+        self._profile_save_btn.pack(anchor="e", pady=(4, 0))
+
+        # ── Account Info Card ───────────────────────────────
+        ai_inner = self._build_settings_card(parent, "Account Info")
 
         info_rows = [
             ("Role", role),
@@ -300,32 +325,17 @@ class AccountSettingsMixin:
             ("Auth Provider", provider_text),
             ("Account Status", user.get('status', 'active').capitalize()),
         ]
-        for label, value in info_rows:
-            row = ctk.CTkFrame(parent, fg_color="transparent")
-            row.pack(fill="x", padx=10, pady=2)
+        for i, (label, value) in enumerate(info_rows):
+            bg = self.secondary_color if i % 2 == 0 else "transparent"
+            row = ctk.CTkFrame(ai_inner, fg_color=bg, corner_radius=4)
+            row.pack(fill="x", pady=2, ipady=4)
             ctk.CTkLabel(row, text=label,
                          font=self.body_light_font,
                          text_color=self.text_color,
-                         width=120).pack(side="left")
+                         width=130).pack(side="left", padx=(10, 0))
             ctk.CTkLabel(row, text=value,
                          font=self.body_paragraph_font,
-                         text_color=self.text_color).pack(side="left")
-
-        # ── Error label + Save Button ───────────────────────────────
-        self._profile_error = ctk.CTkLabel(parent, text="",
-                                           text_color=self.error_red,
-                                           font=self.inline_error_font)
-        self._profile_error.pack(pady=(10, 0))
-
-        self._profile_save_btn = ctk.CTkButton(parent, text="SAVE CHANGES",
-                                               height=42,
-                                               corner_radius=6,
-                                               font=self.body_bold_font,
-                                               fg_color=self.primary_color,
-                                               hover_color=self.hover_color,
-                                               text_color=("white", "white"),
-                                               command=self._save_profile_tab)
-        self._profile_save_btn.pack(fill="x", padx=10, pady=(8, 15))
+                         text_color=self.primary_color).pack(side="left", padx=(8, 0))
 
     def _format_date(self, date_str):
         """Format ISO date string to 'Month Day, Year'."""
@@ -353,8 +363,8 @@ class AccountSettingsMixin:
 
         try:
             pil_img = Image.open(file_path)
-            pil_img.thumbnail((80, 80))
-            ctk_img = ctk.CTkImage(pil_img, size=(80, 80))
+            pil_img.thumbnail((100, 100))
+            ctk_img = ctk.CTkImage(pil_img, size=(100, 100))
             self._profile_avatar.configure(image=ctk_img)
             self._profile_photo_path = file_path  # store for save
         except Exception:
@@ -441,23 +451,19 @@ class AccountSettingsMixin:
 
     def _build_security_tab(self, parent):
         """Build the Security tab — shared across all roles."""
-        # ── Change Password Section ────────────────────────────────
-        ctk.CTkLabel(parent, text="Change Password",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 8))
+        # ── Change Password Card ─────────────────────────────
+        pw_inner = self._build_settings_card(parent, "Change Password")
 
         # Current Password
-        curr_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        curr_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(curr_frame, text="Current Password",
+        ctk.CTkLabel(pw_inner, text="Current Password",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
 
-        curr_input_frame = ctk.CTkFrame(curr_frame, fg_color=self.fg_color,
-                                        border_color=self.entry_border,
-                                        border_width=1, corner_radius=6,
-                                        height=38)
-        curr_input_frame.pack(fill="x")
+        curr_input_frame = ctk.CTkFrame(pw_inner, fg_color=self.fg_color,
+                                         border_color=self.entry_border,
+                                         border_width=1, corner_radius=6,
+                                         height=38)
+        curr_input_frame.pack(fill="x", pady=(0, 12))
         curr_input_frame.pack_propagate(False)
 
         self._sec_old_pw = ctk.CTkEntry(curr_input_frame,
@@ -467,27 +473,25 @@ class AccountSettingsMixin:
                                         fg_color="transparent",
                                         border_width=0,
                                         text_color=self.text_color)
-        self._sec_old_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+        self._sec_old_pw.pack(side="left", fill="x", expand=True, padx=(10, 40), pady=4)
 
         self._sec_old_eye = ctk.CTkLabel(curr_input_frame,
                                          image=self.closed_eye_icon,
                                          text="", cursor="hand2")
-        self._sec_old_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_old_eye.pack(side="right", padx=(0, 10))
         self._sec_old_eye.bind("<Button-1>",
                                lambda e: self._toggle_pw_visibility("old"))
 
         # New Password
-        new_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        new_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(new_frame, text="New Password",
+        ctk.CTkLabel(pw_inner, text="New Password",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
 
-        new_input_frame = ctk.CTkFrame(new_frame, fg_color=self.fg_color,
-                                       border_color=self.entry_border,
-                                       border_width=1, corner_radius=6,
-                                       height=38)
-        new_input_frame.pack(fill="x")
+        new_input_frame = ctk.CTkFrame(pw_inner, fg_color=self.fg_color,
+                                        border_color=self.entry_border,
+                                        border_width=1, corner_radius=6,
+                                        height=38)
+        new_input_frame.pack(fill="x", pady=(0, 4))
         new_input_frame.pack_propagate(False)
 
         self._sec_new_pw = ctk.CTkEntry(new_input_frame,
@@ -497,18 +501,18 @@ class AccountSettingsMixin:
                                         fg_color="transparent",
                                         border_width=0,
                                         text_color=self.text_color)
-        self._sec_new_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+        self._sec_new_pw.pack(side="left", fill="x", expand=True, padx=(10, 40), pady=4)
 
         self._sec_new_eye = ctk.CTkLabel(new_input_frame,
                                          image=self.closed_eye_icon,
                                          text="", cursor="hand2")
-        self._sec_new_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_new_eye.pack(side="right", padx=(0, 10))
         self._sec_new_eye.bind("<Button-1>",
                                lambda e: self._toggle_pw_visibility("new"))
 
-        # Password requirement checklist (reusing register page pattern)
-        req_frame = ctk.CTkFrame(new_frame, fg_color="transparent")
-        req_frame.pack(anchor="w", padx=5, pady=(4, 0))
+        # Password requirement checklist
+        req_frame = ctk.CTkFrame(pw_inner, fg_color="transparent")
+        req_frame.pack(anchor="w", padx=5, pady=(4, 12))
 
         self._sec_req_length = ctk.CTkLabel(
             req_frame, text="✗  8+ characters", font=self.inline_error_font,
@@ -531,17 +535,15 @@ class AccountSettingsMixin:
         self._sec_new_pw.bind("<KeyRelease>", self._validate_sec_strength)
 
         # Confirm New Password
-        confirm_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        confirm_frame.pack(fill="x", padx=10, pady=(0, 8))
-        ctk.CTkLabel(confirm_frame, text="Confirm New Password",
+        ctk.CTkLabel(pw_inner, text="Confirm New Password",
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 3))
 
-        confirm_input_frame = ctk.CTkFrame(confirm_frame, fg_color=self.fg_color,
-                                           border_color=self.entry_border,
-                                           border_width=1, corner_radius=6,
-                                           height=38)
-        confirm_input_frame.pack(fill="x")
+        confirm_input_frame = ctk.CTkFrame(pw_inner, fg_color=self.fg_color,
+                                            border_color=self.entry_border,
+                                            border_width=1, corner_radius=6,
+                                            height=38)
+        confirm_input_frame.pack(fill="x", pady=(0, 4))
         confirm_input_frame.pack_propagate(False)
 
         self._sec_confirm_pw = ctk.CTkEntry(confirm_input_frame,
@@ -551,39 +553,39 @@ class AccountSettingsMixin:
                                             fg_color="transparent",
                                             border_width=0,
                                             text_color=self.text_color)
-        self._sec_confirm_pw.place(relx=0.46, rely=0.5, relwidth=0.82, anchor="center")
+        self._sec_confirm_pw.pack(side="left", fill="x", expand=True, padx=(10, 40), pady=4)
 
         self._sec_confirm_eye = ctk.CTkLabel(confirm_input_frame,
                                              image=self.closed_eye_icon,
                                              text="", cursor="hand2")
-        self._sec_confirm_eye.place(relx=0.9, rely=0.5, anchor="center")
+        self._sec_confirm_eye.pack(side="right", padx=(0, 10))
         self._sec_confirm_eye.bind("<Button-1>",
                                    lambda e: self._toggle_pw_visibility("confirm"))
 
         self._sec_confirm_pw.bind("<KeyRelease>", self._validate_sec_match)
 
-        # Password match error label
-        self._sec_match_error = ctk.CTkLabel(parent, text="",
+        # Password match error
+        self._sec_match_error = ctk.CTkLabel(pw_inner, text="",
                                              text_color=self.error_red,
                                              font=self.inline_error_font)
-        self._sec_match_error.pack(anchor="w", padx=15)
+        self._sec_match_error.pack(anchor="w", pady=(4, 8))
 
         # Error label
-        self._sec_error = ctk.CTkLabel(parent, text="",
+        self._sec_error = ctk.CTkLabel(pw_inner, text="",
                                        text_color=self.error_red,
                                        font=self.inline_error_font)
-        self._sec_error.pack(pady=(5, 0))
+        self._sec_error.pack(pady=(0, 8))
 
         # Update Password button
-        self._sec_update_btn = ctk.CTkButton(parent, text="UPDATE PASSWORD",
+        self._sec_update_btn = ctk.CTkButton(pw_inner, text="UPDATE PASSWORD",
                                              height=42,
                                              corner_radius=6,
-                                             font=self.body_bold_font,
+                                             font=self.body_paragraph_font,
                                              fg_color=self.primary_color,
                                              hover_color=self.hover_color,
                                              text_color=("white", "white"),
                                              command=self._update_password)
-        self._sec_update_btn.pack(fill="x", padx=10, pady=(8, 15))
+        self._sec_update_btn.pack(anchor="e", pady=(0, 4))
 
         # ── Danger Zone ────────────────────────────────────────────
         ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
@@ -782,55 +784,43 @@ class AccountSettingsMixin:
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
 
-        # ── ID Upload Section ───────────────────────────────────────
-        ctk.CTkLabel(parent, text="Valid ID Document",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+        # ── Valid ID Document Card ──────────────────────────
+        doc_inner = self._build_settings_card(parent, "Valid ID Document")
 
-        upload_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        upload_frame.pack(fill="x", padx=10, pady=(0, 10))
-
-        self._verify_upload_btn = ctk.CTkButton(upload_frame,
+        self._verify_upload_btn = ctk.CTkButton(doc_inner,
                                                 text="📤  Upload Valid ID",
                                                 font=self.body_light_font,
                                                 fg_color=self.primary_color,
                                                 hover_color=self.hover_color,
                                                 text_color=("white", "white"),
                                                 command=self._pick_id_document)
-        self._verify_upload_btn.pack(side="left")
+        self._verify_upload_btn.pack(anchor="w")
 
-        ctk.CTkLabel(upload_frame,
+        ctk.CTkLabel(doc_inner,
                      text="Accepted: JPG, PNG, PDF (max 5MB)",
                      font=self.body_description_font,
-                     text_color=self.text_color).pack(side="left", padx=(10, 0))
+                     text_color=self.text_color).pack(anchor="w", pady=(4, 0))
 
-        # Existing file info
-        self._verify_file_label = ctk.CTkLabel(parent, text="",
+        self._verify_file_label = ctk.CTkLabel(doc_inner, text="",
                                                 font=self.body_light_font,
                                                 text_color=self.text_color)
-        self._verify_file_label.pack(anchor="w", padx=10)
+        self._verify_file_label.pack(anchor="w", pady=(4, 0))
         if id_doc_url:
             filename = id_doc_url.split("/")[-1] if "/" in id_doc_url else id_doc_url
             self._verify_file_label.configure(text=f"Current file: {filename}")
 
-        self._verify_progress = ctk.CTkProgressBar(parent, mode="indeterminate",
+        self._verify_progress = ctk.CTkProgressBar(doc_inner, mode="indeterminate",
                                                     fg_color=self.entry_border,
                                                     progress_color=self.primary_color)
-        self._verify_error = ctk.CTkLabel(parent, text="",
+        self._verify_error = ctk.CTkLabel(doc_inner, text="",
                                           text_color=self.error_red,
                                           font=self.inline_error_font)
-        self._verify_error.pack(anchor="w", padx=10, pady=(5, 0))
+        self._verify_error.pack(anchor="w", pady=(5, 0))
 
-        # ── Linked Accounts ─────────────────────────────────────────
-        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
-            fill="x", padx=10, pady=10)
-
-        ctk.CTkLabel(parent, text="Linked Accounts",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(0, 8))
-
+        # ── Linked Accounts Card ────────────────────────────
+        linked_inner = self._build_settings_card(parent, "Linked Accounts")
         auth_provider = user.get('auth_provider', 'email')
-        self._build_linked_account_card(parent, auth_provider)
+        self._build_linked_account_card(linked_inner, auth_provider)
 
     def _pick_id_document(self):
         """Open file dialog to select an ID document."""
@@ -914,66 +904,52 @@ class AccountSettingsMixin:
                      font=self.body_light_font,
                      text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
 
-        ctk.CTkLabel(parent, text="Business Permit",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(10, 5))
+        # ── Business Permit Card ────────────────────────────
+        permit_inner = self._build_settings_card(parent, "Business Permit")
 
-        upload_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        upload_frame.pack(fill="x", padx=10, pady=(0, 10))
-
-        self._doc_upload_btn = ctk.CTkButton(upload_frame,
+        self._doc_upload_btn = ctk.CTkButton(permit_inner,
                                              text="📤  Upload Business Permit",
                                              font=self.body_light_font,
                                              fg_color=self.primary_color,
                                              hover_color=self.hover_color,
                                              text_color=("white", "white"),
                                              command=self._pick_permit)
-        self._doc_upload_btn.pack(side="left")
+        self._doc_upload_btn.pack(anchor="w")
 
-        ctk.CTkLabel(upload_frame,
+        ctk.CTkLabel(permit_inner,
                      text="Accepted: JPG, PNG, PDF (max 10MB)",
                      font=self.body_description_font,
-                     text_color=self.text_color).pack(side="left", padx=(10, 0))
+                     text_color=self.text_color).pack(anchor="w", pady=(4, 0))
 
-        self._doc_file_label = ctk.CTkLabel(parent, text="",
-                                            font=self.body_light_font,
-                                            text_color=self.text_color)
-        self._doc_file_label.pack(anchor="w", padx=10)
+        self._doc_file_label = ctk.CTkLabel(permit_inner, text="",
+                                             font=self.body_light_font,
+                                             text_color=self.text_color)
+        self._doc_file_label.pack(anchor="w", pady=(4, 0))
         if permit_url:
             filename = permit_url.split("/")[-1] if "/" in permit_url else permit_url
             self._doc_file_label.configure(text=f"Current file: {filename}")
 
-        self._doc_progress = ctk.CTkProgressBar(parent, mode="indeterminate",
+        self._doc_progress = ctk.CTkProgressBar(permit_inner, mode="indeterminate",
                                                  fg_color=self.entry_border,
                                                  progress_color=self.primary_color)
-        self._doc_error = ctk.CTkLabel(parent, text="",
+        self._doc_error = ctk.CTkLabel(permit_inner, text="",
                                        text_color=self.error_red,
                                        font=self.inline_error_font)
-        self._doc_error.pack(anchor="w", padx=10, pady=(5, 0))
+        self._doc_error.pack(anchor="w", pady=(5, 0))
 
-        ctk.CTkFrame(parent, height=1, fg_color=self.entry_border).pack(
-            fill="x", padx=10, pady=10)
-
-        ctk.CTkLabel(parent, text="Linked Accounts",
-                     font=self.body_paragraph_font,
-                     text_color=self.primary_color).pack(anchor="w", padx=10, pady=(0, 8))
-
+        # ── Linked Accounts Card ────────────────────────────
+        linked_inner = self._build_settings_card(parent, "Linked Accounts")
         auth_provider = user.get('auth_provider', 'email')
-        self._build_linked_account_card(parent, auth_provider)
+        self._build_linked_account_card(linked_inner, auth_provider)
 
     def _build_linked_account_card(self, parent, auth_provider):
-        """Build the linked accounts card (Google only)."""
+        """Build the linked accounts card content. parent is the inner frame of the settings card."""
         has_google = auth_provider in ("google", "both")
         user = getattr(self, 'current_user', {}) or {}
         email = user.get('email', '')
 
-        card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
-                            corner_radius=6, border_width=1,
-                            border_color=self.entry_border)
-        card.pack(fill="x", padx=10, pady=(0, 10))
-
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=15, pady=10)
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x")
 
         ctk.CTkLabel(row, text="Google",
                      font=self.body_paragraph_font,
@@ -1005,9 +981,9 @@ class AccountSettingsMixin:
                           state="disabled",
                           width=60, height=28).pack(side="right", padx=(0, 8))
 
-        ctk.CTkLabel(card, text=email,
+        ctk.CTkLabel(parent, text=email,
                      font=self.body_light_font,
-                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
+                     text_color=self.text_color).pack(anchor="w", pady=(4, 0))
 
     def _unlink_google(self):
         """Unlink Google account from user."""
