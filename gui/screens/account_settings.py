@@ -76,13 +76,8 @@ class AccountSettingsMixin:
             self._accordion_sections[key] = section
 
     def _close_account_overlay(self):
-        """Destroy the account settings overlay."""
-        if hasattr(self, '_account_overlay') and self._account_overlay:
-            try:
-                self._account_overlay.destroy()
-            except Exception:
-                pass
-            self._account_overlay = None
+        """Clean up accordion section references."""
+        self._accordion_sections = {}
 
     def _build_accordion_section(self, parent, key, title, icon):
         """Build a single collapsible accordion section.
