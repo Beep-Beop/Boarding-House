@@ -1,13 +1,48 @@
-import smtplib
-import ssl
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 
 from src.config import settings
 from src.logger import logger
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
 
 def _send_email(to_email: str, subject: str, text: str, html: str) -> bool:
+    if settings.BREVO_API_KEY:
+        return _send_via_brevo_api(to_email, subject, text, html)
+    return _send_via_smtp(to_email, subject, text, html)
+
+
+def _send_via_brevo_api(to_email: str, subject: str, text: str, html: str) -> bool:
+    try:
+        payload = {
+            "sender": {"email": settings.SMTP_FROM_EMAIL, "name": "Boarding House Finder"},
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "textContent": text,
+            "htmlContent": html,
+        }
+        resp = requests.post(
+            BREVO_API_URL,
+            json=payload,
+            headers={"api-key": settings.BREVO_API_KEY},
+            timeout=15,
+        )
+        if resp.ok:
+            logger.info("Email sent to %s via Brevo API", to_email)
+            return True
+        logger.error("Brevo API error [%s]: %s", resp.status_code, resp.text)
+        return False
+    except Exception as e:
+        logger.error("Failed to send email to %s via API: %s", to_email, e)
+        return False
+
+
+def _send_via_smtp(to_email: str, subject: str, text: str, html: str) -> bool:
+    import smtplib
+    import ssl
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -24,10 +59,10 @@ def _send_email(to_email: str, subject: str, text: str, html: str) -> bool:
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM_EMAIL, to_email, msg.as_string())
 
-        logger.info("Email sent to %s", to_email)
+        logger.info("Email sent to %s via SMTP", to_email)
         return True
     except Exception as e:
-        logger.error("Failed to send email to %s: %s", to_email, e)
+        logger.error("Failed to send email to %s via SMTP: %s", to_email, e)
         return False
 
 

@@ -24,6 +24,7 @@ class Settings:
         self.SMTP_USER = os.getenv("SMTP_USER")
         self.SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
         self.SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_EMAIL", "noreply@beepboops.app")
+        self.BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
         if self.ACCESS_SECRET_KEY and len(self.ACCESS_SECRET_KEY) < 32:
             raise ValueError("ACCESS_SECRET_KEY must be at least 32 characters long")
