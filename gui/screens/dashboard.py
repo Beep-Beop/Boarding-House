@@ -1,4 +1,5 @@
 import os
+import sys
 import customtkinter as ctk
 import requests
 import threading
@@ -2442,7 +2443,10 @@ class DashboardMixin:
         checkin_container.pack(fill="x")
 
         # ── Calendar pill → popup ──
-        _cal_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "calendar.png")
+        if getattr(sys, 'frozen', False):
+            _cal_path = os.path.join(sys._MEIPASS, "assets", "calendar.png")
+        else:
+            _cal_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "calendar.png")
         cal_img = ctk.CTkImage(Image.open(_cal_path), size=(22, 22))
         self._selected_checkin_date = datetime.now().date()
 

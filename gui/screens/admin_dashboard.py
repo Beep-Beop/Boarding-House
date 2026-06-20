@@ -1,6 +1,7 @@
 import io
 import webbrowser
 import threading
+import tkinter as tk
 import requests
 import customtkinter as ctk
 from tkinter import ttk
@@ -509,19 +510,18 @@ class AdminDashboardMixin:
         self._admin_users_search_entry, _ = self._admin_build_search_bar(
             main, "Search by name or email...", self._admin_refresh_users)
 
-        self._admin_users_table_container = ctk.CTkFrame(main, fg_color="transparent")
-        self._admin_users_table_container.pack(fill="both", expand=True)
+        card = ctk.CTkFrame(main, fg_color=self.secondary_color, corner_radius=6)
+        card.pack(fill="both", expand=True, pady=(10, 0))
+        self._admin_users_container = card
 
         self._admin_refresh_users()
 
     def _admin_refresh_users(self):
-        for w in self._admin_users_table_container.winfo_children():
+        card = self._admin_users_container
+        for w in card.winfo_children():
             w.destroy()
 
-        scroll = ctk.CTkScrollableFrame(self._admin_users_table_container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
-
-        self._admin_show_loading(scroll)
+        self._admin_show_loading(card)
 
         def _do():
             users = []
@@ -540,56 +540,81 @@ class AdminDashboardMixin:
                 users = [u for u in users if
                          search in u.get("name", "").lower() or
                          search in u.get("email", "").lower()]
-            self.after(0, lambda: self._admin_populate_users(scroll, users))
+            self.after(0, lambda: self._admin_populate_users(users))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_populate_users(self, scroll, users):
+    def _admin_populate_users(self, users):
         self._admin_hide_loading()
-        for w in scroll.winfo_children():
+        card = self._admin_users_container
+        for w in card.winfo_children():
             w.destroy()
 
-        if not users:
-            ctk.CTkLabel(scroll, text="No users found.", font=self.body_paragraph_font,
-                          text_color=self.text_color).pack(pady=30)
-            return
+        sticky_h = ["w", "w", "w", "w", "w", "ew"]
+        card.grid_columnconfigure(0, weight=0, minsize=50)
+        card.grid_columnconfigure(1, weight=1, minsize=160)
+        card.grid_columnconfigure(2, weight=1, minsize=180)
+        card.grid_columnconfigure(3, weight=0, minsize=80)
+        card.grid_columnconfigure(4, weight=0, minsize=80)
+        card.grid_columnconfigure(5, weight=0, minsize=160)
 
         headers = ["ID", "Name", "Email", "Role", "Status", "Actions"]
-        self._admin_build_table_header(scroll, headers, col_weights=[0, 1, 1, 0, 0, 0])
+        for j, header in enumerate(headers):
+            ctk.CTkLabel(card, text=header, font=self.body_bold_font,
+                          text_color=self.text_color).grid(
+                row=0, column=j, padx=15, pady=(15, 10), sticky=sticky_h[j])
 
-        for i, user in enumerate(users):
-            row_color = self.fg_color if i % 2 == 0 else self.secondary_color
-            row = ctk.CTkFrame(scroll, fg_color=row_color, corner_radius=4)
-            row.pack(fill="x", pady=1)
+        if not users:
+            ctk.CTkLabel(card, text="No users found.",
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(row=1, column=0, columnspan=6, padx=15, pady=20)
+            return
 
-            ctk.CTkLabel(row, text=str(user.get("user_id", "")), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=0, padx=10, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=user.get("name", ""), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=1, padx=10, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=user.get("email", ""), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=2, padx=10, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=user.get("role", ""), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=3, padx=10, pady=5, sticky="w")
+        for r, user in enumerate(users):
+            data_row = 1 + r * 2
+            sep_row = data_row + 1
+            is_last = r == len(users) - 1
+
+            ctk.CTkLabel(card, text=str(user.get("user_id", "")), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=0, padx=15, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=user.get("name", ""), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=1, padx=10, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=user.get("email", ""), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=2, padx=10, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=user.get("role", ""), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=3, padx=10, pady=(7, 7), sticky="w")
 
             status = user.get("status", "active")
-            color = self._admin_status_colors.get(status, self.text_color)
-            ctk.CTkLabel(row, text=status.capitalize(), font=self.body_description_font,
-                          fg_color=color, text_color="white", corner_radius=4,
-                          padx=8, pady=2).grid(row=0, column=4, padx=10, pady=5, sticky="w")
+            s_color = self._admin_status_colors.get(status, self.text_color)
+            ctk.CTkLabel(card, text=status.capitalize(), font=self.body_description_font,
+                          fg_color=s_color, text_color="white",
+                          corner_radius=4, padx=8, pady=2).grid(
+                row=data_row, column=4, padx=15, pady=(7, 7), sticky="ew")
 
             uid = user.get("user_id")
-            action_f = ctk.CTkFrame(row, fg_color="transparent")
-            action_f.grid(row=0, column=5, padx=10, pady=5, sticky="w")
+            actions_f = ctk.CTkFrame(card, fg_color="transparent")
+            actions_f.grid(row=data_row, column=5, padx=15, pady=(7, 7))
             if status != "banned":
-                ctk.CTkButton(action_f, text="Ban", font=self.body_description_font,
+                ctk.CTkButton(actions_f, text="Ban", font=self.body_description_font,
                               fg_color=self.error_red, text_color="white",
                               width=50, height=25,
                               command=lambda uid=uid: self._admin_ban_user(uid)).pack(side="left", padx=2)
             else:
-                ctk.CTkButton(action_f, text="Unban", font=self.body_description_font,
+                ctk.CTkButton(actions_f, text="Unban", font=self.body_description_font,
                               fg_color="green", text_color="white",
                               width=50, height=25,
                               command=lambda uid=uid: self._admin_unban_user(uid)).pack(side="left", padx=2)
+
+            if not is_last:
+                ttk.Separator(card, orient="horizontal").grid(
+                    row=sep_row, column=0, columnspan=6, padx=20, pady=4, sticky="ew")
 
     def _admin_ban_user(self, user_id):
         result = self._admin_confirm_action(f"Type BAN to ban user #{user_id}:", "Ban User")
@@ -874,6 +899,9 @@ class AdminDashboardMixin:
                           fg_color=self.hover_color, text_color="white",
                           corner_radius=4, padx=12, pady=4).pack(side="left", padx=(5, 0))
 
+        # ── Photo Gallery ──
+        self._admin_build_photo_gallery(parent, photos or [])
+
         body = ctk.CTkFrame(parent, fg_color="transparent")
         body.pack(fill="x")
         body.grid_columnconfigure((0, 1), weight=1, uniform="detcol")
@@ -902,21 +930,6 @@ class AdminDashboardMixin:
         ctk.CTkLabel(right, text="Status & Info", font=self.body_big_font,
                       text_color=self.primary_color).pack(anchor="w", padx=15, pady=(15, 10))
 
-        photo_label = ctk.CTkLabel(right, text="[No Image]", font=self.body_paragraph_font,
-                                    text_color=self.text_color)
-        photo_label.pack(padx=15, pady=(0, 10))
-        if photos:
-            photo_url = photos[0].get("photo_url", "")
-            if photo_url:
-                def load_photo(lbl=photo_label, url=photo_url):
-                    try:
-                        img_data = requests.get(url, timeout=5).content
-                        pil_image = Image.open(io.BytesIO(img_data))
-                        ctk_image = ctk.CTkImage(pil_image, size=(260, 180))
-                        self.after(0, lambda: lbl.configure(image=ctk_image, text=""))
-                    except Exception:
-                        self.after(0, lambda: self.show_toast("Failed to load photo. Check your connection.", is_error=True))
-                threading.Thread(target=load_photo, daemon=True).start()
 
         for label, val in [
             ("Listing ID:", f"#{data.get('listing_id', 'N/A')}"),
@@ -937,18 +950,109 @@ class AdminDashboardMixin:
         ctk.CTkLabel(pf, text="Permit Document:", font=self.body_light_font,
                       text_color=self.text_color).pack(anchor="w")
         if permit_url:
-            ctk.CTkLabel(right, text=permit_url, font=self.body_description_font,
-                          text_color=self.primary_color, wraplength=250,
-                          justify="left").pack(anchor="w", padx=15)
-            ctk.CTkButton(right, text="Open in Browser", font=self.body_description_font,
-                          fg_color=self.primary_color, hover_color=self.hover_color,
-                          text_color="white", cursor="hand2",
-                          command=lambda: webbrowser.open(permit_url)
-                          ).pack(anchor="w", padx=15, pady=(5, 10))
+            permit_img = ctk.CTkLabel(right, text="Loading...", font=self.body_description_font,
+                                       fg_color=self.entry_border, height=150)
+            permit_img.pack(fill="x", padx=15, pady=(5, 5))
+
+            def load_permit():
+                try:
+                    resp = requests.get(permit_url, timeout=10)
+                    pil = Image.open(io.BytesIO(resp.content)).copy()
+                    self.after(0, lambda p=pil: (
+                        setattr(permit_img, '_permit_img', ctk.CTkImage(p, size=(250, 150))),
+                        permit_img.configure(image=permit_img._permit_img, text="")
+                    ))
+                except Exception:
+                    self.after(0, lambda: permit_img.configure(text="[Not an image]"))
+
+            threading.Thread(target=load_permit, daemon=True).start()
         else:
             ctk.CTkLabel(right, text="No permit document uploaded.",
                           font=self.body_description_font,
                           text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 10))
+
+    def _admin_build_photo_gallery(self, parent, photos):
+        gallery_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        gallery_frame.pack(fill="x", pady=(0, 15))
+
+        if not photos:
+            empty = ctk.CTkFrame(
+                gallery_frame, fg_color=self.secondary_color,
+                corner_radius=6, height=200,
+            )
+            empty.pack(fill="x")
+            empty.pack_propagate(False)
+            inner_empty = ctk.CTkFrame(empty, fg_color="transparent")
+            inner_empty.place(relx=0.5, rely=0.5, anchor="center")
+            ctk.CTkLabel(
+                inner_empty, text="No Photos Available",
+                font=self.body_paragraph_font, text_color=self.text_color,
+            ).pack()
+            return gallery_frame
+
+        container = ctk.CTkFrame(gallery_frame, fg_color=self.secondary_color, corner_radius=6)
+        container.pack(fill="x")
+
+        canvas = tk.Canvas(
+            container, height=470, highlightthickness=0,
+            bg=self.secondary_color[0],
+        )
+        canvas.pack(side="top", fill="x")
+
+        h_scrollbar = ctk.CTkScrollbar(
+            container, orientation="horizontal",
+            command=canvas.xview,
+        )
+        h_scrollbar.pack(side="bottom", fill="x")
+        canvas.configure(xscrollcommand=h_scrollbar.set)
+
+        inner = ctk.CTkFrame(canvas, fg_color="transparent")
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _update_scrollregion(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        inner.bind("<Configure>", _update_scrollregion)
+
+        img_w, img_h = 600, 338
+
+        for i, photo in enumerate(photos):
+            url = photo.get("photo_url", "")
+            if not url:
+                continue
+            card = ctk.CTkFrame(inner, fg_color=self.fg_color, corner_radius=4,
+                                width=img_w + 16, height=img_h + 14)
+            card.pack(side="left", padx=6, pady=10)
+            card.pack_propagate(False)
+
+            lbl = ctk.CTkLabel(card, text="", font=self.body_paragraph_font,
+                               fg_color=self.entry_border)
+            lbl.pack(fill="both", expand=True, padx=2, pady=2)
+
+            def load(lb=lbl, u=url, w=img_w, h=img_h):
+                try:
+                    resp = requests.get(u, timeout=10)
+                    pil = Image.open(io.BytesIO(resp.content)).copy()
+                    self.after(0, lambda p=pil, lb=lb, w=w, h=h: self._admin_set_photo_image(lb, p, w, h, _update_scrollregion))
+                except Exception:
+                    self.after(0, lambda: lb.configure(text="Error", fg_color=self.error_red))
+
+            threading.Thread(target=load, daemon=True).start()
+
+        return gallery_frame
+
+    def _admin_set_photo_image(self, label, pil_image, w, h, update_cb=None):
+        try:
+            ctk_image = ctk.CTkImage(pil_image, size=(w, h))
+            label._ctk_img = ctk_image
+            label.configure(image=ctk_image, text="")
+            if update_cb:
+                label.after(50, update_cb)
+        except Exception:
+            try:
+                label.configure(text="Error", fg_color=self.error_red)
+            except Exception:
+                pass
 
     def _admin_ban_listing(self, listing_id):
         result = self._admin_confirm_action(f"Type BAN to ban listing #{listing_id}:", "Ban Listing")
@@ -1192,70 +1296,92 @@ class AdminDashboardMixin:
                           font=self.body_paragraph_font, text_color=self.text_color).pack(pady=30)
             return
 
-        scroll = ctk.CTkScrollableFrame(self._admin_bookings_table, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        card = ctk.CTkFrame(self._admin_bookings_table, fg_color=self.secondary_color, corner_radius=6)
+        card.pack(fill="both", expand=True)
+
+        sticky_h = ["w", "w", "w", "w", "w", "w", "w", "ew", "ew"]
+        card.grid_columnconfigure(0, weight=0, minsize=50)
+        card.grid_columnconfigure(1, weight=1, minsize=130)
+        card.grid_columnconfigure(2, weight=1, minsize=130)
+        card.grid_columnconfigure(3, weight=0, minsize=50)
+        card.grid_columnconfigure(4, weight=0, minsize=90)
+        card.grid_columnconfigure(5, weight=0, minsize=90)
+        card.grid_columnconfigure(6, weight=0, minsize=80)
+        card.grid_columnconfigure(7, weight=0, minsize=80)
+        card.grid_columnconfigure(8, weight=0, minsize=240)
 
         headers = ["ID", "Tenant", "Property", "Room", "Check-in", "Check-out", "Status", "Total", "Actions"]
-        col_weights = [0, 1, 1, 0, 0, 0, 0, 0, 0]
-        self._admin_build_table_header(scroll, headers, col_weights)
+        for j, header in enumerate(headers):
+            ctk.CTkLabel(card, text=header, font=self.body_bold_font,
+                          text_color=self.text_color).grid(
+                row=0, column=j, padx=12, pady=(15, 10), sticky=sticky_h[j])
 
-        for i, b in enumerate(bookings):
-            row_color = self.fg_color if i % 2 == 0 else self.secondary_color
-            row = ctk.CTkFrame(scroll, fg_color=row_color, corner_radius=4)
-            row.pack(fill="x", pady=1)
+        for r, b in enumerate(bookings):
+            data_row = 1 + r * 2
+            sep_row = data_row + 1
+            is_last = r == len(bookings) - 1
 
-            ctk.CTkLabel(row, text=str(b.get("booking_id", "")), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=0, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=str(b.get("booking_id", "")), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=0, padx=12, pady=(7, 7), sticky="w")
 
-            ctk.CTkLabel(row, text=b.get("tenant_name", f"User #{b.get('user_id')}"),
-                          font=self.body_light_font, text_color=self.text_color).grid(
-                row=0, column=1, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=b.get("tenant_name", f"User #{b.get('user_id')}"),
+                          font=self.body_paragraph_font, text_color=self.text_color).grid(
+                row=data_row, column=1, padx=10, pady=(7, 7), sticky="w")
 
-            ctk.CTkLabel(row, text=b.get("property_name", "N/A"), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=2, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=b.get("property_name", "N/A"), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=2, padx=10, pady=(7, 7), sticky="w")
 
             room_no = b.get("room_number", "?")
-            ctk.CTkLabel(row, text=f"#{room_no}" if room_no else "?", font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=3, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=f"#{room_no}" if room_no else "?", font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=3, padx=10, pady=(7, 7), sticky="w")
 
             ci = str(b.get("check_in", "") or "")[:10]
             co = str(b.get("check_out", "") or "")[:10]
-            ctk.CTkLabel(row, text=ci, font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=4, padx=8, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=co, font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=5, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=ci, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=4, padx=10, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=co, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=5, padx=10, pady=(7, 7), sticky="w")
 
             status = b.get("status", "unknown")
-            color = self._admin_status_colors.get(status, self.text_color)
-            ctk.CTkLabel(row, text=status.capitalize(), font=self.body_description_font,
-                          fg_color=color, text_color="white",
+            s_color = self._admin_status_colors.get(status, self.text_color)
+            ctk.CTkLabel(card, text=status.capitalize(), font=self.body_description_font,
+                          fg_color=s_color, text_color="white",
                           corner_radius=4, padx=8, pady=2).grid(
-                row=0, column=6, padx=8, pady=5, sticky="w")
+                row=data_row, column=6, padx=15, pady=(7, 7), sticky="ew")
 
-            ctk.CTkLabel(row, text=f"\u20B1{b.get('total_price', '0')}", font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=7, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=f"\u20B1{b.get('total_price', '0')}", font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=7, padx=10, pady=(7, 7), sticky="w")
 
-            action_frame = ctk.CTkFrame(row, fg_color="transparent")
-            action_frame.grid(row=0, column=8, padx=8, pady=5, sticky="w")
+            actions_f = ctk.CTkFrame(card, fg_color="transparent")
+            actions_f.grid(row=data_row, column=8, padx=12, pady=(7, 7))
             bid = b.get("booking_id")
-            ctk.CTkButton(action_frame, text="View", font=self.body_description_font,
+            col = 0
+            ctk.CTkButton(actions_f, text="View", font=self.body_description_font,
                           fg_color=self.primary_color, hover_color=self.hover_color,
-                          text_color="white", width=50, height=24,
+                          text_color="white", width=50, height=28, cursor="hand2",
                           command=lambda bid=bid: self._admin_show_booking_detail(bid)
-                          ).pack(side="left", padx=1)
+                          ).grid(row=0, column=col, padx=(0, 4)); col += 1
             if status == "pending":
-                ctk.CTkButton(action_frame, text="Approve", font=self.body_description_font,
-                              fg_color="green", hover_color="darkgreen",
-                              text_color="white", width=60, height=24,
+                ctk.CTkButton(actions_f, text="Approve", font=self.body_description_font,
+                              fg_color="green", text_color="white",
+                              width=60, height=28, cursor="hand2",
                               command=lambda bid=bid: self._admin_booking_change_status(
-                                  bid, "active")).pack(side="left", padx=1)
-                ctk.CTkButton(action_frame, text="Cancel", font=self.body_description_font,
-                              fg_color=self.error_red, hover_color="#b52e2a",
-                              text_color="white", width=55, height=24,
-                                command=lambda bid=bid: self._admin_booking_change_status(
-                                    bid, "cancelled")).pack(side="left", padx=1)
+                                  bid, "active")).grid(row=0, column=col, padx=(0, 4)); col += 1
+                ctk.CTkButton(actions_f, text="Cancel", font=self.body_description_font,
+                              fg_color=self.error_red, text_color="white",
+                              width=55, height=28, cursor="hand2",
+                              command=lambda bid=bid: self._admin_booking_change_status(
+                                  bid, "cancelled")).grid(row=0, column=col, padx=(0, 4)); col += 1
 
-        self._enable_scroll_refresh(scroll, self._admin_refresh_bookings)
+            if not is_last:
+                ttk.Separator(card, orient="horizontal").grid(
+                    row=sep_row, column=0, columnspan=9, padx=20, pady=4, sticky="ew")
 
     # ── Booking Detail View ──
 
@@ -1504,10 +1630,11 @@ class AdminDashboardMixin:
         ctk.CTkLabel(main, text="Reviews & Feedback", font=self.body_bold_font,
                       text_color=self.text_color).pack(anchor="w", pady=(0, 10))
 
-        self._admin_reviews_container = ctk.CTkFrame(main, fg_color="transparent")
-        self._admin_reviews_container.pack(fill="both", expand=True)
+        card = ctk.CTkFrame(main, fg_color=self.secondary_color, corner_radius=6)
+        card.pack(fill="both", expand=True, pady=(10, 0))
+        self._admin_reviews_container = card
 
-        self._admin_show_loading(self._admin_reviews_container)
+        self._admin_show_loading(card)
 
         def _do():
             reviews = []
@@ -1523,54 +1650,76 @@ class AdminDashboardMixin:
 
     def _admin_populate_reviews(self, reviews):
         self._admin_hide_loading()
-        for w in self._admin_reviews_container.winfo_children():
+        card = self._admin_reviews_container
+        for w in card.winfo_children():
             w.destroy()
 
         if not reviews:
-            ctk.CTkLabel(self._admin_reviews_container, text="No reviews found.",
-                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=30)
+            ctk.CTkLabel(card, text="No reviews found.",
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(row=1, column=0, columnspan=7, padx=15, pady=20)
             return
 
-        scroll = ctk.CTkScrollableFrame(self._admin_reviews_container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        sticky_h = ["w", "w", "w", "w", "w", "w", "ew"]
+        card.grid_columnconfigure(0, weight=0, minsize=50)
+        card.grid_columnconfigure(1, weight=0, minsize=70)
+        card.grid_columnconfigure(2, weight=0, minsize=70)
+        card.grid_columnconfigure(3, weight=0, minsize=100)
+        card.grid_columnconfigure(4, weight=2, minsize=200)
+        card.grid_columnconfigure(5, weight=0, minsize=90)
+        card.grid_columnconfigure(6, weight=0, minsize=100)
 
         headers = ["ID", "Listing ID", "User ID", "Rating", "Comment", "Date", "Actions"]
-        col_weights = [0, 0, 0, 0, 2, 0, 0]
-        self._admin_build_table_header(scroll, headers, col_weights)
+        for j, header in enumerate(headers):
+            ctk.CTkLabel(card, text=header, font=self.body_bold_font,
+                          text_color=self.text_color).grid(
+                row=0, column=j, padx=12, pady=(15, 10), sticky=sticky_h[j])
 
-        for i, review in enumerate(reviews):
-            row_color = self.fg_color if i % 2 == 0 else self.secondary_color
-            row = ctk.CTkFrame(scroll, fg_color=row_color, corner_radius=4)
-            row.pack(fill="x", pady=1)
+        for r, review in enumerate(reviews):
+            data_row = 1 + r * 2
+            sep_row = data_row + 1
+            is_last = r == len(reviews) - 1
 
-            ctk.CTkLabel(row, text=str(review.get("review_id", "")), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=0, padx=8, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=str(review.get("listing_id", "")), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=1, padx=8, pady=5, sticky="w")
-            ctk.CTkLabel(row, text=str(review.get("user_id", "")), font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=2, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=str(review.get("review_id", "")), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=0, padx=12, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=str(review.get("listing_id", "")), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=1, padx=10, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=str(review.get("user_id", "")), font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=2, padx=10, pady=(7, 7), sticky="w")
 
             rating = review.get("rating", 0)
             stars = "\u2605" * rating + "\u2606" * (5 - rating)
-            ctk.CTkLabel(row, text=stars, font=self.body_paragraph_font,
-                          text_color=self.primary_color).grid(row=0, column=3, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=stars, font=self.body_paragraph_font,
+                          text_color=self.primary_color).grid(
+                row=data_row, column=3, padx=10, pady=(7, 7), sticky="w")
 
             comment = review.get("comment", "") or ""
             if len(comment) > 60:
                 comment = comment[:60] + "..."
-            ctk.CTkLabel(row, text=comment, font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=4, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=comment, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=4, padx=10, pady=(7, 7), sticky="w")
 
             created = str(review.get("created_at", "") or "")[:10]
-            ctk.CTkLabel(row, text=created, font=self.body_light_font,
-                          text_color=self.text_color).grid(row=0, column=5, padx=8, pady=5, sticky="w")
+            ctk.CTkLabel(card, text=created, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=5, padx=10, pady=(7, 7), sticky="w")
 
             rid = review.get("review_id")
-            ctk.CTkButton(row, text="Delete", font=self.body_description_font,
+            actions_f = ctk.CTkFrame(card, fg_color="transparent")
+            actions_f.grid(row=data_row, column=6, padx=12, pady=(7, 7))
+            ctk.CTkButton(actions_f, text="Delete", font=self.body_description_font,
                           fg_color=self.error_red, text_color="white",
-                          width=60, height=25,
+                          width=60, height=28, cursor="hand2",
                           command=lambda rid=rid: self._admin_delete_review(rid)
-                          ).grid(row=0, column=6, padx=8, pady=5, sticky="w")
+                          ).pack(side="left", padx=2)
+
+            if not is_last:
+                ttk.Separator(card, orient="horizontal").grid(
+                    row=sep_row, column=0, columnspan=7, padx=20, pady=4, sticky="ew")
 
     def _admin_delete_review(self, review_id):
         result = self._admin_confirm_action(
@@ -1620,16 +1769,18 @@ class AdminDashboardMixin:
         self._admin_reports_filter.pack(side="left")
         self._admin_reports_filter.set("All")
 
-        self._admin_reports_container = ctk.CTkFrame(main, fg_color="transparent")
-        self._admin_reports_container.pack(fill="both", expand=True)
+        card = ctk.CTkFrame(main, fg_color=self.secondary_color, corner_radius=6)
+        card.pack(fill="both", expand=True, pady=(10, 0))
+        self._admin_reports_container = card
 
         self._admin_refresh_reports()
 
     def _admin_refresh_reports(self):
-        for w in self._admin_reports_container.winfo_children():
+        card = self._admin_reports_container
+        for w in card.winfo_children():
             w.destroy()
 
-        self._admin_show_loading(self._admin_reports_container)
+        self._admin_show_loading(card)
 
         def _do():
             reports = []
@@ -1652,63 +1803,90 @@ class AdminDashboardMixin:
 
     def _admin_populate_reports(self, reports):
         self._admin_hide_loading()
-        for w in self._admin_reports_container.winfo_children():
+        card = self._admin_reports_container
+        for w in card.winfo_children():
             w.destroy()
 
         if not reports:
-            ctk.CTkLabel(self._admin_reports_container, text="No reports found.",
-                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=30)
+            ctk.CTkLabel(card, text="No reports found.",
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(row=1, column=0, columnspan=7, padx=15, pady=20)
             return
 
-        scroll = ctk.CTkScrollableFrame(self._admin_reports_container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        sticky_h = ["w", "w", "ew", "w", "w", "w", "ew"]
+        card.grid_columnconfigure(0, weight=0, minsize=50)
+        card.grid_columnconfigure(1, weight=0, minsize=100)
+        card.grid_columnconfigure(2, weight=2, minsize=200)
+        card.grid_columnconfigure(3, weight=0, minsize=100)
+        card.grid_columnconfigure(4, weight=0, minsize=140)
+        card.grid_columnconfigure(5, weight=0, minsize=160)
+        card.grid_columnconfigure(6, weight=0, minsize=200)
 
-        for report in reports:
+        headers = ["ID", "Target", "Reason", "Status", "Date", "Reported By", "Actions"]
+        for j, header in enumerate(headers):
+            ctk.CTkLabel(card, text=header, font=self.body_bold_font,
+                          text_color=self.text_color).grid(
+                row=0, column=j, padx=12, pady=(15, 10), sticky=sticky_h[j])
+
+        for r, report in enumerate(reports):
+            data_row = 1 + r * 2
+            sep_row = data_row + 1
+            is_last = r == len(reports) - 1
+
             rid = report.get("report_id")
             status = report.get("status", "pending")
-            color = self._admin_status_colors.get(status, self.text_color)
-
-            card = ctk.CTkFrame(scroll, fg_color=self.secondary_color, corner_radius=6,
-                                 border_width=1, border_color=self.entry_border)
-            card.pack(fill="x", pady=3)
-
-            top = ctk.CTkFrame(card, fg_color="transparent")
-            top.pack(fill="x", padx=15, pady=(10, 2))
-
-            info = f"Report #{rid} \u2014 {report.get('target_type')} #{report.get('target_id')}"
-            ctk.CTkLabel(top, text=info, font=self.body_paragraph_font,
-                          text_color=self.text_color).pack(side="left")
-            ctk.CTkLabel(top, text=status.capitalize(), font=self.body_description_font,
-                          fg_color=color, text_color="white",
-                          corner_radius=4, padx=8, pady=2).pack(side="right")
-
-            mid = ctk.CTkFrame(card, fg_color="transparent")
-            mid.pack(fill="x", padx=15, pady=(2, 2))
+            s_color = self._admin_status_colors.get(status, self.text_color)
             reason = report.get("reason", "") or ""
-            if len(reason) > 200:
-                reason = reason[:200] + "..."
-            ctk.CTkLabel(mid, text=f"Reason: {reason}", font=self.body_light_font,
-                          text_color=self.text_color, wraplength=600,
-                          justify="left").pack(anchor="w")
+            if len(reason) > 100:
+                reason = reason[:100] + "..."
 
-            bottom = ctk.CTkFrame(card, fg_color="transparent")
-            bottom.pack(fill="x", padx=15, pady=(2, 10))
+            ctk.CTkLabel(card, text=f"#{rid}", font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=0, padx=12, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=f"{report.get('target_type', '?')} #{report.get('target_id', '?')}",
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=1, padx=10, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=reason, font=self.body_paragraph_font,
+                          text_color=self.text_color, wraplength=250,
+                          justify="left").grid(
+                row=data_row, column=2, padx=10, pady=(7, 7), sticky="w")
+
+            ctk.CTkLabel(card, text=status.capitalize(), font=self.body_description_font,
+                          fg_color=s_color, text_color="white",
+                          corner_radius=4, padx=8, pady=2).grid(
+                row=data_row, column=3, padx=15, pady=(7, 7), sticky="ew")
 
             created = str(report.get("created_at", "") or "")[:16]
-            ctk.CTkLabel(bottom, text=f"Reported: {created}", font=self.body_description_font,
-                          text_color=self.text_color).pack(side="left")
+            ctk.CTkLabel(card, text=created, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=4, padx=10, pady=(7, 7), sticky="w")
 
-            if status == "pending" or status == "reviewed":
-                ctk.CTkButton(bottom, text="Resolve", font=self.body_description_font,
+            ctk.CTkLabel(card, text=report.get("reported_by_name", f"User #{report.get('reported_by')}"),
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=5, padx=10, pady=(7, 7), sticky="w")
+
+            actions_f = ctk.CTkFrame(card, fg_color="transparent")
+            actions_f.grid(row=data_row, column=6, padx=12, pady=(7, 7))
+            col = 0
+            if status in ("pending", "reviewed"):
+                ctk.CTkButton(actions_f, text="Resolve", font=self.body_description_font,
                               fg_color="green", text_color="white",
-                              width=80, height=28, cursor="hand2",
+                              width=70, height=28, cursor="hand2",
                               command=lambda rid=rid: self._admin_resolve_report(rid)
-                              ).pack(side="right", padx=(5, 0))
-                ctk.CTkButton(bottom, text="Dismiss", font=self.body_description_font,
+                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                ctk.CTkButton(actions_f, text="Dismiss", font=self.body_description_font,
                               fg_color=self.text_color, text_color="white",
-                              width=80, height=28, cursor="hand2",
+                              width=70, height=28, cursor="hand2",
                               command=lambda rid=rid: self._admin_dismiss_report(rid)
-                              ).pack(side="right", padx=(5, 0))
+                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+
+            if not is_last:
+                ttk.Separator(card, orient="horizontal").grid(
+                    row=sep_row, column=0, columnspan=7, padx=20, pady=4, sticky="ew")
 
     def _admin_resolve_report(self, report_id):
         result = self._admin_confirm_action(
@@ -1832,10 +2010,11 @@ class AdminDashboardMixin:
         ctk.CTkLabel(main, text="Admin Logs", font=self.body_bold_font,
                       text_color=self.text_color).pack(anchor="w", pady=(0, 10))
 
-        container = ctk.CTkFrame(main, fg_color="transparent")
-        container.pack(fill="both", expand=True)
+        card = ctk.CTkFrame(main, fg_color=self.secondary_color, corner_radius=6)
+        card.pack(fill="both", expand=True, pady=(10, 0))
+        self._admin_logs_container = card
 
-        self._admin_show_loading(container)
+        self._admin_show_loading(card)
 
         def _do():
             logs = []
@@ -1845,36 +2024,65 @@ class AdminDashboardMixin:
                     logs = resp.json()
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load admin logs. Check your connection.", is_error=True))
-            self.after(0, lambda: self._admin_populate_logs(container, logs))
+            self.after(0, lambda: self._admin_populate_logs(logs))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_populate_logs(self, parent, logs):
+    def _admin_populate_logs(self, logs):
         self._admin_hide_loading()
-        for w in parent.winfo_children():
+        card = self._admin_logs_container
+        for w in card.winfo_children():
             w.destroy()
 
         if not logs:
-            ctk.CTkLabel(parent, text="No admin logs found.",
-                          font=self.body_paragraph_font, text_color=self.text_color).pack(pady=20)
+            ctk.CTkLabel(card, text="No admin logs found.",
+                          font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(row=1, column=0, columnspan=5, padx=15, pady=20)
             return
 
-        scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        sticky_h = ["w", "w", "w", "w", "w"]
+        card.grid_columnconfigure(0, weight=0, minsize=140)
+        card.grid_columnconfigure(1, weight=1, minsize=150)
+        card.grid_columnconfigure(2, weight=0, minsize=100)
+        card.grid_columnconfigure(3, weight=0, minsize=60)
+        card.grid_columnconfigure(4, weight=1, minsize=150)
 
-        for log in logs:
-            card = ctk.CTkFrame(scroll, fg_color=self.secondary_color, corner_radius=4,
-                                 border_width=1, border_color=self.entry_border)
-            card.pack(fill="x", pady=2)
+        headers = ["Timestamp", "Action", "Target Type", "Target ID", "Details"]
+        for j, header in enumerate(headers):
+            ctk.CTkLabel(card, text=header, font=self.body_bold_font,
+                          text_color=self.text_color).grid(
+                row=0, column=j, padx=12, pady=(15, 10), sticky=sticky_h[j])
+
+        for r, log in enumerate(logs):
+            data_row = 1 + r * 2
+            sep_row = data_row + 1
+            is_last = r == len(logs) - 1
 
             ts = str(log.get("performed_at", "") or "")[:19]
             action = log.get("action", "?")
             target_type = log.get("target_type", "?")
             target_id = log.get("target_id", "?")
-            info = f"{ts} \u2014 {action} \u2014 {target_type} #{target_id}"
+            details = log.get("details", log.get("admin_name", "")) or ""
 
-            ctk.CTkLabel(card, text=info, font=self.body_light_font,
-                          text_color=self.text_color).pack(side="left", padx=15, pady=8)
+            ctk.CTkLabel(card, text=ts, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=0, padx=12, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=action, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=1, padx=10, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=target_type, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=2, padx=10, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=f"#{target_id}", font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=3, padx=10, pady=(7, 7), sticky="w")
+            ctk.CTkLabel(card, text=details, font=self.body_paragraph_font,
+                          text_color=self.text_color).grid(
+                row=data_row, column=4, padx=10, pady=(7, 7), sticky="w")
+
+            if not is_last:
+                ttk.Separator(card, orient="horizontal").grid(
+                    row=sep_row, column=0, columnspan=5, padx=20, pady=4, sticky="ew")
 
     # ════════════════════════════════════
     #  SECTION 9: ADMIN ACCOUNT MANAGEMENT

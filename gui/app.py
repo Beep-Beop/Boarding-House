@@ -85,8 +85,11 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.after_ids = []
 
         # --- Font Setup ---
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
+        if getattr(sys, 'frozen', False):
+            parent_dir = sys._MEIPASS
+        else:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            parent_dir = os.path.dirname(current_dir)
         font_files = [
             os.path.join(parent_dir, "assets", "Novecentosanswide-Light.otf"),
             os.path.join(parent_dir, "assets", "Novecentosanswide-Normal.otf"),
