@@ -21,7 +21,8 @@ create_admin.py
 
 opencode.json
 
-
+build/
+dist/
 
 plan.md
 owner-bookins-plan.md

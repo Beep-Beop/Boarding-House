@@ -16,7 +16,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['C:\\Users\\Lily Ann\\Documents\\2nd Year\\3rd Sem\\Database\\Boarding House'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
