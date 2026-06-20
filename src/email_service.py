@@ -22,10 +22,11 @@ def _send_via_brevo_api(to_email: str, subject: str, text: str, html: str) -> bo
             "textContent": text,
             "htmlContent": html,
         }
+        api_key = settings.BREVO_API_KEY.strip()
         resp = requests.post(
             BREVO_API_URL,
             json=payload,
-            headers={"api-key": settings.BREVO_API_KEY},
+            headers={"api-key": api_key},
             timeout=15,
         )
         if resp.ok:
