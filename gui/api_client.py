@@ -4,7 +4,7 @@ import requests
 
 class APIClient:
     def __init__(self, base_url=None):
-        self.base_url = base_url or os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+        self.base_url = base_url or os.getenv("API_BASE_URL", "https://BeepBeop-boarding-house-api.hf.space")
         self.access_token = None
 
     def _headers(self, extra=None):
