@@ -13,6 +13,7 @@ def _send_email(to_email: str, subject: str, text: str, html: str) -> bool:
 
 
 def _send_via_brevo_api(to_email: str, subject: str, text: str, html: str) -> bool:
+    logger.info("BREVO_API_KEY loaded: %s", "yes" if settings.BREVO_API_KEY else "no")
     try:
         payload = {
             "sender": {"email": settings.SMTP_FROM_EMAIL, "name": "Boarding House Finder"},
