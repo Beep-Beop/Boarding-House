@@ -32,15 +32,18 @@ jobs:
       - name: Build .exe with PyInstaller
         run: pyinstaller BoardingHouseFinder.spec -y
 
+      - name: Zip the .exe
+        run: Compress-Archive -Path dist/BoardingHouseFinder.exe -DestinationPath dist/BoardingHouseFinder.zip
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BoardingHouseFinder
-          path: dist/BoardingHouseFinder.exe
+          path: dist/BoardingHouseFinder.zip
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' || inputs.tag != ''
         with:
           tag_name: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
-          files: dist/BoardingHouseFinder.exe
+          files: dist/BoardingHouseFinder.zip
