@@ -27,7 +27,7 @@ jobs:
 
       - name: Build .exe with PyInstaller
         run: |
-          pyinstaller --onedir --windowed --name "BoardingHouseFinder" `
+          pyinstaller --onedir --windowed -y --name "BoardingHouseFinder" `
             --add-data "assets;assets" `
             --hidden-import "src.logger" `
             --collect-all "customtkinter" `
