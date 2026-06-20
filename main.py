@@ -2,6 +2,13 @@ import sys
 import customtkinter as ctk
 from gui.app import BoardingHouseApp
 
+if sys.platform == "win32":
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+
 ctk.set_appearance_mode("Light")
 
 if __name__ == "__main__":

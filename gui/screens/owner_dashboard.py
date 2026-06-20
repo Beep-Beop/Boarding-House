@@ -364,9 +364,11 @@ class OwnerDashboardMixin:
                                           text=None,
                                           image=self.pfp_placeholder_sm,
                                           width=32,
-                                          height=32
+                                          height=32,
+                                          cursor="hand2"
                                           )
         self.owner_nav_pfp.pack(side="left", padx=(0, 12))
+        self.owner_nav_pfp.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
 
         self.owner_profile_text_frame = ctk.CTkFrame(self.owner_profile_frame,
                                                      fg_color="transparent"
@@ -384,14 +386,8 @@ class OwnerDashboardMixin:
 
         # Chevron indicator
         self.owner_profile_chevron = ctk.CTkLabel(self.owner_profile_text_frame, text="▾",
-                                                  font=self.body_light_font, text_color=self.text_color)
+                                                   font=self.body_light_font, text_color=self.text_color)
         self.owner_profile_chevron.pack(side="left", padx=(4, 0))
-
-        # Make clickable
-        self.owner_profile_frame.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
-        self.owner_profile_frame.configure(cursor="hand2")
-        for child in self.owner_profile_frame.winfo_children():
-            child.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
 
     def _build_owner_sidebar(self):
         self.sidebar_main_frame = ctk.CTkFrame(self.body_frame,

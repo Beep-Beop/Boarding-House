@@ -97,8 +97,11 @@ class AdminDashboardMixin:
         self._admin_profile_frame = ctk.CTkFrame(nav, fg_color="transparent")
         self._admin_profile_frame.pack(side="right", padx=25, pady=10)
 
-        ctk.CTkLabel(self._admin_profile_frame, text=None, image=self.pfp_placeholder_sm,
-                      width=32, height=32).pack(side="left", padx=(0, 12))
+        self._admin_nav_pfp = ctk.CTkLabel(self._admin_profile_frame, text=None,
+                                            image=self.pfp_placeholder_sm,
+                                            width=32, height=32, cursor="hand2")
+        self._admin_nav_pfp.pack(side="left", padx=(0, 12))
+        self._admin_nav_pfp.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
 
         text_frame = ctk.CTkFrame(self._admin_profile_frame, fg_color="transparent")
         text_frame.pack(side="left")
@@ -110,11 +113,6 @@ class AdminDashboardMixin:
 
         ctk.CTkLabel(text_frame, text="▾", font=self.body_light_font,
                       text_color=self.text_color).pack(side="left", padx=(4, 0))
-
-        self._admin_profile_frame.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
-        self._admin_profile_frame.configure(cursor="hand2")
-        for child in self._admin_profile_frame.winfo_children():
-            child.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
 
         self._admin_nav_bar = nav
         self._admin_notif_frame = notif_frame
