@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
@@ -16,7 +18,7 @@ for pkg in ['customtkinter', 'CTkScrollableDropdown', 'tkinterdnd2', 'PIL']:
 
 a = Analysis(
     ['main.py'],
-    pathex=[sys._MEIPASS, '.'],
+    pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
