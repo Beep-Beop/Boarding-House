@@ -1,8 +1,10 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="CTkScrollableDropdown",
     version="1.2",
-    packages=find_packages(),
+    packages=["CTkScrollableDropdown"],
+    package_dir={"CTkScrollableDropdown": "."},
+    py_modules=["ctk_scrollable_dropdown", "ctk_scrollable_dropdown_frame"],
     install_requires=["customtkinter"],
 )

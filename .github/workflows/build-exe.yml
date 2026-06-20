@@ -30,27 +30,20 @@ jobs:
           pip install pyinstaller
 
       - name: Build .exe with PyInstaller
-        run: |
-          pyinstaller --onedir --windowed -y --name "BoardingHouseFinder" `
-            --add-data "assets;assets" `
-            --hidden-import "src.logger" `
-            --collect-all "customtkinter" `
-            --collect-all "CTkScrollableDropdown" `
-            --collect-all "tkinterdnd2" `
-            --collect-all "PIL" `
-            main.py
+        run: pyinstaller BoardingHouseFinder.spec -y
 
-      - name: Compress to ZIP
-        run: Compress-Archive -Path dist/BoardingHouseFinder/* -DestinationPath BoardingHouseFinder.zip
+      - name: Rename to .exe
+        run: Rename-Item -Path dist/BoardingHouseFinder -NewName "BoardingHouseFinder.exe"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: BoardingHouseFinder
-          path: dist/BoardingHouseFinder/
+          path: dist/BoardingHouseFinder.exe
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' || inputs.tag != ''
         with:
           tag_name: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
-          files: BoardingHouseFinder.zip
+          files: dist/BoardingHouseFinder.exe
