@@ -23,6 +23,8 @@ class DashboardMixin:
         "active": ("#2E7D32", "#4CAF50"),
         "cancelled": ("#757575", "#9E9E9E"),
         "confirmed": ("#1565C0", "#42A5F5"),
+        "approved": ("#1565C0", "#42A5F5"),
+        "move_in_requested": ("#00897B", "#26A69A"),
     }
 
     # ── Shell ──────────────────────────────────────────────────────
@@ -704,23 +706,49 @@ class DashboardMixin:
                          text_color=self.text_color).pack(anchor="w")
 
             status = b.get("status", "unknown")
-            color = self.STATUS_COLORS.get(status, ("#757575", "#9E9E9E"))
-            badge = ctk.CTkLabel(info_frame, text=status.title(),
+            move_in_req = b.get("move_in_requested", False)
+            if move_in_req and status != "active":
+                display_badge = "Move-in Requested"
+                color = ("#00897B", "#26A69A")
+            else:
+                display_badge = status.title()
+                color = self.STATUS_COLORS.get(status, ("#757575", "#9E9E9E"))
+            badge = ctk.CTkLabel(info_frame, text=display_badge,
                                  fg_color=color, text_color="white",
                                  corner_radius=4,
                                  font=ctk.CTkFont(size=11, weight="bold"),
                                  width=60)
             badge.pack(anchor="w", pady=(4, 0))
 
-            if b.get("status") == "pending":
-                cancel_btn = ctk.CTkButton(card, text="Cancel Booking",
+            if move_in_req and status == "approved":
+                ctk.CTkLabel(info_frame,
+                             text="Waiting for owner to confirm your move-in",
+                             font=self.body_light_font,
+                             text_color=self.text_color).pack(anchor="w")
+
+            bid = b.get('booking_id', '?')
+            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+            btn_frame.pack(side="right", padx=15, pady=8)
+
+            if status in ("pending", "approved"):
+                if status == "approved" and not move_in_req:
+                    pay_btn = ctk.CTkButton(btn_frame, text="Pay & Request Move-in",
+                                            fg_color=self.primary_color,
+                                            hover_color=self.hover_color,
+                                            text_color="white",
+                                            font=ctk.CTkFont(size=16),
+                                            width=200, height=32)
+                    pay_btn.pack(side="right", padx=(8, 0))
+                    total_price = b.get("total_price", 0)
+                    pay_btn.configure(command=lambda b=bid, btn=pay_btn, crd=card, tp=total_price: self._show_payment_form(b, crd, btn, tp))
+
+                cancel_btn = ctk.CTkButton(btn_frame, text="Cancel Booking",
                                            fg_color=self.error_red,
                                            hover_color=self.error_red,
                                            text_color="white",
                                            font=self.body_paragraph_font,
                                            width=120, height=32)
-                cancel_btn.pack(side="right", padx=15, pady=8)
-                bid = b.get('booking_id', '?')
+                cancel_btn.pack(side="right")
                 cancel_btn.configure(command=lambda bid=bid, btn=cancel_btn: self._cancel_booking(bid, btn))
 
     # ── Favorites Content ──────────────────────────────────────────
@@ -1831,8 +1859,10 @@ class DashboardMixin:
 
         def _do():
             try:
+                user_id = getattr(self, 'current_user', {}).get('user_id', 0)
                 resp = self.api.patch(f"/bookings/{booking_id}/status", json={
-                    "status": "cancelled"
+                    "status": "cancelled",
+                    "changed_by_user_id": user_id
                 }, timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self._cancel_done())
@@ -1850,6 +1880,114 @@ class DashboardMixin:
 
     def _cancel_done(self):
         self.show_toast("Booking cancelled!", is_error=False)
+        self.show_tenant_bookings_content()
+
+    # ── Payment Form (Pay & Request Move-in) ──────────────────────
+
+    def _show_payment_form(self, booking_id, card, pay_btn, total_price=0):
+        pay_btn.pack_forget()
+        form_frame = ctk.CTkFrame(card, fg_color="transparent")
+        form_frame.pack(side="right", padx=15, pady=8)
+        form_frame._pay_form_ref = True
+
+        method_combo = ctk.CTkComboBox(
+            form_frame, values=["GCash", "Bank Transfer", "Cash", "Card"],
+            width=140, height=32, font=self.body_paragraph_font,
+            fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
+            button_color=self.primary_color, button_hover_color=self.hover_color,
+            dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
+            dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
+            text_color=self.text_color
+        )
+        method_combo.set("GCash")
+        method_combo.pack(side="left", padx=(0, 6))
+
+        ref_entry = ctk.CTkEntry(
+            form_frame, placeholder_text="Reference # (optional)",
+            font=self.body_paragraph_font, width=140, height=32,
+            fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
+            text_color=self.text_color
+        )
+        ref_entry.pack(side="left", padx=(0, 6))
+
+        submit_btn = ctk.CTkButton(form_frame, text="Submit Payment",
+                                   fg_color=self.primary_color,
+                                   hover_color=self.hover_color,
+                                   text_color="white",
+                                   font=self.body_paragraph_font,
+                                   height=32)
+        submit_btn.pack(side="left", padx=(0, 4))
+
+        cancel_link = ctk.CTkButton(form_frame, text="Cancel",
+                                    fg_color="transparent",
+                                    text_color=self.primary_color,
+                                    hover_color=self.hover_color,
+                                    font=self.body_paragraph_font,
+                                    height=32, width=60)
+        cancel_link.pack(side="left")
+
+        submit_btn.configure(command=lambda: self._payment_submit(booking_id, form_frame, method_combo, ref_entry, submit_btn, cancel_link, pay_btn, total_price))
+        cancel_link.configure(command=lambda: self._close_payment_form(form_frame, pay_btn))
+
+    def _close_payment_form(self, form_frame, pay_btn):
+        try:
+            form_frame.destroy()
+        except Exception:
+            pass
+        pay_btn.pack(side="right", padx=(8, 0))
+
+    def _payment_submit(self, booking_id, form_frame, method_combo, ref_entry, submit_btn, cancel_link, pay_btn, total_price=0):
+        method = method_combo.get().strip()
+        ref_no = ref_entry.get().strip() or None
+
+        if not method:
+            self.show_toast("Please select a payment method.", is_error=True)
+            return
+
+        submit_btn.configure(state="disabled", text="Submitting...")
+
+        def _do():
+            try:
+                resp = self.api.post("/payments/", json={
+                    "booking_id": booking_id,
+                    "amount": total_price,
+                    "method": method,
+                    "reference_no": ref_no,
+                }, timeout=10)
+                if resp.status_code not in (200, 201):
+                    err = resp.json().get("detail", "Payment failed")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+                    self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
+                    return
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
+                return
+
+            try:
+                user_id = getattr(self, 'current_user', {}).get('user_id', 0)
+                resp2 = self.api.patch(f"/bookings/{booking_id}/status", json={
+                    "status": "active",
+                    "changed_by_user_id": user_id
+                }, timeout=10)
+                if resp2.status_code == 200:
+                    self.after(0, lambda: self._payment_done(form_frame, pay_btn))
+                else:
+                    err2 = resp2.json().get("detail", "Failed to update booking")
+                    self.after(0, lambda: self.show_toast(err2, is_error=True))
+                    self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _payment_done(self, form_frame, pay_btn):
+        try:
+            form_frame.destroy()
+        except Exception:
+            pass
+        self.show_toast("Payment submitted! Move-in request sent to owner.", is_error=False)
         self.show_tenant_bookings_content()
 
     # ── Notification Badge ─────────────────────────────────────────
@@ -2455,7 +2593,19 @@ class DashboardMixin:
                          font=self.body_light_font,
                          text_color=self.text_color).pack(anchor="w")
 
-        # ── 2. Amenities ────────────────────────────────────────────
+        # ── 2. Schedule Viewing ──────────────────────────────────────
+        body = _make_card(parent, "Schedule a Viewing")
+        ctk.CTkLabel(body, text="Arrange a time to visit this property in person.",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 8))
+        ctk.CTkButton(body, text="Schedule Viewing",
+                     font=self.body_paragraph_font,
+                     fg_color=self.primary_color,
+                     hover_color=self.hover_color,
+                     text_color="white",
+                     command=lambda: self._schedule_viewing(listing_id)).pack(fill="x")
+
+        # ── 3. Amenities ────────────────────────────────────────────
         body = _make_card(parent, "Amenities")
 
         amenities_str = listing.get("amenities", "")
@@ -2474,7 +2624,7 @@ class DashboardMixin:
                          font=self.body_light_font,
                          text_color=self.text_color).pack(side="left")
 
-        # ── 3. Select Room ───────────────────────────────────────────
+        # ── 4. Select Room ───────────────────────────────────────────
         room_card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
                                   corner_radius=8, border_width=1,
                                   border_color=self.entry_border)
@@ -2532,7 +2682,7 @@ class DashboardMixin:
                          font=self.body_light_font,
                          text_color=self.text_color).pack(anchor="w")
 
-        # ── 4. House Rules ──────────────────────────────────────────
+        # ── 5. House Rules ──────────────────────────────────────────
         body = _make_card(parent, "House Rules")
 
         rules = listing.get("rules", "")
@@ -2553,7 +2703,7 @@ class DashboardMixin:
                          font=self.body_light_font,
                          text_color=self.text_color).pack(anchor="w")
 
-        # ── 5. Check-in Date ────────────────────────────────────────
+        # ── 6. Check-in Date ────────────────────────────────────────
         checkin_card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
                                      corner_radius=8, border_width=1,
                                      border_color=self.entry_border)
@@ -2600,6 +2750,7 @@ class DashboardMixin:
             top.geometry("320x300")
             top.resizable(False, False)
             top.transient(self)
+            top.wait_visibility()
             top.grab_set()
 
             cy, cm, cd = self._selected_checkin_date.year, self._selected_checkin_date.month, self._selected_checkin_date.day
@@ -2666,7 +2817,7 @@ class DashboardMixin:
         pill_inner.bind("<Button-1>", lambda e: _open_calendar())
         date_lbl.bind("<Button-1>", lambda e: _open_calendar())
 
-        # ── 6. Check-out Date ────────────────────────────────────────
+        # ── 7. Check-out Date ────────────────────────────────────────
         checkout_card = ctk.CTkFrame(checkin_card, fg_color="transparent")
         checkout_card.pack(fill="x", padx=12, pady=(0, 8))
         ctk.CTkLabel(checkout_card, text="Check-Out Date",
@@ -2700,6 +2851,7 @@ class DashboardMixin:
             top.geometry("320x300")
             top.resizable(False, False)
             top.transient(self)
+            top.wait_visibility()
             top.grab_set()
 
             cy, cm, cd = self._selected_checkout_date.year, self._selected_checkout_date.month, self._selected_checkout_date.day
@@ -2846,6 +2998,7 @@ class DashboardMixin:
                             f"from {self._selected_checkin_date.isoformat()} "
                             f"to {self._selected_checkout_date.isoformat()}",
                             is_error=False))
+                        self.after(700, self.show_tenant_bookings_content)
                     else:
                         detail = "Unknown error"
                         try:

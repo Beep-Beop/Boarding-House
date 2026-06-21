@@ -153,17 +153,29 @@ class AccountSettingsMixin:
             fg_color="transparent", text_color=self.text_color,
             border_color=self.entry_border)
         self._settings_name_entry.insert(0, user.get("name", ""))
-        self._settings_name_entry.pack(fill="x", pady=(0, 10))
+        self._settings_name_entry.pack(fill="x", pady=(0, 2))
+        self._settings_name_error = ctk.CTkLabel(
+            pi_inner, text="", font=self.inline_error_font,
+            text_color=self.error_red)
+        self._settings_name_error.pack(anchor="w", pady=(0, 10))
+        self._settings_name_entry.bind("<KeyRelease>", self._validate_settings_name)
 
         ctk.CTkLabel(pi_inner, text="Phone",
                      font=self.body_description_font,
                      text_color=self.text_color).pack(anchor="w")
+        self._settings_phone_var = ctk.StringVar()
+        self._settings_phone_var.trace_add("write", self._filter_settings_phone)
         self._settings_phone_entry = ctk.CTkEntry(
             pi_inner, font=self.body_light_font,
             fg_color="transparent", text_color=self.text_color,
-            border_color=self.entry_border)
+            border_color=self.entry_border, textvariable=self._settings_phone_var)
         self._settings_phone_entry.insert(0, user.get("phone", ""))
-        self._settings_phone_entry.pack(fill="x", pady=(0, 10))
+        self._settings_phone_entry.pack(fill="x", pady=(0, 2))
+        self._settings_phone_error = ctk.CTkLabel(
+            pi_inner, text="", font=self.inline_error_font,
+            text_color=self.error_red)
+        self._settings_phone_error.pack(anchor="w", pady=(0, 10))
+        self._settings_phone_entry.bind("<KeyRelease>", self._validate_settings_phone)
 
         ctk.CTkLabel(pi_inner, text="Street Address",
                      font=self.body_description_font,
@@ -322,15 +334,26 @@ class AccountSettingsMixin:
         day = self._settings_dob_day.get()
         year = self._settings_dob_year.get()
 
-        if not name:
-            self._settings_profile_error.configure(text="Name is required.")
-            return
+        has_error = False
+        if not name or len(name) < 2:
+            self._settings_name_error.configure(text="Name must be at least 2 characters.")
+            self._settings_name_entry.configure(border_color=self.error_red)
+            has_error = True
+        else:
+            self._settings_name_error.configure(text="")
 
         if phone:
             if not re.match(r"^09\d{9}$", phone):
-                self._settings_profile_error.configure(
-                    text="Phone must start with '09' and be exactly 11 digits.")
-                return
+                self._settings_phone_error.configure(text="Must start with '09' and be exactly 11 digits.")
+                self._settings_phone_entry.configure(border_color=self.error_red)
+                has_error = True
+            else:
+                self._settings_phone_error.configure(text="")
+        else:
+            self._settings_phone_error.configure(text="")
+
+        if has_error:
+            return
 
         dob_str = f"{year}-{month}-{day}"
         try:
@@ -402,6 +425,38 @@ class AccountSettingsMixin:
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()
+
+    # ── Real-time Validation ──────────────────────────────────────
+
+    def _validate_settings_name(self, event=None):
+        name = self._settings_name_entry.get().strip()
+        if not name or len(name) < 2:
+            self._settings_name_entry.configure(border_color=self.error_red)
+            self._settings_name_error.configure(text="Name must be at least 2 characters.")
+        else:
+            self._settings_name_entry.configure(border_color="green")
+            self._settings_name_error.configure(text="")
+
+    def _validate_settings_phone(self, event=None):
+        phone = self._settings_phone_entry.get().strip()
+        if not phone:
+            self._settings_phone_entry.configure(border_color=self.entry_border)
+            self._settings_phone_error.configure(text="")
+        elif not phone.startswith("09"):
+            self._settings_phone_entry.configure(border_color=self.error_red)
+            self._settings_phone_error.configure(text="Phone must start with 09.")
+        elif len(phone) != 11:
+            self._settings_phone_entry.configure(border_color=self.error_red)
+            self._settings_phone_error.configure(text=f"Must be 11 digits ({len(phone)}/11).")
+        else:
+            self._settings_phone_entry.configure(border_color="green")
+            self._settings_phone_error.configure(text="")
+
+    def _filter_settings_phone(self, *args):
+        val = self._settings_phone_var.get()
+        filtered = "".join(c for c in val if c.isdigit())[:11]
+        if filtered != val:
+            self._settings_phone_var.set(filtered)
 
     def _pick_profile_photo(self):
         path = filedialog.askopenfilename(

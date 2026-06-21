@@ -345,7 +345,8 @@ class BookingsResponse(BookingsBase):
     booking_id: int
     user_id: int
     room_id: int
-    status: Literal['active', 'pending', 'cancelled']
+    status: Literal['active', 'pending', 'approved', 'cancelled']
+    move_in_requested: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -355,17 +356,19 @@ class BookingUpdate(BaseModel):  # Fixed: Dropped parent class inheritance to su
     check_in: Optional[date] = None  # Harmonized with BookingsBase fields
     check_out: Optional[date] = None
     total_price: Optional[Decimal] = None
-    status: Optional[Literal['active', 'pending', 'cancelled']] = None  # Enforced precise data bounds
+    status: Optional[Literal['active', 'pending', 'approved', 'cancelled']] = None  # Enforced precise data bounds
     notes: Optional[str] = None
 
 class BookingStatusUpdate(BaseModel):
-    status: Literal['active', 'pending', 'cancelled']
+    status: Literal['active', 'pending', 'approved', 'cancelled']
     changed_by_user_id: int  # Converted from a loose parameter into an encapsulated field
 
 class BookingAdminResponse(BookingsResponse):
     tenant_name: Optional[str] = None
     tenant_email: Optional[str] = None
     tenant_phone: Optional[str] = None
+    account_setup_complete: Optional[bool] = None
+    move_in_requested: Optional[bool] = None
     property_name: Optional[str] = None
     property_type: Optional[str] = None
     room_number: Optional[int] = None
@@ -377,6 +380,7 @@ class BookingAdminResponse(BookingsResponse):
 class BookingStats(BaseModel):
     total_bookings: int
     pending_count: int
+    approved_count: int = 0
     active_count: int
     cancelled_count: int
     total_revenue: Decimal

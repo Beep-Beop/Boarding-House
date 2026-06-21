@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from src import crud, schemas, database
+from src import crud, models, schemas, database
 from src.dependencies import get_current_user, limiter
 
 # 1. Always declare the router at the top
@@ -56,16 +56,62 @@ def update_booking_status(
         and booking.status == "pending"
     )
 
+    is_student_move_in_request = (
+        current_user.role == "student"
+        and current_user.user_id == booking.user_id
+        and status_update.status == "active"
+        and booking.status == "approved"
+    )
+
     is_owner_or_admin = (
         current_user.role == "admin"
         or (bh and bh.owner_id == current_user.user_id)
     )
 
-    if not is_student_cancel and not is_owner_or_admin:
+    if not is_student_cancel and not is_student_move_in_request and not is_owner_or_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this booking"
         )
+
+    # Handle student move-in request (flag instead of status change)
+    if is_student_move_in_request:
+        payments_crud = crud.PaymentsCRUD(db)
+        payments = payments_crud.get_payments_by_booking(booking_id)
+        if not any(p.status == "completed" for p in payments):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Payment is required before requesting move-in. Please submit a payment first."
+            )
+
+        booking.move_in_requested = True
+        db.commit()
+        db.refresh(booking)
+
+        history_entry = models.BookingHistory(
+            booking_id=booking_id, old_status=booking.status, new_status="move_in_requested",
+            changed_by=current_user.user_id
+        )
+        db.add(history_entry)
+        db.commit()
+        db.refresh(booking)
+        return booking
+
+    # Owner transitions
+    valid_owner_transitions = {
+        "pending": ["approved", "cancelled"],
+        "approved": ["active", "cancelled"],
+        "active": ["cancelled"],
+        "cancelled": ["pending"],
+    }
+
+    if is_owner_or_admin:
+        allowed = valid_owner_transitions.get(booking.status, [])
+        if status_update.status not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot change booking from {booking.status} to {status_update.status}"
+            )
 
     booking = booking_crud.update_status(
         booking_id=booking_id,
@@ -118,6 +164,8 @@ def get_owner_bookings_enriched(
             tenant_name=tenant.name if tenant else None,
             tenant_email=tenant.email if tenant else None,
             tenant_phone=tenant.phone if tenant else None,
+            account_setup_complete=tenant.account_setup_complete if tenant else None,
+            move_in_requested=item.get("move_in_requested"),
             property_name=listing.bh_name if listing else None,
             property_type=listing.property_type if listing else None,
             room_number=room.room_id if room else None,
@@ -184,6 +232,8 @@ def get_owner_booking_detail(
         tenant_name=tenant.name if tenant else None,
         tenant_email=tenant.email if tenant else None,
         tenant_phone=tenant.phone if tenant else None,
+        account_setup_complete=tenant.account_setup_complete if tenant else None,
+        move_in_requested=b.move_in_requested,
         property_name=listing.bh_name if listing else None,
         property_type=listing.property_type if listing else None,
         room_number=room.room_id if room else None,
@@ -231,6 +281,8 @@ def get_all_bookings(
             tenant_name=tenant.name if tenant else None,
             tenant_email=tenant.email if tenant else None,
             tenant_phone=tenant.phone if tenant else None,
+            account_setup_complete=tenant.account_setup_complete if tenant else None,
+            move_in_requested=b.move_in_requested,
             property_name=listing.bh_name if listing else None,
             property_type=listing.property_type if listing else None,
             room_number=room.room_id if room else None,
@@ -291,6 +343,8 @@ def get_booking_detail(
         tenant_name=tenant.name if tenant else None,
         tenant_email=tenant.email if tenant else None,
         tenant_phone=tenant.phone if tenant else None,
+        account_setup_complete=tenant.account_setup_complete if tenant else None,
+        move_in_requested=b.move_in_requested,
         property_name=listing.bh_name if listing else None,
         property_type=listing.property_type if listing else None,
         room_number=room.room_id if room else None,

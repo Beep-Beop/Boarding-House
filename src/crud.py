@@ -673,7 +673,7 @@ class BookingsCRUD:
 
         overlap = self.db.query(Bookings).filter(
             Bookings.room_id == room_id,
-            Bookings.status.in_(["active", "pending"]),
+            Bookings.status.in_(["active", "pending", "approved"]),
             Bookings.check_in < check_out,
             Bookings.check_out > check_in,
         ).first()
@@ -752,6 +752,7 @@ class BookingsCRUD:
         stats = self.db.query(
             sa_func.count(Bookings.booking_id).label("total_bookings"),
             sa_func.sum(sa_func.if_(Bookings.status == "pending", 1, 0)).label("pending_count"),
+            sa_func.sum(sa_func.if_(Bookings.status == "approved", 1, 0)).label("approved_count"),
             sa_func.sum(sa_func.if_(Bookings.status == "active", 1, 0)).label("active_count"),
             sa_func.sum(sa_func.if_(Bookings.status == "cancelled", 1, 0)).label("cancelled_count"),
             sa_func.coalesce(sa_func.sum(
@@ -761,6 +762,7 @@ class BookingsCRUD:
         return {
             "total_bookings": stats.total_bookings or 0,
             "pending_count": stats.pending_count or 0,
+            "approved_count": stats.approved_count or 0,
             "active_count": stats.active_count or 0,
             "cancelled_count": stats.cancelled_count or 0,
             "total_revenue": stats.total_revenue or 0,
@@ -805,6 +807,7 @@ class BookingsCRUD:
                 "payment_status": payment_status,
                 "payment_method": payment_method,
                 "payment_amount": payment_amount,
+                "move_in_requested": b.move_in_requested,
             })
         return result
 
@@ -816,6 +819,7 @@ class BookingsCRUD:
         return {
             "total_bookings": len(bookings),
             "pending_count": sum(1 for b in bookings if b.status == "pending"),
+            "approved_count": sum(1 for b in bookings if b.status == "approved"),
             "active_count": sum(1 for b in bookings if b.status == "active"),
             "cancelled_count": sum(1 for b in bookings if b.status == "cancelled"),
             "total_revenue": total_revenue,

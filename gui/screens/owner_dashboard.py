@@ -504,23 +504,33 @@ class OwnerDashboardMixin:
             table_frame.grid_columnconfigure(j, weight=1)
 
         self._tenants_table_frame = table_frame
-        self._show_owner_loading(table_frame)
+
+        # Show loading in main_content instead of table_frame (table_frame uses grid for headers/data)
+        self._show_owner_loading(main_content)
 
         owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
 
         def _do():
             tenant_data = []
             try:
-                resp = self.api.get(f"/bookings/owner/{owner_id}", timeout=5)
+                resp = self.api.get(f"/bookings/owner/{owner_id}/enriched", timeout=5)
                 if resp.status_code == 200:
                     bookings = resp.json()
                     for b in bookings:
+                        name = b.get('tenant_name', '') or f"Tenant #{b.get('user_id', '?')}"
+                        unit = str(b.get('room_number', '')) or f"Room #{b.get('room_id', '?')}"
+                        contact = b.get('tenant_phone', '') or ''
+                        move_in = b.get('check_in', '')
+                        payment_status = (b.get('payment_status') or '').capitalize() or b.get('status', 'Pending').capitalize()
+                        profile_complete = bool(b.get('tenant_phone'))
                         tenant_data.append((
-                            f"Tenant #{b.get('user_id', '?')}",
-                            f"Room #{b.get('room_id', '?')}",
-                            "",
-                            b.get('check_in', ''),
-                            b.get('status', 'Pending').capitalize(),
+                            name,
+                            unit,
+                            contact,
+                            move_in,
+                            payment_status,
+                            profile_complete,
+                            b.get('user_id', 0),
                         ))
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load tenants. Check your connection.", is_error=True))
@@ -538,12 +548,12 @@ class OwnerDashboardMixin:
 
         if not tenant_data:
             tenant_data = [
-                ("No tenants yet", "", "", "", ""),
+                ("No tenants yet", "", "", "", "", True, 0),
             ]
         self.tenant_action_menus = {}
         self.tenant_action_btns = {}
 
-        for r, (name, unit, contact, move_in, status) in enumerate(tenant_data):
+        for r, (name, unit, contact, move_in, status, profile_complete, user_id) in enumerate(tenant_data):
             data_row = 1 + r * 2
             sep_row = data_row + 1
             is_last = r == len(tenant_data) - 1
@@ -557,11 +567,21 @@ class OwnerDashboardMixin:
             ctk.CTkLabel(name_frame, text=name, font=self.body_paragraph_font,
                          text_color=self.text_color).pack(side="left")
 
+            if not profile_complete:
+                incomplete_badge = ctk.CTkLabel(
+                    name_frame, text="Incomplete Profile",
+                    font=self.body_description_font, fg_color="#F59E0B", text_color="white",
+                    corner_radius=4, padx=6, pady=2
+                )
+                incomplete_badge.pack(side="left", padx=(4, 0))
+
             ctk.CTkLabel(table_frame, text=unit, font=self.body_paragraph_font,
                          text_color=self.text_color).grid(row=data_row, column=1, padx=15, pady=(7, 7), sticky="w")
 
-            ctk.CTkLabel(table_frame, text=contact, font=self.body_paragraph_font,
-                         text_color=self.text_color).grid(row=data_row, column=2, padx=15, pady=(7, 7), sticky="w")
+            contact_text = contact if contact else "Not provided"
+            contact_color = self.text_color if contact else self.entry_border
+            ctk.CTkLabel(table_frame, text=contact_text, font=self.body_paragraph_font,
+                         text_color=contact_color).grid(row=data_row, column=2, padx=15, pady=(7, 7), sticky="w")
 
             ctk.CTkLabel(table_frame, text=move_in, font=self.body_paragraph_font,
                          text_color=self.text_color).grid(row=data_row, column=3, padx=15, pady=(7, 7), sticky="w")
@@ -585,29 +605,37 @@ class OwnerDashboardMixin:
                                        width=30, height=30,
                                        fg_color="transparent", text_color=self.text_color,
                                        hover_color=self.hover_color,
-                                       command=lambda n=name: self.toggle_tenant_action_menu(n))
+                                       command=lambda uid=user_id: self.toggle_tenant_action_menu(uid))
             action_btn.grid(row=data_row, column=5, padx=15, pady=(7, 7), sticky="w")
 
             action_frame = ctk.CTkFrame(table_frame, fg_color="white", corner_radius=6,
                                         border_width=1, border_color=self.entry_border)
 
-            for item_text, item_clr, item_cmd in [("View Details", self.text_color, lambda: None), ("Edit", self.text_color, lambda: None), ("Remove", self.error_red, lambda: self.show_toast("Coming soon", is_error=False))]:
+            actions = [
+                ("View Details", self.text_color, lambda: None),
+                ("Edit", self.text_color, lambda: None),
+            ]
+            if not profile_complete and user_id:
+                actions.append(("Remind to Complete Profile", self.hover_color, lambda uid=user_id: self._remind_tenant(uid)))
+            actions.append(("Remove", self.error_red, lambda: self.show_toast("Coming soon", is_error=False)))
+
+            for item_text, item_clr, item_cmd in actions:
                 ctk.CTkButton(action_frame, text=item_text, font=self.body_light_font,
                               fg_color="transparent", text_color=item_clr,
                               hover_color=self.hover_color, corner_radius=4, height=28,
                               cursor="hand2",
                               command=item_cmd).pack(padx=5, pady=2, fill="x")
 
-            self.tenant_action_menus[name] = action_frame
-            self.tenant_action_btns[name] = action_btn
+            self.tenant_action_menus[user_id] = action_frame
+            self.tenant_action_btns[user_id] = action_btn
 
             if not is_last:
                 sep = ctk.CTkFrame(table_frame, height=1, fg_color=self.entry_border)
                 sep.grid(row=sep_row, column=0, columnspan=6, padx=25, pady=4, sticky="ew")
 
-    def toggle_tenant_action_menu(self, tenant_name):
-        frame = self.tenant_action_menus.get(tenant_name)
-        btn = self.tenant_action_btns.get(tenant_name)
+    def toggle_tenant_action_menu(self, user_id):
+        frame = self.tenant_action_menus.get(user_id)
+        btn = self.tenant_action_btns.get(user_id)
         if frame is None or btn is None:
             return
         if frame.winfo_ismapped():
@@ -619,6 +647,29 @@ class OwnerDashboardMixin:
             frame.place(x=btn.winfo_rootx() - parent.winfo_rootx() + btn.winfo_width() + 5,
                         y=btn.winfo_rooty() - parent.winfo_rooty())
             frame.lift()
+
+    def _remind_tenant(self, tenant_user_id):
+        owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
+        if not tenant_user_id or not owner_id:
+            self.show_toast("Cannot send reminder. Missing user info.", is_error=True)
+            return
+
+        def _do():
+            try:
+                resp = self.api.post("/notifications/", json={
+                    "user_id": tenant_user_id,
+                    "notif_type": "system",
+                    "content": "Your landlord has reminded you to complete your profile. Please update your name, phone, and date of birth in Account Settings to ensure smooth communication.",
+                    "triggered_by": owner_id,
+                }, timeout=5)
+                if resp.status_code == 201:
+                    self.after(0, lambda: self.show_toast("Reminder sent to tenant!", is_error=False))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to send reminder.", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Connection error. Could not send reminder.", is_error=True))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def show_owner_property(self):
         for widget in self.content_wrapper.winfo_children():
@@ -1305,15 +1356,16 @@ class OwnerDashboardMixin:
         # Stats bar
         stats_card_frame = ctk.CTkFrame(main_content, fg_color="transparent")
         stats_card_frame.pack(fill="x", pady=(0, 20))
-        stats_card_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="booking_stats")
+        stats_card_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="booking_stats")
 
         stats_keys = [
             ("total", "Total Bookings"),
             ("pending", "Pending"),
+            ("approved", "Approved"),
             ("active", "Active"),
             ("cancelled", "Cancelled"),
         ]
-        accent_map = {"total": None, "pending": self.hover_color, "active": self.primary_color, "cancelled": self.error_red}
+        accent_map = {"total": None, "pending": self.hover_color, "approved": ("#1565C0", "#42A5F5"), "active": self.primary_color, "cancelled": self.error_red}
         self._booking_stats_labels = {}
         for i, (skey, stitle) in enumerate(stats_keys):
             card = ctk.CTkFrame(stats_card_frame, fg_color=self.secondary_color, corner_radius=6, height=100)
@@ -1340,7 +1392,7 @@ class OwnerDashboardMixin:
         search_icon_lbl.pack(side="left", padx=(15, 10))
 
         self._booking_filter_combo = ctk.CTkComboBox(
-            filter_frame, values=["All", "Pending", "Active", "Cancelled"],
+            filter_frame, values=["All", "Pending", "Approved", "Active", "Cancelled"],
             width=140, height=32, font=self.body_paragraph_font,
             fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
@@ -1452,7 +1504,7 @@ class OwnerDashboardMixin:
 
         # Update stats
         if stats and hasattr(self, '_booking_stats_labels'):
-            for k in ("total", "pending", "active", "cancelled"):
+            for k in ("total", "pending", "approved", "active", "cancelled"):
                 if k in self._booking_stats_labels and self._booking_stats_labels[k].winfo_exists():
                     self._booking_stats_labels[k].configure(text=str(stats.get(f"{k}_count" if k != "total" else "total_bookings", 0)))
 
@@ -1530,9 +1582,17 @@ class OwnerDashboardMixin:
                 status_fg = self.primary_color
             elif status == "pending":
                 status_fg = self.hover_color
+            elif status == "approved":
+                status_fg = ("#1565C0", "#42A5F5")
+            elif status == "cancelled":
+                status_fg = self.error_red
             else:
                 status_fg = self.error_red
-            status_lbl = ctk.CTkLabel(table_frame, text=status.capitalize(), font=self.body_paragraph_font,
+            display_status = status.capitalize()
+            if booking.get("move_in_requested"):
+                display_status = "Move-in Requested"
+                status_fg = ("#00897B", "#26A69A")
+            status_lbl = ctk.CTkLabel(table_frame, text=display_status, font=self.body_paragraph_font,
                                       fg_color=status_fg, text_color="white", corner_radius=4, padx=10, pady=2)
             status_lbl.grid(row=data_row, column=5, padx=10, pady=(7, 7), sticky="w")
             row_widgets.append(status_lbl)
@@ -1556,14 +1616,40 @@ class OwnerDashboardMixin:
             row_widgets.append(action_frame)
 
             btn_info = {}
+            move_in_req = booking.get("move_in_requested", False)
+
             if status == "pending":
                 approve_btn = ctk.CTkButton(action_frame, text="Approve", font=self.body_description_font,
                                             fg_color=self.primary_color, hover_color=self.hover_color,
                                             text_color="white", cursor="hand2",
-                                            command=lambda bid=booking_id: self._owner_booking_action(bid, "active"))
+                                            command=lambda bid=booking_id: self._owner_booking_action(bid, "approved"))
                 approve_btn.pack(side="left", padx=(0, 4))
                 btn_info["approve"] = approve_btn
 
+                cancel_btn = ctk.CTkButton(action_frame, text="Cancel", font=self.body_description_font,
+                                           fg_color=self.error_red, hover_color="#b3302e",
+                                           text_color="white", cursor="hand2",
+                                           command=lambda bid=booking_id: self._confirm_cancel_booking(bid))
+                cancel_btn.pack(side="left")
+                btn_info["cancel"] = cancel_btn
+
+            elif status == "approved":
+                action_text = "Confirm Move-in" if move_in_req else "Mark as Moved In"
+                action_btn = ctk.CTkButton(action_frame, text=action_text, font=self.body_description_font,
+                                           fg_color=self.primary_color, hover_color=self.hover_color,
+                                           text_color="white", cursor="hand2",
+                                           command=lambda bid=booking_id: self._owner_booking_action(bid, "active"))
+                action_btn.pack(side="left", padx=(0, 4))
+                btn_info["approve"] = action_btn
+
+                cancel_btn = ctk.CTkButton(action_frame, text="Cancel", font=self.body_description_font,
+                                           fg_color=self.error_red, hover_color="#b3302e",
+                                           text_color="white", cursor="hand2",
+                                           command=lambda bid=booking_id: self._confirm_cancel_booking(bid))
+                cancel_btn.pack(side="left")
+                btn_info["cancel"] = cancel_btn
+
+            elif status == "active":
                 cancel_btn = ctk.CTkButton(action_frame, text="Cancel", font=self.body_description_font,
                                            fg_color=self.error_red, hover_color="#b3302e",
                                            text_color="white", cursor="hand2",
@@ -1655,9 +1741,15 @@ class OwnerDashboardMixin:
             status_fg = self.primary_color
         elif status == "pending":
             status_fg = self.hover_color
+        elif status == "approved":
+            status_fg = ("#1565C0", "#42A5F5")
         else:
             status_fg = self.error_red
-        status_lbl = ctk.CTkLabel(hero_inner, text=status.capitalize(), font=self.body_paragraph_font,
+        display_status = status.capitalize()
+        if data.get("move_in_requested"):
+            display_status = "Move-in Requested"
+            status_fg = ("#00897B", "#26A69A")
+        status_lbl = ctk.CTkLabel(hero_inner, text=display_status, font=self.body_paragraph_font,
                                   fg_color=status_fg, text_color="white", corner_radius=4, padx=12, pady=4)
         status_lbl.pack(side="left")
 
@@ -1765,7 +1857,7 @@ class OwnerDashboardMixin:
                                         font=self.body_big_font, fg_color=self.primary_color,
                                         hover_color=self.hover_color, text_color="white",
                                         height=45, corner_radius=6, cursor="hand2",
-                                        command=lambda: self._owner_booking_action(self._booking_detail_id, "active"))
+                                        command=lambda: self._owner_booking_action(self._booking_detail_id, "approved"))
             approve_btn.pack(side="left", padx=(0, 15))
             cancel_btn = ctk.CTkButton(action_bar, text="Cancel Booking",
                                        font=self.body_big_font, fg_color=self.error_red,
@@ -1775,6 +1867,36 @@ class OwnerDashboardMixin:
             cancel_btn.pack(side="left")
             self._booking_action_btns[self._booking_detail_id] = {"approve": approve_btn, "cancel": cancel_btn}
 
+        elif status == "approved":
+            action_bar = ctk.CTkFrame(main_content, fg_color="transparent")
+            action_bar.pack(fill="x", pady=(0, 20))
+            move_in = data.get("move_in_requested", False)
+            btn_text = "\u2713 Confirm Move-in" if move_in else "Mark as Moved In"
+            confirm_btn = ctk.CTkButton(action_bar, text=btn_text,
+                                        font=self.body_big_font, fg_color=self.primary_color,
+                                        hover_color=self.hover_color, text_color="white",
+                                        height=45, corner_radius=6, cursor="hand2",
+                                        command=lambda: self._owner_booking_action(self._booking_detail_id, "active"))
+            confirm_btn.pack(side="left", padx=(0, 15))
+            cancel_btn = ctk.CTkButton(action_bar, text="Cancel Booking",
+                                       font=self.body_big_font, fg_color=self.error_red,
+                                       hover_color="#b3302e", text_color="white",
+                                       height=45, corner_radius=6, cursor="hand2",
+                                       command=lambda: self._confirm_cancel_booking(self._booking_detail_id))
+            cancel_btn.pack(side="left")
+            self._booking_action_btns[self._booking_detail_id] = {"confirm": confirm_btn, "cancel": cancel_btn}
+
+        elif status == "active":
+            action_bar = ctk.CTkFrame(main_content, fg_color="transparent")
+            action_bar.pack(fill="x", pady=(0, 20))
+            cancel_btn = ctk.CTkButton(action_bar, text="Cancel Booking",
+                                       font=self.body_big_font, fg_color=self.error_red,
+                                       hover_color="#b3302e", text_color="white",
+                                       height=45, corner_radius=6, cursor="hand2",
+                                       command=lambda: self._confirm_cancel_booking(self._booking_detail_id))
+            cancel_btn.pack(side="left")
+            self._booking_action_btns[self._booking_detail_id] = {"cancel": cancel_btn}
+
     def _confirm_cancel_booking(self, booking_id):
         dialog = ctk.CTkInputDialog(text="Type CANCEL to confirm cancellation:", title="Cancel Booking")
         if dialog.get_input() != "CANCEL":
@@ -1782,7 +1904,6 @@ class OwnerDashboardMixin:
         self._owner_booking_action(booking_id, "cancelled")
 
     def _owner_booking_action(self, booking_id, new_status):
-        action_label = "Approving" if new_status == "active" else "Cancelling"
         btns = self._booking_action_btns.get(booking_id, {})
         for btn in btns.values():
             try:
@@ -1796,7 +1917,12 @@ class OwnerDashboardMixin:
                 resp = self.api.patch(f"/bookings/{booking_id}/status",
                                       json={"status": new_status, "changed_by_user_id": user_id})
                 if resp.status_code == 200:
-                    msg = "Booking approved!" if new_status == "active" else "Booking cancelled."
+                    if new_status == "approved":
+                        msg = "Booking approved!"
+                    elif new_status == "active":
+                        msg = "Move-in confirmed! Booking is now active."
+                    else:
+                        msg = "Booking cancelled."
                     self.after(0, lambda: (self.show_toast(msg, is_error=False), self.show_owner_bookings()))
                 else:
                     detail = resp.text

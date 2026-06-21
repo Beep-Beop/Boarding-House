@@ -232,7 +232,8 @@ class Bookings(Base):
     
     check_in = Column(Date, nullable=False)
     check_out = Column(Date, nullable=False)
-    status = Column(Enum('active', 'pending', 'cancelled'), default='pending')
+    status = Column(Enum('active', 'pending', 'approved', 'cancelled'), default='pending')
+    move_in_requested = Column(Boolean, default=False)
     total_price = Column(DECIMAL(10, 2), nullable=False) # Cached price in case room rent changes later
     notes = Column(Text) # Special requests by the student
     created_at = Column(DateTime, server_default=func.now())
@@ -265,8 +266,8 @@ class BookingHistory(Base):
 
     history_id = Column(Integer, primary_key=True, autoincrement=True)
     booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="CASCADE"), nullable=False)
-    old_status = Column(Enum('active', 'pending', 'cancelled'), nullable=True)
-    new_status = Column(Enum('active', 'pending', 'cancelled'), nullable=False)
+    old_status = Column(Enum('active', 'pending', 'approved', 'cancelled'), nullable=True)
+    new_status = Column(Enum('active', 'pending', 'approved', 'cancelled', 'move_in_requested'), nullable=False)
     changed_at = Column(DateTime, server_default=func.now())
     
     # RESTRICT prevents deleting a user if they manipulated a booking status.
