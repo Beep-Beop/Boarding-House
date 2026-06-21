@@ -75,9 +75,7 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self.access_token = None
         self._screen_active = True
         self._menu_showing = False
-        self._menu_shown_at = 0.0
-        self._last_profile_toggle = 0.0
-        self.bind_all("<Button-1>", self._on_global_menu_click, add="+")
+        self.bind_all("<Button-1>", self._on_global_menu_click)
 
         # --- API Client ---
         self.api = APIClient()
@@ -483,73 +481,21 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self._hide_user_menu()
 
         menu_width = 240
-        try:
-            popup = ctk.CTkToplevel(self, fg_color=self.entry_border)
-            popup.overrideredirect(True)
-            popup.attributes("-topmost", True)
-            body = ctk.CTkFrame(popup, fg_color=self.secondary_color,
-                                corner_radius=8)
-            body.pack(fill="both")
-        except Exception as e:
-            print(f"[DEBUG] Failed to create menu popup: {e}")
-            self.show_toast("Failed to create menu", is_error=True)
-            return
-        self._user_menu = popup
+        menu = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                            corner_radius=8, border_width=2,
+                            border_color=self.entry_border, width=menu_width)
+        self._user_menu = menu
 
-        user = getattr(self, 'current_user', {})
-        name = user.get('name', '')
-        email = user.get('email', '')
-        role = user.get('role', 'tenant').capitalize()
-
-        header = ctk.CTkFrame(body, fg_color="transparent")
-        header.pack(fill="x", padx=14, pady=(14, 8))
-        if name:
-            ctk.CTkLabel(header, text=name, font=ctk.CTkFont(size=14, weight="bold"),
-                         text_color=self.text_color).pack(anchor="w")
-        if email:
-            ctk.CTkLabel(header, text=email, font=ctk.CTkFont(size=13),
-                         text_color=self.text_color).pack(anchor="w")
-        ctk.CTkLabel(header, text=role, font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color="white", fg_color=self.primary_color,
-                     corner_radius=4, padx=6).pack(anchor="w", pady=(3, 0))
-
-        ctk.CTkFrame(body, height=1, fg_color=self.entry_border).pack(fill="x", padx=10, pady=6)
-
-        for item in items:
-            if item is None:
-                ctk.CTkFrame(body, height=1, fg_color=self.entry_border).pack(fill="x", padx=10, pady=2)
-                continue
-            text, icon, cmd = item
-            btn = ctk.CTkButton(body, text=text, image=icon,
-                                font=ctk.CTkFont(family="Poppins", size=14),
-                                fg_color="transparent", text_color=self.text_color,
-                                hover_color=self.hover_color, anchor="w",
-                                height=40)
-            btn.pack(fill="x", padx=5, pady=2)
-            btn.configure(command=lambda cb=cmd: self._execute_menu_action(cb))
-            btn.bind("<Button-3>", lambda e, t=text, cb=cmd: self._debug_menu_item(t, cb))
-
-        popup.update_idletasks()
-        bw = body.winfo_reqwidth()
-        bh = body.winfo_reqheight()
         try:
             scaling = float(self.tk.call('tk', 'scaling'))
         except Exception:
             scaling = 1.0
         gap = max(6, int(6 * scaling))
-        ax = anchor.winfo_rootx()
-        ay = anchor.winfo_rooty()
+        ax = anchor.winfo_rootx() - form_container.winfo_rootx()
+        ay = anchor.winfo_rooty() - form_container.winfo_rooty()
         ah = anchor.winfo_height()
-        aw = anchor.winfo_width()
-        popup.geometry(f"{bw}x{bh}+{ax + aw - bw}+{ay + ah + gap}")
-        popup.lift()
-        popup.focus_set()
-        popup.bind("<Escape>", lambda e: self._hide_user_menu())
-        self._menu_anchor = anchor
-        self._menu_showing = True
-        self._menu_shown_at = time.time()
-        print(f"[DBG]   after update: ismapped={menu.winfo_ismapped()}, viewable={menu.winfo_viewable()}")
-        menu.after(500, lambda: print(f"[DBG]   500ms later: ismapped={menu.winfo_ismapped()}, viewable={menu.winfo_viewable()}"))
+        menu.place(x=ax + anchor.winfo_width() - menu_width, y=ay + ah + gap)
+        menu.lift()
 
         user = getattr(self, 'current_user', {})
         name = user.get('name', '')
@@ -558,7 +504,6 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
 
         header = ctk.CTkFrame(menu, fg_color="transparent")
         header.pack(fill="x", padx=14, pady=(14, 8))
-
         if name:
             ctk.CTkLabel(header, text=name, font=ctk.CTkFont(size=14, weight="bold"),
                          text_color=self.text_color).pack(anchor="w")
@@ -589,10 +534,6 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         menu.bind("<Escape>", lambda e: self._hide_user_menu())
         self._menu_anchor = anchor
         self._menu_showing = True
-        self._menu_shown_at = time.time()
-        print(f"[DBG]   menu placed. _menu_showing=True, _menu_shown_at={self._menu_shown_at}")
-        print(f"[DBG]   menu.winfo_ismapped()={menu.winfo_ismapped()}, menu.winfo_viewable()={menu.winfo_viewable()}")
-        self.update_idletasks()
 
     def _debug_menu_item(self, text, callback):
         print(f"\n[DEBUG] ===== Right-click on menu item: '{text}' =====")
@@ -622,7 +563,7 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
             self.after(0, lambda: self.show_toast(f"Navigation error: {e}", is_error=True))
 
     def _hide_user_menu(self):
-        """Destroy menu popup. Shared by all three dashboards."""
+        """Destroy menu and overlay. Shared by all three dashboards."""
         self._menu_showing = False
         if hasattr(self, '_user_menu') and self._user_menu:
             try:
@@ -633,31 +574,53 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self._reset_chevrons()
 
     def _on_global_menu_click(self, event):
+        """Single handler for profile toggle and outside-click dismissal.
+        Uses coordinate math (not widget tree) so it works on all platforms."""
+        # Map of profile frame attribute -> toggle method name
+        profile_frames = {
+            'profile_frame': '_toggle_user_menu',
+            '_admin_profile_frame': '_admin_toggle_user_menu',
+            'owner_profile_frame': '_owner_toggle_user_menu',
+        }
+
+        # Check if click is within any known profile frame
+        for attr, toggle_name in profile_frames.items():
+            frame = getattr(self, attr, None)
+            if frame is not None:
+                try:
+                    if not frame.winfo_exists():
+                        continue
+                    x1 = frame.winfo_rootx()
+                    y1 = frame.winfo_rooty()
+                    x2 = x1 + frame.winfo_width()
+                    y2 = y1 + frame.winfo_height()
+                    if x1 <= event.x_root <= x2 and y1 <= event.y_root <= y2:
+                        toggle = getattr(self, toggle_name)
+                        toggle()
+                        return
+                except Exception:
+                    continue
+
+        # Outside-click dismissal
         if not self._menu_showing:
             return
-        if time.time() - self._menu_shown_at < 0.1:
-            return
-
-        def _within(w):
-            if not w or not w.winfo_exists():
-                return False
-            try:
-                x1 = w.winfo_rootx()
-                y1 = w.winfo_rooty()
-                return x1 <= event.x_root <= x1 + w.winfo_width() and \
-                       y1 <= event.y_root <= y1 + w.winfo_height()
-            except Exception:
-                return False
-
         menu = getattr(self, '_user_menu', None)
-        anchor = getattr(self, '_menu_anchor', None)
-        if _within(menu) or _within(anchor):
-            return
+        if menu is not None:
+            try:
+                if menu.winfo_exists():
+                    x1 = menu.winfo_rootx()
+                    y1 = menu.winfo_rooty()
+                    x2 = x1 + menu.winfo_width()
+                    y2 = y1 + menu.winfo_height()
+                    if x1 <= event.x_root <= x2 and y1 <= event.y_root <= y2:
+                        return  # Click is on the menu — let buttons handle it
+            except Exception:
+                pass
         self._hide_user_menu()
 
     def _reset_chevrons(self):
         """Set all known chevron labels back to ▾."""
-        for attr in ('profile_chevron', 'owner_profile_chevron'):
+        for attr in ('profile_chevron', 'owner_profile_chevron', '_admin_profile_chevron'):
             if hasattr(self, attr):
                 try:
                     getattr(self, attr).configure(text="▾")

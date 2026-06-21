@@ -368,7 +368,6 @@ class OwnerDashboardMixin:
                                           cursor="hand2"
                                           )
         self.owner_nav_pfp.pack(side="left", padx=(0, 12))
-        self.owner_nav_pfp.bind("<Button-1>", lambda e: self._owner_toggle_user_menu())
 
         self.owner_profile_text_frame = ctk.CTkFrame(self.owner_profile_frame,
                                                      fg_color="transparent"
@@ -386,8 +385,10 @@ class OwnerDashboardMixin:
 
         # Chevron indicator
         self.owner_profile_chevron = ctk.CTkLabel(self.owner_profile_text_frame, text="▾",
-                                                   font=self.body_light_font, text_color=self.text_color)
+                                                  font=self.body_light_font, text_color=self.text_color)
         self.owner_profile_chevron.pack(side="left", padx=(4, 0))
+
+        self.owner_profile_frame.configure(cursor="hand2")
 
     def _build_owner_sidebar(self):
         self.sidebar_main_frame = ctk.CTkFrame(self.body_frame,
@@ -2884,7 +2885,7 @@ class OwnerDashboardMixin:
                 self.owner_notif_badge.configure(text="")
 
     def _owner_toggle_user_menu(self):
-        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_ismapped():
+        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_exists():
             self._hide_user_menu()
         else:
             self._show_user_menu(

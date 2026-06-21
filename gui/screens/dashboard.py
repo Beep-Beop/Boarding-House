@@ -96,7 +96,6 @@ class DashboardMixin:
                                     image=self.pfp_placeholder_sm,
                                     width=32, height=32, cursor="hand2")
         self.nav_pfp.pack(side="left", padx=(0, 12))
-        self.nav_pfp.bind("<Button-1>", lambda e: self._toggle_user_menu())
 
         self.profile_text_frame = ctk.CTkFrame(self.profile_frame, fg_color="transparent")
         self.profile_text_frame.pack(side="left")
@@ -110,6 +109,8 @@ class DashboardMixin:
         self.profile_chevron = ctk.CTkLabel(self.profile_text_frame, text="▾",
                                             font=self.body_light_font, text_color=self.text_color)
         self.profile_chevron.pack(side="left", padx=(4, 0))
+
+        self.profile_frame.configure(cursor="hand2")
 
     # ── Sidebar ────────────────────────────────────────────────────
 

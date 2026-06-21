@@ -101,8 +101,6 @@ class AdminDashboardMixin:
                                             image=self.pfp_placeholder_sm,
                                             width=32, height=32, cursor="hand2")
         self._admin_nav_pfp.pack(side="left", padx=(0, 12))
-        self._admin_nav_pfp.bind("<Button-1>", lambda e: self._admin_toggle_user_menu())
-
         text_frame = ctk.CTkFrame(self._admin_profile_frame, fg_color="transparent")
         text_frame.pack(side="left")
 
@@ -111,8 +109,12 @@ class AdminDashboardMixin:
         ctk.CTkLabel(text_frame, text=user_name, font=self.body_light_font,
                       text_color=self.text_color).pack(side="left")
 
-        ctk.CTkLabel(text_frame, text="▾", font=self.body_light_font,
-                      text_color=self.text_color).pack(side="left", padx=(4, 0))
+        self._admin_profile_chevron = ctk.CTkLabel(text_frame, text="▾",
+                                                    font=self.body_light_font,
+                                                    text_color=self.text_color)
+        self._admin_profile_chevron.pack(side="left", padx=(4, 0))
+
+        self._admin_profile_frame.configure(cursor="hand2")
 
         self._admin_nav_bar = nav
         self._admin_notif_frame = notif_frame
@@ -185,7 +187,7 @@ class AdminDashboardMixin:
     # ── User Menu ──
 
     def _admin_toggle_user_menu(self):
-        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_ismapped():
+        if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_exists():
             self._hide_user_menu()
         else:
             self._show_user_menu(
@@ -200,6 +202,8 @@ class AdminDashboardMixin:
                     ("Logout",         self.menu_logout_icon,   self._handle_logout),
                 ],
             )
+            if hasattr(self, '_admin_profile_chevron'):
+                self._admin_profile_chevron.configure(text="▴")
 
     # ── Helper: Stat Card Row ──
 
