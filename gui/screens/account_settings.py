@@ -722,7 +722,7 @@ class AccountSettingsMixin:
             try:
                 resp = self.api.post(
                     "/auth/change-password",
-                    json={"current_password": current,
+                    json={"old_password": current,
                           "new_password": new},
                     timeout=10)
                 self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
@@ -737,8 +737,12 @@ class AccountSettingsMixin:
                             "Password updated!", is_error=False))
                 else:
                     try:
-                        err = resp.json().get("detail",
-                                              "Failed to update password.")
+                        detail = resp.json().get("detail",
+                                                 "Failed to update password.")
+                        if isinstance(detail, list):
+                            err = detail[0].get("msg", "Failed to update password.") if detail else "Failed to update password."
+                        else:
+                            err = detail
                     except Exception:
                         err = "Failed to update password."
                     self.after(

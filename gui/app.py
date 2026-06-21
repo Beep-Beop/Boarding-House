@@ -318,18 +318,22 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
 
         bg_color = self.error_red if is_error else self.primary_color
 
+        lines = message.count("\n") + 1
+        toast_h = max(40, min(120, lines * 20))
+
         self.current_toast = ctk.CTkFrame(self,
                                           fg_color=bg_color,
                                           corner_radius=6,
-                                          width=350,
-                                          height=40)
+                                          width=420,
+                                          height=toast_h)
         self.current_toast.place(relx=0.5, rely=-0.1, anchor="center")
-        self.current_toast.pack_propagate(False)
 
         msg_label = ctk.CTkLabel(self.current_toast,
                                  text=message,
                                  text_color="#FFFFFF",
-                                 font=self.body_paragraph_font)
+                                 font=self.body_paragraph_font,
+                                 wraplength=400,
+                                 justify="left")
         msg_label.place(relx=0.5, rely=0.5, anchor="center")
 
         def animate_in(current_rely=1.05):

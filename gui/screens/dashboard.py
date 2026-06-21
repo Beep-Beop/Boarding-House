@@ -54,6 +54,7 @@ class DashboardMixin:
         self.content_wrapper = ctk.CTkFrame(self.body_frame, fg_color="transparent")
         self.content_wrapper.pack(side="left", fill="both", expand=True, padx=(10, 10), pady=20)
 
+        self._build_tenant_sidebar()
         self.show_tenant_dashboard_content()
         self._fetch_notif_count()
 
@@ -774,7 +775,7 @@ class DashboardMixin:
         dialog.title("Report Maintenance Issue")
         dialog.geometry("400x300")
         dialog.transient(self)
-        dialog.grab_set()
+        dialog.after(100, dialog.grab_set)
 
         main = ctk.CTkFrame(dialog, fg_color=self.fg_color, corner_radius=8)
         main.pack(fill="both", expand=True, padx=20, pady=20)

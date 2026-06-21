@@ -22,9 +22,6 @@ app.add_middleware(
     allow_origins=[
         "http://127.0.0.1:8000",
         "http://localhost:8000",
-        "https://*.onrender.com",
-        "https://fastapi.beepboops.app",
-        "https://BeepBeop-boarding-house-api.hf.space",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],

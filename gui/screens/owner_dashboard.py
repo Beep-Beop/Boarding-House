@@ -687,6 +687,18 @@ class OwnerDashboardMixin:
                                            )
         self.bookings_btn.grid(row=4, column=0, padx=10, pady=(0, 30))
 
+        self.viewings_btn = ctk.CTkButton(self.menu_btn_frame,
+                                           text="Viewings",
+                                           width=230,
+                                           height=40,
+                                           hover_color=self.hover_color,
+                                           fg_color="transparent",
+                                           text_color=self.text_color,
+                                           font=self.body_big_font,
+                                           command=self.show_owner_viewings
+                                           )
+        self.viewings_btn.grid(row=5, column=0, padx=10, pady=(0, 30))
+
     def _set_owner_sidebar_btn(self, active):
         buttons = {
             "dashboard": self.dashboard_btn,
@@ -694,6 +706,7 @@ class OwnerDashboardMixin:
             "active_tenants": self.active_tenants_btn,
             "property": self.property_btn,
             "bookings": self.bookings_btn,
+            "viewings": self.viewings_btn,
         }
         for name, btn in buttons.items():
             if name == active:
@@ -753,6 +766,15 @@ class OwnerDashboardMixin:
         if not main.winfo_exists():
             return
 
+        for w in main.winfo_children():
+            w.destroy()
+
+        ctk.CTkLabel(main, text="Active Tenants", font=self.alt_title_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 20))
+
+        scroll = ctk.CTkScrollableFrame(main, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
+
         maint_by_listing = {}
         for m in maintenance:
             lid = m.get("listing_id")
@@ -762,9 +784,6 @@ class OwnerDashboardMixin:
         for p in payments:
             bid = p.get("booking_id")
             pay_by_booking.setdefault(bid, []).append(p)
-
-        scroll = ctk.CTkScrollableFrame(main, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
 
         if not enriched:
             ctk.CTkLabel(scroll, text="No active tenants yet.",
@@ -2982,12 +3001,22 @@ class OwnerDashboardMixin:
     def _upload_to_server(self, file_path):
         try:
             with open(file_path, "rb") as f:
-                resp = self.api.post("/photos/upload", files={"file": f})
+                resp = self.api.post("/photos/upload", files={"file": f}, timeout=120)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("url"), data.get("filename")
-        except Exception:
-            pass
+            try:
+                err = resp.json().get("detail", resp.reason)
+                if isinstance(err, list):
+                    err = err[0].get("msg", str(err[0])) if err else resp.reason
+            except Exception:
+                err = resp.reason
+            status = resp.status_code
+            self.after(0, lambda s=status, e=err: self.winfo_exists() and self.show_toast(
+                f"Upload failed ({s}): {e}", is_error=True))
+        except Exception as e:
+            self.after(0, lambda err=e: self.winfo_exists() and self.show_toast(
+                f"Upload error: {err}", is_error=True))
         return None, None
 
     def _upload_file_entry(self, entry, key, is_permit, max_files, drop_zone, placeholder, choose_btn, parent_frame):
@@ -3684,6 +3713,183 @@ class OwnerDashboardMixin:
                 self.owner_notif_badge.configure(text=str(count) if count <= 99 else "99+")
             else:
                 self.owner_notif_badge.configure(text="")
+
+    # ── Owner Viewings Management ──────────────────────────────────
+
+    def show_owner_viewings(self):
+        for widget in self.content_wrapper.winfo_children():
+            widget.destroy()
+        self._set_owner_sidebar_btn("viewings")
+        self.build_owner_viewings_content()
+
+    def build_owner_viewings_content(self):
+        self._owner_viewings_main = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        self._owner_viewings_main.pack(fill="both", expand=True, padx=20, pady=10)
+
+        header = ctk.CTkFrame(self._owner_viewings_main, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 20))
+        ctk.CTkLabel(header, text="Viewing Requests", font=self.alt_title_font,
+                     text_color=self.text_color).pack(side="left")
+        refresh_btn = ctk.CTkButton(header, text="Refresh", font=self.body_light_font,
+                                    fg_color=self.secondary_color, text_color=self.text_color,
+                                    hover_color=self.hover_color, width=100, height=32,
+                                    border_width=1, border_color=self.entry_border,
+                                    command=self.show_owner_viewings)
+        refresh_btn.pack(side="right")
+
+        self._owner_viewings_loading = ctk.CTkProgressBar(self._owner_viewings_main, mode="indeterminate",
+                                                           progress_color=self.primary_color)
+        self._owner_viewings_loading.pack(fill="x", pady=(0, 10))
+        self._owner_viewings_loading.start()
+
+        owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
+
+        def _do():
+            enriched = []
+            try:
+                resp = self.api.get(f"/boarding-houses/owner/{owner_id}", timeout=5)
+                if resp.status_code == 200:
+                    listings = resp.json()
+                    listing_map = {l["listing_id"]: l["bh_name"] for l in listings}
+                    for lid in listing_map:
+                        vr = self.api.get(f"/viewings/listing/{lid}", timeout=5)
+                        if vr.status_code == 200:
+                            for v in vr.json():
+                                v["bh_name"] = listing_map[lid]
+                                enriched.append(v)
+            except Exception:
+                self.after(0, lambda: self.show_toast("Failed to load viewings. Check your connection.", is_error=True))
+
+            tenant_ids = set(v["tenant_id"] for v in enriched)
+            tenant_map = {}
+            for tid in tenant_ids:
+                try:
+                    ur = self.api.get(f"/users/{tid}/public", timeout=5)
+                    if ur.status_code == 200:
+                        u = ur.json()
+                        tenant_map[tid] = u
+                except Exception:
+                    pass
+
+            self.after(0, lambda: self._populate_owner_viewings(enriched, tenant_map))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _populate_owner_viewings(self, viewings, tenant_map):
+        if hasattr(self, '_owner_viewings_loading') and self._owner_viewings_loading:
+            self._owner_viewings_loading.stop()
+            self._owner_viewings_loading.pack_forget()
+            self._owner_viewings_loading = None
+
+        if not hasattr(self, '_owner_viewings_main') or not self._owner_viewings_main.winfo_exists():
+            return
+
+        self._owner_viewings_container = ctk.CTkFrame(self._owner_viewings_main, fg_color="transparent")
+        self._owner_viewings_container.pack(fill="both", expand=True)
+
+        card = ctk.CTkFrame(self._owner_viewings_container, fg_color=self.secondary_color,
+                            corner_radius=6, border_width=1, border_color=self.entry_border)
+        card.pack(fill="x")
+
+        headers = ["Tenant", "Property", "Date", "Time", "Status", "Action"]
+        header_row = ctk.CTkFrame(card, fg_color="transparent")
+        header_row.pack(fill="x", padx=15, pady=(15, 10))
+        for j, h in enumerate(headers):
+            ctk.CTkLabel(header_row, text=h, font=self.body_paragraph_font,
+                         text_color=self.text_color).pack(side="left", padx=10, expand=True)
+
+        sep = ctk.CTkFrame(card, height=1, fg_color=self.entry_border)
+        sep.pack(fill="x", padx=15)
+
+        container = ctk.CTkFrame(card, fg_color="transparent")
+        container.pack(fill="x", padx=15, pady=(5, 15))
+
+        if not viewings:
+            ctk.CTkLabel(container, text="No viewing requests yet.",
+                         font=self.body_light_font, text_color=self.text_color).pack(pady=20)
+            return
+
+        for v in viewings:
+            row = ctk.CTkFrame(container, fg_color="transparent")
+            row.pack(fill="x", pady=4)
+
+            tid = v.get("tenant_id")
+            tenant = tenant_map.get(tid, {})
+            tenant_name = tenant.get("name", f"Tenant #{tid}")
+
+            name_lbl = ctk.CTkLabel(row, text=tenant_name, font=self.body_paragraph_font,
+                                    text_color=self.text_color, anchor="w")
+            name_lbl.pack(side="left", padx=10, expand=True)
+
+            prop_lbl = ctk.CTkLabel(row, text=v.get("bh_name", f"Listing #{v.get('listing_id')}"),
+                                    font=self.body_paragraph_font, text_color=self.text_color, anchor="w")
+            prop_lbl.pack(side="left", padx=10, expand=True)
+
+            s_date = v.get("scheduled_date", "")
+            date_lbl = ctk.CTkLabel(row, text=s_date[:10] if s_date else "",
+                                    font=self.body_paragraph_font, text_color=self.text_color, anchor="w")
+            date_lbl.pack(side="left", padx=10, expand=True)
+
+            s_time = v.get("scheduled_time", "")
+            time_lbl = ctk.CTkLabel(row, text=str(s_time)[:5] if s_time else "—",
+                                    font=self.body_paragraph_font, text_color=self.text_color, anchor="w")
+            time_lbl.pack(side="left", padx=10, expand=True)
+
+            status = v.get("status", "pending")
+            status_colors = {"pending": ("#E67E22", "white"), "confirmed": ("#27AE60", "white"),
+                            "completed": ("#2E86C1", "white"), "cancelled": ("#E74C3C", "white")}
+            sc = status_colors.get(status, (self.primary_color, "white"))
+            status_lbl = ctk.CTkLabel(row, text=status.capitalize(), font=self.body_description_font,
+                                      fg_color=sc[0], text_color=sc[1], corner_radius=4, padx=8, pady=2)
+            status_lbl.pack(side="left", padx=10, expand=False)
+
+            if status == "pending":
+                btn_row = ctk.CTkFrame(row, fg_color="transparent")
+                btn_row.pack(side="left", padx=10)
+                vid = v["viewing_id"]
+                accept_btn = ctk.CTkButton(btn_row, text="Accept", font=self.body_description_font,
+                                           fg_color="#27AE60", text_color="white", hover_color="#1E8449",
+                                           width=70, height=28,
+                                           command=lambda vid=vid: self._owner_accept_viewing(vid))
+                accept_btn.pack(side="left", padx=(0, 4))
+                reject_btn = ctk.CTkButton(btn_row, text="Reject", font=self.body_description_font,
+                                           fg_color="#E74C3C", text_color="white", hover_color="#B03A2E",
+                                           width=70, height=28,
+                                           command=lambda vid=vid: self._owner_reject_viewing(vid))
+                reject_btn.pack(side="left")
+            else:
+                ctk.CTkLabel(row, text="—", font=self.body_paragraph_font,
+                             text_color=self.text_color).pack(side="left", padx=10, expand=True)
+
+    def _owner_accept_viewing(self, viewing_id):
+        def _do():
+            try:
+                resp = self.api.patch(f"/viewings/{viewing_id}/status",
+                                      json={"status": "confirmed"}, timeout=5)
+                if resp.status_code == 200:
+                    self.after(0, lambda: (self.show_toast("Viewing confirmed!", is_error=False),
+                                           self.show_owner_viewings()))
+                else:
+                    err = resp.json().get("detail", "Failed to confirm viewing")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _owner_reject_viewing(self, viewing_id):
+        def _do():
+            try:
+                resp = self.api.patch(f"/viewings/{viewing_id}/status",
+                                      json={"status": "cancelled"}, timeout=5)
+                if resp.status_code == 200:
+                    self.after(0, lambda: (self.show_toast("Viewing rejected.", is_error=False),
+                                           self.show_owner_viewings()))
+                else:
+                    err = resp.json().get("detail", "Failed to reject viewing")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+        threading.Thread(target=_do, daemon=True).start()
 
     def _owner_toggle_user_menu(self):
         if hasattr(self, '_user_menu') and self._user_menu and self._user_menu.winfo_exists():
