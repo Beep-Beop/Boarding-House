@@ -303,8 +303,11 @@ class DashboardMixin:
     # ── Dashboard Section 1: Active Lease Card ─────────────────────
 
     def _build_active_lease(self, parent, active_bookings):
-        for w in parent.winfo_children():
-            w.destroy()
+        try:
+            for w in parent.winfo_children():
+                w.destroy()
+        except Exception:
+            pass
 
         if active_bookings:
             b = active_bookings[0]
@@ -1531,6 +1534,13 @@ class DashboardMixin:
                 pass
 
     def _load_initial_dashboard(self):
+        # Clear previous widgets with safety check
+        try:
+            for w in self.cards_grid_frame.winfo_children():
+                w.destroy()
+        except Exception:
+            pass
+        
         self._explore_progress = ctk.CTkProgressBar(self.cards_grid_frame, mode="indeterminate",
                                                      fg_color=self.entry_border,
                                                      progress_color=self.primary_color)
@@ -1921,12 +1931,21 @@ class DashboardMixin:
 
     def _update_stat_labels(self, bookings, favorites, reviews):
         if hasattr(self, '_stat_labels'):
-            if "Active Bookings" in self._stat_labels:
-                self._stat_labels["Active Bookings"].configure(text=bookings)
-            if "Saved Favorites" in self._stat_labels:
-                self._stat_labels["Saved Favorites"].configure(text=favorites)
-            if "Total Reviews" in self._stat_labels:
-                self._stat_labels["Total Reviews"].configure(text=reviews)
+            try:
+                if "Active Bookings" in self._stat_labels:
+                    self._stat_labels["Active Bookings"].configure(text=bookings)
+            except Exception:
+                pass
+            try:
+                if "Saved Favorites" in self._stat_labels:
+                    self._stat_labels["Saved Favorites"].configure(text=favorites)
+            except Exception:
+                pass
+            try:
+                if "Total Reviews" in self._stat_labels:
+                    self._stat_labels["Total Reviews"].configure(text=reviews)
+            except Exception:
+                pass
 
 
 
@@ -1952,6 +1971,7 @@ class DashboardMixin:
             photos_data = []
             reviews_data = []
             owner_data = None
+            rooms_data = []
 
             try:
                 resp = self.api.get(f"/boarding-houses/{listing_id}", timeout=8)
@@ -1974,6 +1994,13 @@ class DashboardMixin:
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load reviews. Check your connection.", is_error=True))
 
+            try:
+                resp = self.api.get(f"/rooms/listing/{listing_id}", timeout=8)
+                if resp.status_code == 200:
+                    rooms_data = resp.json()
+            except Exception:
+                self.after(0, lambda: self.show_toast("Failed to load rooms. Check your connection.", is_error=True))
+
             if listing_data:
                 owner_id = listing_data.get("owner_id")
                 if owner_id:
@@ -1985,7 +2012,7 @@ class DashboardMixin:
                         self.after(0, lambda: self.show_toast("Failed to load owner info. Check your connection.", is_error=True))
 
             self.after(0, lambda: self._build_property_details_ui(
-                loading, listing_data, photos_data, reviews_data, owner_data
+                loading, listing_data, photos_data, reviews_data, owner_data, rooms_data
             ))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -2039,12 +2066,12 @@ class DashboardMixin:
         right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         right.grid_columnconfigure(0, weight=1)
 
-        self._build_left_panel(left, listing, photos, reviews)
+        self._build_left_panel(left, listing, photos, reviews, rooms)
         self._build_right_panel(right, listing, owner, listing.get("listing_id") or listing.get("id"), rooms)
 
     # ── LEFT PANEL ──────────────────────────────────────────────────
 
-    def _build_left_panel(self, parent, listing, photos, reviews):
+    def _build_left_panel(self, parent, listing, photos, reviews, rooms=None):
         """Left side: images, name/price, address, rent, stars, info, reviews."""
 
         # ── Main Image ──────────────────────────────────────────────
@@ -2123,8 +2150,15 @@ class DashboardMixin:
                      text_color=self.text_color).grid(row=0, column=0, sticky="w",
                                                        padx=12, pady=(12, 2))
 
+        # Calculate price_range from rooms if not in listing
         price = listing.get("price_range", "")
-        ctk.CTkLabel(details, text=f"P{price}" if price else "",
+        if not price and rooms:
+            prices = [float(r.get("price_per_month", 0)) for r in rooms 
+                     if r.get("price_per_month") is not None]
+            if prices:
+                price = f"₱{min(prices):,.0f} - ₱{max(prices):,.0f}"
+        
+        ctk.CTkLabel(details, text=price if price else "Price TBA",
                      font=self.body_bold_paragraph_font,
                      text_color=self.primary_color).grid(row=0, column=1, sticky="e",
                                                           padx=12, pady=(12, 2))
@@ -2172,8 +2206,10 @@ class DashboardMixin:
                      font=self.body_description_font,
                      text_color=self.text_color).pack(side="left", padx=(4, 12))
 
-        rooms_info = listing.get("rooms_summary", "—")
-        ctk.CTkLabel(info_row, text=f"{rooms_info} Rooms Available",
+        if rooms is None:
+            rooms = []
+        rooms_count = len(rooms) if rooms else 0
+        ctk.CTkLabel(info_row, text=f"{rooms_count} Rooms Available",
                      font=self.body_description_font,
                      text_color=self.text_color).pack(side="left")
 
@@ -2468,26 +2504,29 @@ class DashboardMixin:
                     label += f" ({r['room_type']})"
                 label += f"  —  ₱{_safe_float(r.get('price_per_month', 0)):,.2f}/mo"
                 room_options.append(label)
-            room_var = ctk.StringVar(value=room_options[0])
+            
             self._selected_room = rooms[0]
             self._selected_room_price = _safe_float(rooms[0].get("price_per_month", 0))
 
-            room_menu = ctk.CTkOptionMenu(room_body, values=room_options,
-                                           variable=room_var,
-                                           font=self.body_light_font,
-                                           fg_color=self.fg_color,
-                                           button_color=self.primary_color,
-                                           button_hover_color=self.hover_color,
-                                           dropdown_font=self.body_light_font)
-            room_menu.pack(fill="x")
+            # Create entry box and dropdown
+            room_entry = ctk.CTkComboBox(room_body, values=room_options,
+                                         font=self.body_light_font,
+                                         fg_color=self.fg_color,
+                                         state="readonly")
+            room_entry.set(room_options[0])
+            room_entry.pack(fill="x")
 
             def _on_room_select(choice):
-                idx = room_options.index(choice)
-                self._selected_room = rooms[idx]
-                self._selected_room_price = _safe_float(rooms[idx].get("price_per_month", 0))
-                _update_fees()
+                try:
+                    idx = room_options.index(choice)
+                    self._selected_room = rooms[idx]
+                    self._selected_room_price = _safe_float(rooms[idx].get("price_per_month", 0))
+                    _update_fees()
+                except ValueError:
+                    pass
 
-            room_menu.configure(command=_on_room_select)
+            room_dropdown = self._make_dropdown(room_entry, values=room_options,
+                                               command=_on_room_select)
         else:
             ctk.CTkLabel(room_body, text="No rooms available for this property",
                          font=self.body_light_font,
