@@ -277,9 +277,6 @@ class AccountSettingsMixin:
             autocomplete=True, command=self._settings_dob_year.set)
         if dob_year in years:
             self._settings_dob_year.set(dob_year)
-        self._settings_dob_year.pack(side="left")
-        if dob_year in years:
-            self._settings_dob_year.set(dob_year)
 
         self._settings_profile_error = ctk.CTkLabel(
             pi_inner, text="", font=self.inline_error_font,
@@ -1176,7 +1173,7 @@ class AccountSettingsMixin:
                           hover_color=self.hover_color,
                           text_color="white",
                           width=60, height=28,
-                          state="disabled").pack(side="right", padx=(0, 6))
+                          command=self._link_google_account).pack(side="right", padx=(0, 6))
 
     def _unlink_google(self):
         dialog = ctk.CTkInputDialog(
@@ -1232,6 +1229,37 @@ class AccountSettingsMixin:
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()
+
+    def _link_google_account(self):
+        from gui.screens.google_auth import GoogleAuthHandler
+
+        def on_success(user_info):
+            user_id = self.current_user.get("user_id")
+            if not user_id:
+                self.show_toast("Session error.", is_error=True)
+                return
+            def _do():
+                try:
+                    resp = self.api.patch(
+                        f"/users/{user_id}",
+                        json={"auth_provider": "both"}, timeout=10)
+                    if resp.status_code == 200:
+                        self.current_user["auth_provider"] = "both"
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast(
+                            "Google account linked!", is_error=False))
+                        self.after(100, self.show_account_settings)
+                    else:
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast(
+                            "Failed to link Google account.", is_error=True))
+                except Exception:
+                    self.after(0, lambda: self.winfo_exists() and self.show_toast(
+                        "Cannot connect to server.", is_error=True))
+            threading.Thread(target=_do, daemon=True).start()
+
+        def on_error(msg):
+            self.show_toast(msg, is_error=True)
+
+        GoogleAuthHandler(self.api, self, on_success, on_error).start()
 
     # ── Navigation ──────────────────────────────────────────────────
 

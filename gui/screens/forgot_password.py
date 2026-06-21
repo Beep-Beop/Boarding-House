@@ -7,6 +7,7 @@ import requests
 class ForgotPasswordMixin:
     def show_forgot_password_page(self):
         self.clear_container()
+        self._screen_active = True
         self.geometry("630x700")
         self.resizable(False, False)
 

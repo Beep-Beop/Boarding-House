@@ -11,6 +11,7 @@ class OwnerDashboardMixin:
     def show_owner_dashboard(self):
         print("[DEBUG] Showing: Owner Dashboard")
         self.clear_container()
+        self._screen_active = True
         self._enable_debug_right_click()
 
         w, h = self.winfo_screenwidth(), self.winfo_screenheight()

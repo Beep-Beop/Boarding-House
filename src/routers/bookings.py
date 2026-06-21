@@ -204,6 +204,7 @@ def get_owner_booking_stats(
 @router.get("/{booking_id}/owner-detail", response_model=schemas.BookingDetailResponse)
 @limiter.limit("30/minute")
 def get_owner_booking_detail(
+    request: Request,
     booking_id: int,
     db: Session = Depends(database.get_db),
     current_user: schemas.TokenData = Depends(get_current_user),

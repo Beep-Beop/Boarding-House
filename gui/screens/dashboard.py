@@ -34,6 +34,7 @@ class DashboardMixin:
     def show_tenant_dashboard(self):
         print("[DEBUG] Showing: Tenant Dashboard")
         self.clear_container()
+        self._screen_active = True
 
         w, h = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{int(w * 0.85)}x{int(h * 0.85)}")

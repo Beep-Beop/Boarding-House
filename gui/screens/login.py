@@ -30,12 +30,13 @@ class LoginMixin:
     def show_login_page(self):
         print("[DEBUG] Showing: Login Page")
         self.clear_container()
+        self._screen_active = True
 
         self.geometry("630x750")
         self.resizable(False, False)
 
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
-        self.form_container.pack(pady=40, fill="both", expand=True)
+        self.form_container.pack(pady=(30, 20), fill="both", expand=True)
 
         # Logo
         logo_label = ctk.CTkLabel(self.form_container,
