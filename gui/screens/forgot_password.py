@@ -57,7 +57,7 @@ class ForgotPasswordMixin:
         email_label = ctk.CTkLabel(email_frame, text="Email", font=self.body_light_font, text_color=self.text_color)
         email_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        self.fp_email_fake_entry = ctk.CTkFrame(email_frame, width=400, height=40,
+        self.fp_email_fake_entry = ctk.CTkFrame(email_frame, width=400, height=50,
                                                  fg_color=self.fg_color, border_color=self.entry_border,
                                                  border_width=1, corner_radius=6)
         self.fp_email_fake_entry.pack()
@@ -93,7 +93,7 @@ class ForgotPasswordMixin:
                                   text_color=self.text_color)
         code_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        self.fp_code_fake_entry = ctk.CTkFrame(code_frame, width=400, height=40,
+        self.fp_code_fake_entry = ctk.CTkFrame(code_frame, width=400, height=50,
                                                 fg_color=self.fg_color, border_color=self.entry_border,
                                                 border_width=1, corner_radius=6)
         self.fp_code_fake_entry.pack()
@@ -136,7 +136,7 @@ class ForgotPasswordMixin:
                                      text_color=self.text_color)
         new_pwd_label.pack(anchor="w", padx=(15, 0), pady=(0, 5))
 
-        self.fp_new_pwd_fake_entry = ctk.CTkFrame(pwd_frame, width=400, height=40,
+        self.fp_new_pwd_fake_entry = ctk.CTkFrame(pwd_frame, width=400, height=50,
                                                    fg_color=self.fg_color, border_color=self.entry_border,
                                                    border_width=1, corner_radius=6)
         self.fp_new_pwd_fake_entry.pack()
@@ -195,7 +195,7 @@ class ForgotPasswordMixin:
                                          text_color=self.text_color)
         confirm_pwd_label.pack(anchor="w", padx=(15, 0), pady=(15, 5))
 
-        self.fp_confirm_pwd_fake_entry = ctk.CTkFrame(pwd_frame, width=400, height=40,
+        self.fp_confirm_pwd_fake_entry = ctk.CTkFrame(pwd_frame, width=400, height=50,
                                                        fg_color=self.fg_color, border_color=self.entry_border,
                                                        border_width=1, corner_radius=6)
         self.fp_confirm_pwd_fake_entry.pack()

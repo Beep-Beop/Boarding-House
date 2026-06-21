@@ -6,7 +6,7 @@ from gui.screens.google_auth import GoogleAuthHandler
 
 class LoginMixin:
     def _make_fake_entry(self, parent, placeholder, entry_kwargs=None):
-        frame = ctk.CTkFrame(parent, width=400, height=40,
+        frame = ctk.CTkFrame(parent, width=400, height=50,
                              fg_color=self.fg_color,
                              border_color=self.entry_border,
                              border_width=1, corner_radius=6)
@@ -30,7 +30,7 @@ class LoginMixin:
         print("[DEBUG] Showing: Login Page")
         self.clear_container()
 
-        self.geometry("630x700")
+        self.geometry("630x750")
         self.resizable(False, False)
 
         self.form_container = ctk.CTkFrame(self.container, fg_color="transparent")
@@ -47,8 +47,6 @@ class LoginMixin:
 
         welcome_label = ctk.CTkLabel(self.form_container,
                                      text="WELCOME TO",
-                                     height=5,
-                                     width=121,
                                      font=self.body_light_font,
                                      text_color=self.text_color
                                     )
@@ -65,8 +63,6 @@ class LoginMixin:
 
         notes_label = ctk.CTkLabel(self.form_container,
                                    text="Please enter your login details",
-                                   width=213,
-                                   height=5,
                                    font=self.body_paragraph_font,
                                    text_color=self.text_color
                                    )

@@ -78,8 +78,6 @@ class RegisterFormMixin:
 
         notes_label = ctk.CTkLabel(self.form_container,
                                    text="Sign up to get started with BHFinder",
-                                   width=213,
-                                   height=5,
                                    font=self.body_paragraph_font,
                                    text_color=self.text_color
                                    )
@@ -108,7 +106,7 @@ class RegisterFormMixin:
 
         self.first_name_bg_frame = ctk.CTkFrame(first_name_frame,
                                        width=430,
-                                       height=40,
+                                       height=50,
                                        fg_color=self.fg_color,
                                        border_color=self.entry_border,
                                        border_width=1,
@@ -144,7 +142,7 @@ class RegisterFormMixin:
 
         self.last_name_bg_frame = ctk.CTkFrame(last_name_frame,
                                            width=430,
-                                           height=40,
+                                           height=50,
                                            fg_color=self.fg_color,
                                            border_color=self.entry_border,
                                            border_width=1,
@@ -226,7 +224,7 @@ class RegisterFormMixin:
 
         self.email_bg_frame = ctk.CTkFrame(self.email_frame,
                                       width=430,
-                                      height=40,
+                                      height=50,
                                       fg_color=self.fg_color,
                                       border_color=self.entry_border,
                                       border_width=1,
@@ -263,7 +261,7 @@ class RegisterFormMixin:
 
         self.phone_bg_frame = ctk.CTkFrame(phone_frame,
                                       width=430,
-                                      height=40,
+                                      height=50,
                                       fg_color=self.fg_color,
                                       border_color=self.entry_border,
                                       border_width=1,
@@ -310,7 +308,7 @@ class RegisterFormMixin:
         self.province_menu = ctk.CTkComboBox(province_frame,
                                              values=[],
                                              width=430,
-                                             height=40,
+                                             height=50,
                                              font=self.body_light_font,
                                              dropdown_font=self.body_light_font,
                                              fg_color=self.fg_color,
@@ -359,7 +357,7 @@ class RegisterFormMixin:
         self.city_menu = ctk.CTkComboBox(city_frame,
                                          values=[],
                                          width=430,
-                                         height=40,
+                                         height=50,
                                          font=self.body_light_font,
                                          dropdown_font=self.body_light_font,
                                          fg_color=self.fg_color,
@@ -402,7 +400,7 @@ class RegisterFormMixin:
         self.barangay_menu = ctk.CTkComboBox(barangay_frame,
                                              values=[],
                                              width=430,
-                                             height=40,
+                                             height=50,
                                              font=self.body_light_font,
                                              dropdown_font=self.body_light_font,
                                              fg_color=self.fg_color,
@@ -444,7 +442,7 @@ class RegisterFormMixin:
 
         self.street_bg_frame = ctk.CTkFrame(street_frame,
                                        width=430,
-                                       height=40,
+                                       height=50,
                                        fg_color=self.fg_color,
                                        border_color=self.entry_border,
                                        border_width=1,
@@ -488,7 +486,7 @@ class RegisterFormMixin:
 
         self.create_pass_bg_frame = ctk.CTkFrame(create_pass_frame,
                                             width=430,
-                                            height=40,
+                                            height=50,
                                             fg_color=self.fg_color,
                                             border_color=self.entry_border,
                                             border_width=1,
@@ -559,7 +557,7 @@ class RegisterFormMixin:
 
         self.confirm_pass_bg_frame = ctk.CTkFrame(confirm_pass_frame,
                                         width=430,
-                                        height=40,
+                                        height=50,
                                         fg_color=self.fg_color,
                                         border_color=self.entry_border,
                                         border_width=1,

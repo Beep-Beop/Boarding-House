@@ -336,11 +336,11 @@ class AdminDashboardMixin:
 
         user_name = getattr(self, "current_user", {}).get("name", "Admin")
         welcome = ctk.CTkFrame(main, fg_color=self.secondary_color, corner_radius=8,
-                                height=80, border_width=1, border_color=self.entry_border)
+                                height=90, border_width=1, border_color=self.entry_border)
         welcome.pack(fill="x", pady=(0, 15))
         welcome.pack_propagate(False)
         inner = ctk.CTkFrame(welcome, fg_color="transparent")
-        inner.pack(fill="both", padx=20, pady=15)
+        inner.pack(fill="both", padx=20, pady=10)
         accent = ctk.CTkFrame(inner, width=4, fg_color=self.primary_color, corner_radius=2)
         accent.pack(side="left", fill="y", padx=(0, 12))
         ctk.CTkLabel(inner, text=f"Welcome back, {user_name}!",
@@ -2130,7 +2130,7 @@ class AdminDashboardMixin:
             self._admin_create_widgets[key] = entry
 
         btn_frame = ctk.CTkFrame(form, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=15, pady=(0, 15))
+        btn_frame.pack(anchor="center", padx=15, pady=15)
         self._admin_create_btn = ctk.CTkButton(
             btn_frame, text="CREATE ADMIN ACCOUNT", font=self.body_big_font,
             fg_color=self.primary_color, hover_color=self.hover_color,
