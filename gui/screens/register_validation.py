@@ -9,7 +9,7 @@ PHONE_LENGTH = 11
 class RegisterValidationMixin:
     def validate_email_realtime(self, event=None):
         email = self.email_entry.get().strip()
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        pattern = r"^(?!\.)(?!.*\.\.)[a-zA-Z0-9._%+-]{1,64}@(?!\.)(?!.*\.\.)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
         if hasattr(self, "_email_check_timer") and self._email_check_timer:
             self.after_cancel(self._email_check_timer)
@@ -73,7 +73,7 @@ class RegisterValidationMixin:
     def validate_phone_realtime(self, event=None):
         phone = self.phone_entry.get().strip()
 
-        if not phone or phone == "Enter your mobile number":
+        if not phone:
             self.phone_bg_frame.configure(border_color=self.entry_border)
             self.phone_error_lbl.configure(text="")
         elif not phone.startswith(PHONE_PREFIX):
@@ -103,6 +103,9 @@ class RegisterValidationMixin:
             self.confirm_pass_error_lbl.configure(text="")
 
     def validate_password_strength_realtime(self, event=None):
+        self._do_validate_password_strength()
+
+    def _do_validate_password_strength(self):
         if not hasattr(self, "req_length") or not self.req_length.winfo_exists():
             return
         password = self.create_pass_entry.get()
@@ -120,6 +123,7 @@ class RegisterValidationMixin:
                     text=f"\u2717  {text}",
                     text_color=self.error_red if password else self.entry_border
                 )
+        self._password_strength_timer = None
 
     def validate_phone(self, text):
         if text == "":

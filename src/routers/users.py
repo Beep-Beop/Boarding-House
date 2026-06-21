@@ -1,4 +1,4 @@
-from typing import List, Literal
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from src import crud, schemas, database, security
@@ -107,14 +107,33 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     return schemas.UserResponse.model_validate(user)
 
 @router.patch("/{user_id}/status", response_model=schemas.UserResponse)
-def update_user_status(user_id: int, new_status: Literal['active', 'banned', 'suspended'], db: Session = Depends(database.get_db), admin: schemas.TokenData = Depends(require_role("admin"))):
+def update_user_status(user_id: int, update_data: schemas.UserStatusUpdate, db: Session = Depends(database.get_db), admin: schemas.TokenData = Depends(require_role("admin"))):
     user_crud = crud.UsersCRUD(db)
 
-    user = user_crud.update_status(user_id=user_id, new_status=new_status)
+    user = user_crud.update_status(user_id=user_id, new_status=update_data.new_status)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
+        )
+
+    if update_data.reason:
+        admin_logs_crud = crud.AdminLogsCRUD(db)
+        admin_logs_crud.create(
+            admin_id=admin.user_id,
+            action="update_status",
+            target_type="user",
+            target_id=user_id,
+            description=update_data.reason
+        )
+
+        notif_crud = crud.NotificationsCRUD(db)
+        notif_crud.create(
+            user_id=user_id,
+            notif_type="system",
+            content=f"Your account has been {update_data.new_status}. Reason: {update_data.reason}",
+            triggered_by=admin.user_id,
+            reference_type=f"user_{update_data.new_status}"
         )
 
     return schemas.UserResponse.model_validate(user)

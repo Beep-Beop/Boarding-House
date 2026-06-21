@@ -30,7 +30,7 @@ def get_listing_reviews(request: Request, listing_id: int, db: Session = Depends
 
 @router.delete("/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
-def delete_review(request: Request, review_id: int, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
+def delete_review(request: Request, review_id: int, reason: Optional[str] = None, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     review_crud = crud.ReviewsCRUD(db)
 
     review = review_crud.get(review_id=review_id)
@@ -47,6 +47,16 @@ def delete_review(request: Request, review_id: int, db: Session = Depends(databa
         )
 
     review_crud.delete(review_id=review_id)
+
+    if reason:
+        admin_logs_crud = crud.AdminLogsCRUD(db)
+        admin_logs_crud.create(
+            admin_id=current_user.user_id,
+            action="delete_review",
+            target_type="review",
+            target_id=review_id,
+            description=reason
+        )
     
     return None
 

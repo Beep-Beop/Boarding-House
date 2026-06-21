@@ -127,6 +127,7 @@ class BoardingHouseResponse(BoardingHouseBase):
     status: Literal['active', 'pending', 'banned']
     bh_created_at: datetime
     is_verified: bool
+    rejection_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -149,6 +150,7 @@ class BoardingHouseUpdate(BaseModel):
     min_stay_months: Optional[int] = None
     status: Optional[Literal['active', 'pending', 'banned']] = None
     is_verified: Optional[bool] = None
+    reason: Optional[str] = None
 
 # --- PHOTOS ---
 class PhotoBase(BaseModel):
@@ -207,9 +209,14 @@ class ReportsCreate(ReportsBase):
     target_id: int
     reviewed_id: Optional[int] = None 
 
+class UserStatusUpdate(BaseModel):
+    new_status: Literal['active', 'banned', 'suspended']
+    reason: Optional[str] = None
+
 class ReportsUpdate(BaseModel):
     status: Literal['resolved', 'dismissed']
     resolved_by: int
+    reason: Optional[str] = None
 
 class ReportsResponse(ReportsBase):
     report_id: int
@@ -563,5 +570,6 @@ class AdminListingResponse(BaseModel):
     permit_url: Optional[str] = None
     photo_url: Optional[str] = None
     desc: Optional[str] = None
+    rejection_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

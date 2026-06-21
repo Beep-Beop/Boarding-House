@@ -8,6 +8,8 @@ from tkinter import ttk
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
+from urllib.parse import quote
+import re
 
 
 class AdminDashboardMixin:
@@ -79,21 +81,6 @@ class AdminDashboardMixin:
 
         ctk.CTkLabel(nav, text=None, image=self.logo).pack(side="left", pady=(15, 20))
 
-        notif_frame = ctk.CTkFrame(nav, fg_color="transparent")
-        notif_frame.pack(side="right", padx=(0, 5))
-
-        notif_btn = ctk.CTkLabel(notif_frame, text="", image=self.notification_icon, cursor="hand2")
-        notif_btn.pack(side="left", padx=5)
-        notif_btn.bind("<Button-1>", lambda e: self.show_notifications_page())
-
-        self._admin_notif_badge = ctk.CTkLabel(
-            notif_frame, text="",
-            width=16, height=16, corner_radius=8,
-            fg_color=self.error_red, text_color="white",
-            font=ctk.CTkFont(size=9, weight="bold"),
-        )
-        self._admin_notif_badge.place(x=18, y=-2)
-
         self._admin_profile_frame = ctk.CTkFrame(nav, fg_color="transparent")
         self._admin_profile_frame.pack(side="right", padx=25, pady=10)
 
@@ -117,7 +104,6 @@ class AdminDashboardMixin:
         self._admin_profile_frame.configure(cursor="hand2")
 
         self._admin_nav_bar = nav
-        self._admin_notif_frame = notif_frame
 
     # ── Sidebar ──
 
@@ -197,7 +183,6 @@ class AdminDashboardMixin:
                 items=[
                     ("Account Settings", self.menu_profile_icon,  self.show_account_settings),
                     None,
-                    ("Notifications",  self.notification_icon,  self.show_notifications_page),
                     None,
                     ("Logout",         self.menu_logout_icon,   self._handle_logout),
                 ],
@@ -281,6 +266,86 @@ class AdminDashboardMixin:
     def _admin_confirm_action(self, prompt, title="Confirm"):
         dialog = ctk.CTkInputDialog(text=prompt, title=title)
         return dialog.get_input()
+
+    def _admin_confirm_with_reason(self, prompt, keyword, title="Confirm"):
+        """Custom dialog: confirmation keyword + reason text. Returns (confirmed, reason)."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(title)
+        dialog.geometry("420x300")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.attributes("-topmost", True)
+        dialog.update_idletasks()
+        dialog.wait_visibility()
+        dialog.grab_set()
+        dialog.focus_force()
+
+        main = ctk.CTkFrame(dialog, fg_color=self.secondary_color, corner_radius=6)
+        main.pack(fill="both", expand=True, padx=10, pady=10)
+
+        ctk.CTkLabel(main, text=prompt, font=self.body_paragraph_font,
+                      text_color=self.text_color, wraplength=380).pack(pady=(15, 5), padx=10)
+
+        entry = ctk.CTkEntry(main, font=self.body_paragraph_font, height=32)
+        entry.pack(fill="x", padx=15, pady=5)
+        entry.focus_force()
+
+        ctk.CTkLabel(main, text="Reason:", font=self.body_paragraph_font,
+                      text_color=self.text_color, anchor="w").pack(fill="x", padx=15, pady=(10, 2))
+
+        textbox = ctk.CTkTextbox(main, font=self.body_paragraph_font, height=80)
+        textbox.pack(fill="x", padx=15, pady=(0, 10))
+
+        result = {"confirmed": False, "reason": ""}
+
+        def on_submit():
+            if entry.get().strip().upper() == keyword and textbox.get("1.0", "end-1c").strip():
+                result["confirmed"] = True
+                result["reason"] = textbox.get("1.0", "end-1c").strip()
+                dialog.destroy()
+            elif entry.get().strip().upper() != keyword:
+                self.show_toast(f"Type {keyword} to confirm", is_error=True)
+            else:
+                self.show_toast("Please provide a reason", is_error=True)
+
+        def on_cancel():
+            dialog.destroy()
+
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=15, pady=(0, 10))
+        ctk.CTkButton(btn_frame, text="Cancel", font=self.body_description_font,
+                       fg_color=self.hover_color, text_color="white",
+                       command=on_cancel).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(btn_frame, text="Submit", font=self.body_description_font,
+                       fg_color=self.primary_color, text_color="white",
+                       command=on_submit).pack(side="right")
+
+        dialog.wait_window()
+        return result["confirmed"], result["reason"]
+
+    # ── Helper: Button Disable/Enable ──
+
+    def _admin_disable_buttons(self):
+        self._admin_set_buttons_state("disabled")
+
+    def _admin_enable_buttons(self):
+        self._admin_set_buttons_state("normal")
+
+    def _admin_set_buttons_state(self, state):
+        try:
+            for child in self._admin_content_wrapper.winfo_children():
+                self._admin_recursive_btn_state(child, state)
+        except Exception:
+            pass
+
+    def _admin_recursive_btn_state(self, widget, state):
+        if isinstance(widget, ctk.CTkButton):
+            try:
+                widget.configure(state=state)
+            except Exception:
+                pass
+        for child in widget.winfo_children():
+            self._admin_recursive_btn_state(child, state)
 
     # ── Helper: Search Bar ──
 
@@ -386,7 +451,6 @@ class AdminDashboardMixin:
                       font=self.body_light_font, text_color=self.text_color).pack(anchor="w")
 
         self._admin_fetch_dashboard_stats()
-        self._admin_fetch_notif_count()
 
     def _admin_fetch_dashboard_stats(self):
         def _do():
@@ -406,7 +470,6 @@ class AdminDashboardMixin:
                         if resp.status_code == 200:
                             users = resp.json()
                             data["total_users"] = str(len(users))
-                            data["pending_permits"] = str(sum(1 for u in users if u.get("status") == "active"))
                     except Exception:
                         self.after(0, lambda: self.show_toast("Failed to load users. Check your connection.", is_error=True))
 
@@ -519,6 +582,9 @@ class AdminDashboardMixin:
         self._admin_refresh_users()
 
     def _admin_refresh_users(self):
+        if getattr(self, '_admin_refreshing', False):
+            return
+        self._admin_refreshing = True
         card = self._admin_users_container
         for w in card.winfo_children():
             w.destroy()
@@ -542,7 +608,9 @@ class AdminDashboardMixin:
                 users = [u for u in users if
                          search in u.get("name", "").lower() or
                          search in u.get("email", "").lower()]
-            self.after(0, lambda: self._admin_populate_users(users))
+            self.after(0, lambda: (
+                setattr(self, '_admin_refreshing', False),
+                self._admin_populate_users(users)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -604,44 +672,65 @@ class AdminDashboardMixin:
             actions_f = ctk.CTkFrame(card, fg_color="transparent")
             actions_f.grid(row=data_row, column=5, padx=15, pady=(7, 7))
             if status != "banned":
-                ctk.CTkButton(actions_f, text="Ban", font=self.body_description_font,
-                              fg_color=self.error_red, text_color="white",
-                              width=50, height=25,
-                              command=lambda uid=uid: self._admin_ban_user(uid)).pack(side="left", padx=2)
+                ban_btn = ctk.CTkButton(actions_f, text="Ban", font=self.body_description_font,
+                                        fg_color=self.error_red, text_color="white",
+                                        width=50, height=25)
+                ban_btn.configure(command=lambda uid=uid, b=ban_btn: self._admin_ban_user(uid, b))
+                ban_btn.pack(side="left", padx=2)
             else:
-                ctk.CTkButton(actions_f, text="Unban", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=50, height=25,
-                              command=lambda uid=uid: self._admin_unban_user(uid)).pack(side="left", padx=2)
+                unban_btn = ctk.CTkButton(actions_f, text="Unban", font=self.body_description_font,
+                                          fg_color="green", text_color="white",
+                                          width=50, height=25)
+                unban_btn.configure(command=lambda uid=uid, b=unban_btn: self._admin_unban_user(uid, b))
+                unban_btn.pack(side="left", padx=2)
 
             if not is_last:
                 ttk.Separator(card, orient="horizontal").grid(
                     row=sep_row, column=0, columnspan=6, padx=20, pady=4, sticky="ew")
 
-    def _admin_ban_user(self, user_id):
-        result = self._admin_confirm_action(f"Type BAN to ban user #{user_id}:", "Ban User")
-        if result != "BAN":
+    def _admin_ban_user(self, user_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            "Type BAN to confirm:", "BAN", "Ban User")
+        if not confirmed:
             return
-        try:
-            resp = self.api.patch(f"/users/{user_id}/status?new_status=banned", timeout=10)
-            if resp.status_code == 200:
-                self.show_toast(f"User {user_id} banned", is_error=False)
-            else:
-                self.show_toast("Failed to ban user", is_error=True)
-        except Exception:
-            self.show_toast("Cannot connect to server", is_error=True)
-        self._admin_refresh_users()
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
+        def _do():
+            try:
+                resp = self.api.patch(f"/users/{user_id}/status",
+                                      json={"new_status": "banned", "reason": reason}, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self.show_toast(f"User {user_id} banned", is_error=False))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to ban user", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Ban"))
+            self.after(0, self._admin_refresh_users)
+        threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_unban_user(self, user_id):
-        try:
-            resp = self.api.patch(f"/users/{user_id}/status?new_status=active", timeout=10)
-            if resp.status_code == 200:
-                self.show_toast(f"User {user_id} unbanned", is_error=False)
-            else:
-                self.show_toast("Failed to unban user", is_error=True)
-        except Exception:
-            self.show_toast("Cannot connect to server", is_error=True)
-        self._admin_refresh_users()
+    def _admin_unban_user(self, user_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            "Type UNBAN to confirm:", "UNBAN", "Unban User")
+        if not confirmed:
+            return
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
+        def _do():
+            try:
+                resp = self.api.patch(f"/users/{user_id}/status",
+                                      json={"new_status": "active", "reason": reason}, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self.show_toast(f"User {user_id} unbanned", is_error=False))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to unban user", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Unban"))
+            self.after(0, self._admin_refresh_users)
+        threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
     #  SECTION 3: LISTINGS + PERMIT VERIFIER (COMBINED)
@@ -670,6 +759,9 @@ class AdminDashboardMixin:
         self._enable_scroll_refresh(scroll, self._admin_refresh_listings)
 
     def _admin_refresh_listings(self):
+        if getattr(self, '_admin_refreshing', False):
+            return
+        self._admin_refreshing = True
         card = self._admin_listings_container
         for w in card.winfo_children():
             w.destroy()
@@ -698,7 +790,9 @@ class AdminDashboardMixin:
                 listings = [l for l in listings if search in l.get("name", "").lower()]
             if status_filter != "All":
                 listings = [l for l in listings if l.get("status") == status_filter]
-            self.after(0, lambda: self._admin_populate_listings(listings))
+            self.after(0, lambda: (
+                setattr(self, '_admin_refreshing', False),
+                self._admin_populate_listings(listings)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -733,11 +827,12 @@ class AdminDashboardMixin:
             sep_row = data_row + 1
             is_last = r == len(listings) - 1
 
-            lid = listing.get("id", listing.get("listing_id"))
+            lid = listing.get("id") or listing.get("listing_id") or "?"
             name = listing.get("name", listing.get("bh_name", "Untitled"))
             location = listing.get("location", "Unknown")
             status = listing.get("status", "unknown")
             verified = listing.get("is_verified", False)
+            rejection_reason = listing.get("rejection_reason")
 
             ctk.CTkLabel(card, text=name, font=self.body_paragraph_font,
                           text_color=self.text_color).grid(
@@ -757,8 +852,15 @@ class AdminDashboardMixin:
                           corner_radius=4, padx=8, pady=2).grid(
                 row=data_row, column=3, padx=15, pady=(7, 7), sticky="ew")
 
-            v_text = "Verified" if verified else "Unverified"
-            v_color = "green" if verified else self.hover_color
+            if rejection_reason:
+                v_text = f"Rejected"
+                v_color = self.error_red
+            elif verified:
+                v_text = "Verified"
+                v_color = "green"
+            else:
+                v_text = "Unverified"
+                v_color = self.hover_color
             ctk.CTkLabel(card, text=v_text, font=self.body_description_font,
                           fg_color=v_color, text_color="white",
                           corner_radius=4, padx=8, pady=2).grid(
@@ -775,42 +877,43 @@ class AdminDashboardMixin:
                           ).grid(row=0, column=col, padx=(0, 4)); col += 1
 
             if status == "pending":
-                ctk.CTkButton(actions_f, text="Approve", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=70, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_approve_listing(lid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                approve_btn = ctk.CTkButton(actions_f, text="Approve", font=self.body_description_font,
+                                            fg_color="green", text_color="white",
+                                            width=70, height=28, cursor="hand2")
+                approve_btn.configure(command=lambda lid=lid, b=approve_btn: self._admin_approve_listing(lid, b))
+                approve_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
 
             if status != "banned":
-                ctk.CTkButton(actions_f, text="Ban", font=self.body_description_font,
-                              fg_color=self.error_red, text_color="white",
-                              width=55, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_ban_listing(lid)
-                              ).grid(row=0, column=col, padx=(0, 2)); col += 1
+                ban_listing_btn = ctk.CTkButton(actions_f, text="Ban", font=self.body_description_font,
+                                                fg_color=self.error_red, text_color="white",
+                                                width=55, height=28, cursor="hand2")
+                ban_listing_btn.configure(command=lambda lid=lid, b=ban_listing_btn: self._admin_ban_listing(lid, b))
+                ban_listing_btn.grid(row=0, column=col, padx=(0, 2)); col += 1
             else:
-                ctk.CTkButton(actions_f, text="Restore", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=65, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_restore_listing(lid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                restore_btn = ctk.CTkButton(actions_f, text="Restore", font=self.body_description_font,
+                                            fg_color="green", text_color="white",
+                                            width=65, height=28, cursor="hand2")
+                restore_btn.configure(command=lambda lid=lid, b=restore_btn: self._admin_restore_listing(lid, b))
+                restore_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
 
             if not verified and status != "banned":
-                ctk.CTkButton(actions_f, text="Verify Permit", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=95, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_approve_permit(lid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
-                ctk.CTkButton(actions_f, text="Reject", font=self.body_description_font,
-                              fg_color=self.error_red, text_color="white",
-                              width=60, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_reject_permit(lid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                reject_btn = ctk.CTkButton(actions_f, text="Reject", font=self.body_description_font,
+                                           fg_color=self.error_red, text_color="white",
+                                           width=60, height=28, cursor="hand2")
+                reject_btn.configure(command=lambda lid=lid, b=reject_btn: self._admin_reject_permit(lid, b))
+                reject_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
             elif verified:
-                ctk.CTkButton(actions_f, text="Revoke", font=self.body_description_font,
-                              fg_color=self.hover_color, text_color="white",
-                              width=65, height=28, cursor="hand2",
-                              command=lambda lid=lid: self._admin_revoke_permit(lid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                revoke_btn = ctk.CTkButton(actions_f, text="Revoke", font=self.body_description_font,
+                                           fg_color=self.hover_color, text_color="white",
+                                           width=65, height=28, cursor="hand2")
+                revoke_btn.configure(command=lambda lid=lid, b=revoke_btn: self._admin_revoke_permit(lid, b))
+                revoke_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
+
+            if rejection_reason:
+                ctk.CTkLabel(actions_f, text=f"Reason: {rejection_reason}",
+                              font=self.body_description_font,
+                              text_color=self.error_red, anchor="w", wraplength=250).grid(
+                    row=1, column=0, columnspan=10, padx=(0, 10), pady=(2, 4), sticky="w")
 
             if not is_last:
                 ttk.Separator(card, orient="horizontal").grid(
@@ -835,9 +938,7 @@ class AdminDashboardMixin:
         ctk.CTkLabel(header, text="Listing Detail", font=self.alt_title_font,
                       text_color=self.text_color).pack(side="left", padx=10)
 
-        loading = ctk.CTkLabel(main, text="Loading...", font=self.body_paragraph_font,
-                                text_color=self.text_color)
-        loading.pack(pady=30)
+        self._admin_show_loading(main)
 
         def _do():
             data = None
@@ -854,7 +955,8 @@ class AdminDashboardMixin:
                     photos = resp.json()
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load photos. Check your connection.", is_error=True))
-            self.after(0, lambda: self._admin_populate_listing_detail(main, data, photos))
+            self.after(0, lambda: (self._admin_hide_loading(),
+                                   self._admin_populate_listing_detail(main, data, photos)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -869,6 +971,7 @@ class AdminDashboardMixin:
         name = data.get("bh_name", "Untitled")
         status = data.get("status", "unknown")
         verified = data.get("is_verified", False)
+        rejection_reason = data.get("rejection_reason")
         color = self._admin_status_colors.get(status, self.text_color)
 
         header = ctk.CTkFrame(parent, fg_color="transparent")
@@ -896,6 +999,13 @@ class AdminDashboardMixin:
             ctk.CTkLabel(inner, text="Verified", font=self.body_paragraph_font,
                           fg_color="green", text_color="white",
                           corner_radius=4, padx=12, pady=4).pack(side="left", padx=(5, 0))
+        elif rejection_reason:
+            ctk.CTkLabel(inner, text="Rejected", font=self.body_paragraph_font,
+                          fg_color=self.error_red, text_color="white",
+                          corner_radius=4, padx=12, pady=4).pack(side="left", padx=(5, 0))
+            ctk.CTkLabel(inner, text=f"Reason: {rejection_reason}",
+                          font=self.body_description_font,
+                          text_color=self.error_red).pack(side="left", padx=(5, 0))
         else:
             ctk.CTkLabel(inner, text="Not Verified", font=self.body_paragraph_font,
                           fg_color=self.hover_color, text_color="white",
@@ -997,7 +1107,7 @@ class AdminDashboardMixin:
 
         canvas = tk.Canvas(
             container, height=470, highlightthickness=0,
-            bg=self.secondary_color[0],
+            bg=container._apply_appearance_mode(container.cget("fg_color")),
         )
         canvas.pack(side="top", fill="x")
 
@@ -1056,23 +1166,35 @@ class AdminDashboardMixin:
             except Exception:
                 pass
 
-    def _admin_ban_listing(self, listing_id):
-        result = self._admin_confirm_action(f"Type BAN to ban listing #{listing_id}:", "Ban Listing")
-        if result != "BAN":
+    def _admin_ban_listing(self, listing_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            f"Type BAN to ban listing #{listing_id}:",
+            "BAN", "Ban Listing")
+        if not confirmed:
             return
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
-                resp = self.api.patch(f"/boarding-houses/{listing_id}", json={"status": "banned"}, timeout=10)
+                resp = self.api.patch(f"/boarding-houses/{listing_id}",
+                                      json={"status": "banned", "reason": reason}, timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(f"Listing {listing_id} banned", is_error=False))
                 else:
                     self.after(0, lambda: self.show_toast("Failed to ban listing", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Ban"))
             self.after(0, self._admin_refresh_listings)
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_restore_listing(self, listing_id):
+    def _admin_restore_listing(self, listing_id, btn=None):
+        dialog = ctk.CTkInputDialog(text="Type RESTORE to confirm:", title="Restore Listing")
+        if dialog.get_input() != "RESTORE":
+            return
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(f"/boarding-houses/{listing_id}", json={"status": "active"}, timeout=10)
@@ -1082,15 +1204,18 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to restore listing", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Restore"))
             self.after(0, self._admin_refresh_listings)
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_approve_listing(self, listing_id):
+    def _admin_approve_listing(self, listing_id, btn=None):
         result = self._admin_confirm_action(
             f"Type APPROVE to approve listing #{listing_id} (this will also verify the permit):", "Approve Listing")
         if result != "APPROVE":
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(f"/boarding-houses/{listing_id}",
@@ -1102,6 +1227,8 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to approve listing", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Approve"))
             self.after(0, self._admin_refresh_listings)
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1154,13 +1281,6 @@ class AdminDashboardMixin:
 
         # Permit actions
         if not is_verified:
-            ctk.CTkButton(main, text="Approve Permit Only",
-                          font=self.body_description_font,
-                          fg_color="green", text_color="white",
-                          anchor="w", cursor="hand2",
-                          command=_cmd("Approve Permit",
-                                       lambda: self._admin_approve_permit(listing_id))
-                          ).pack(fill="x", padx=10, pady=2)
             ctk.CTkButton(main, text="Reject Permit",
                           font=self.body_description_font,
                           fg_color=self.error_red, text_color="white",
@@ -1221,7 +1341,8 @@ class AdminDashboardMixin:
             dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
             dropdown_hover_color=self.hover_color, dropdown_font=self.body_light_font,
             text_color=self.text_color,
-            width=140, height=35, state="readonly")
+            width=140, height=35, state="readonly",
+            command=lambda c: self._admin_refresh_bookings())
         self._admin_bookings_filter_status.pack(side="left", padx=(0, 10))
         self._admin_bookings_filter_status.set("All")
 
@@ -1243,6 +1364,9 @@ class AdminDashboardMixin:
         self._admin_refresh_bookings()
 
     def _admin_refresh_bookings(self):
+        if getattr(self, '_admin_refreshing', False):
+            return
+        self._admin_refreshing = True
         for w in self._admin_bookings_table.winfo_children():
             w.destroy()
 
@@ -1253,7 +1377,7 @@ class AdminDashboardMixin:
             search_text = self._admin_bookings_search_entry.get().strip()
             params = f"?status={status_filter}&limit=200"
             if search_text:
-                params += f"&search={search_text}"
+                params += f"&search={quote(search_text)}"
             stats_data = {}
             bookings_data = []
             try:
@@ -1268,7 +1392,9 @@ class AdminDashboardMixin:
                     bookings_data = resp.json().get("bookings", [])
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
-            self.after(0, lambda: self._admin_populate_bookings(stats_data, bookings_data))
+            self.after(0, lambda: (
+                setattr(self, '_admin_refreshing', False),
+                self._admin_populate_bookings(stats_data, bookings_data)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1278,7 +1404,7 @@ class AdminDashboardMixin:
             for w in self._admin_bookings_table.winfo_children():
                 w.destroy()
         except Exception:
-            return
+            pass
 
         if "total_bookings" in self._admin_bookings_stat_labels:
             self._admin_bookings_stat_labels["total_bookings"].configure(
@@ -1370,16 +1496,16 @@ class AdminDashboardMixin:
                           command=lambda bid=bid: self._admin_show_booking_detail(bid)
                           ).grid(row=0, column=col, padx=(0, 4)); col += 1
             if status == "pending":
-                ctk.CTkButton(actions_f, text="Approve", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=60, height=28, cursor="hand2",
-                              command=lambda bid=bid: self._admin_booking_change_status(
-                                  bid, "active")).grid(row=0, column=col, padx=(0, 4)); col += 1
-                ctk.CTkButton(actions_f, text="Cancel", font=self.body_description_font,
-                              fg_color=self.error_red, text_color="white",
-                              width=55, height=28, cursor="hand2",
-                              command=lambda bid=bid: self._admin_booking_change_status(
-                                  bid, "cancelled")).grid(row=0, column=col, padx=(0, 4)); col += 1
+                approve_book_btn = ctk.CTkButton(actions_f, text="Approve", font=self.body_description_font,
+                                                 fg_color="green", text_color="white",
+                                                 width=60, height=28, cursor="hand2")
+                approve_book_btn.configure(command=lambda bid=bid, b=approve_book_btn: self._admin_booking_change_status(bid, "active", b))
+                approve_book_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
+                cancel_book_btn = ctk.CTkButton(actions_f, text="Cancel", font=self.body_description_font,
+                                                fg_color=self.error_red, text_color="white",
+                                                width=55, height=28, cursor="hand2")
+                cancel_book_btn.configure(command=lambda bid=bid, b=cancel_book_btn: self._admin_booking_change_status(bid, "cancelled", b))
+                cancel_book_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
 
             if not is_last:
                 ttk.Separator(card, orient="horizontal").grid(
@@ -1548,40 +1674,41 @@ class AdminDashboardMixin:
         action_frame.pack(fill="x", pady=(0, 20))
         bid = data.get("booking_id")
         if status == "pending":
-            ctk.CTkButton(action_frame, text="Approve Booking", font=self.body_big_font,
-                          fg_color="green", hover_color="darkgreen",
-                          text_color="white", height=40,
-                          command=lambda: self._admin_detail_change_status(bid, "active")
-                          ).pack(side="left", padx=(0, 10))
-            ctk.CTkButton(action_frame, text="Cancel Booking", font=self.body_big_font,
-                          fg_color=self.error_red, hover_color="#b52e2a",
-                          text_color="white", height=40,
-                          command=lambda: self._admin_detail_change_status(bid, "cancelled")
-                          ).pack(side="left")
+            approve_detail_btn = ctk.CTkButton(action_frame, text="Approve Booking", font=self.body_big_font,
+                                               fg_color="green", hover_color="darkgreen",
+                                               text_color="white", height=40)
+            approve_detail_btn.configure(command=lambda: self._admin_detail_change_status(bid, "active", approve_detail_btn))
+            approve_detail_btn.pack(side="left", padx=(0, 10))
+            cancel_detail_btn = ctk.CTkButton(action_frame, text="Cancel Booking", font=self.body_big_font,
+                                              fg_color=self.error_red, hover_color="#b52e2a",
+                                              text_color="white", height=40)
+            cancel_detail_btn.configure(command=lambda: self._admin_detail_change_status(bid, "cancelled", cancel_detail_btn))
+            cancel_detail_btn.pack(side="left")
         elif status == "active":
-            ctk.CTkButton(action_frame, text="Cancel Booking", font=self.body_big_font,
-                          fg_color=self.error_red, hover_color="#b52e2a",
-                          text_color="white", height=40,
-                          command=lambda: self._admin_detail_change_status(bid, "cancelled")
-                          ).pack(side="left")
+            cancel_detail_btn = ctk.CTkButton(action_frame, text="Cancel Booking", font=self.body_big_font,
+                                              fg_color=self.error_red, hover_color="#b52e2a",
+                                              text_color="white", height=40)
+            cancel_detail_btn.configure(command=lambda: self._admin_detail_change_status(bid, "cancelled", cancel_detail_btn))
+            cancel_detail_btn.pack(side="left")
         elif status == "cancelled":
-            ctk.CTkButton(action_frame, text="Re-activate Booking", font=self.body_big_font,
-                          fg_color=self.primary_color, hover_color=self.hover_color,
-                          text_color="white", height=40,
-                          command=lambda: self._admin_detail_change_status(bid, "pending")
-                          ).pack(side="left")
+            reactivate_detail_btn = ctk.CTkButton(action_frame, text="Re-activate Booking", font=self.body_big_font,
+                                                  fg_color=self.primary_color, hover_color=self.hover_color,
+                                                  text_color="white", height=40)
+            reactivate_detail_btn.configure(command=lambda: self._admin_detail_change_status(bid, "pending", reactivate_detail_btn))
+            reactivate_detail_btn.pack(side="left")
 
-    def _admin_booking_change_status(self, booking_id, new_status):
+    def _admin_booking_change_status(self, booking_id, new_status, btn=None):
         result = self._admin_confirm_action(
             f"Type CONFIRM to {new_status} booking #{booking_id}:", "Confirm")
         if result != "CONFIRM":
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(
                     f"/bookings/{booking_id}/status",
-                    json={"status": new_status, "changed_by_user_id": self.current_user.get("user_id", 0)},
+                    json={"status": new_status, "changed_by_user_id": getattr(self, "current_user", {}).get("user_id", 0)},
                     timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(
@@ -1591,21 +1718,23 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast(detail, is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text=new_status.capitalize()))
             self.after(0, self._admin_refresh_bookings)
-
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_detail_change_status(self, booking_id, new_status):
+    def _admin_detail_change_status(self, booking_id, new_status, btn=None):
         result = self._admin_confirm_action(
             f"Type CONFIRM to {new_status} booking #{booking_id}:", "Confirm")
         if result != "CONFIRM":
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(
                     f"/bookings/{booking_id}/status",
-                    json={"status": new_status, "changed_by_user_id": self.current_user.get("user_id", 0)},
+                    json={"status": new_status, "changed_by_user_id": getattr(self, "current_user", {}).get("user_id", 0)},
                     timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(
@@ -1615,8 +1744,9 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast(detail, is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Re-activate" if new_status == "pending" else f"{new_status.capitalize()} Booking"))
             self.after(0, lambda: self._admin_show_booking_detail(booking_id))
-
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
@@ -1713,33 +1843,36 @@ class AdminDashboardMixin:
             rid = review.get("review_id")
             actions_f = ctk.CTkFrame(card, fg_color="transparent")
             actions_f.grid(row=data_row, column=6, padx=12, pady=(7, 7))
-            ctk.CTkButton(actions_f, text="Delete", font=self.body_description_font,
-                          fg_color=self.error_red, text_color="white",
-                          width=60, height=28, cursor="hand2",
-                          command=lambda rid=rid: self._admin_delete_review(rid)
-                          ).pack(side="left", padx=2)
+            delete_review_btn = ctk.CTkButton(actions_f, text="Delete", font=self.body_description_font,
+                                             fg_color=self.error_red, text_color="white",
+                                             width=60, height=28, cursor="hand2")
+            delete_review_btn.configure(command=lambda rid=rid, b=delete_review_btn: self._admin_delete_review(rid, b))
+            delete_review_btn.pack(side="left", padx=2)
 
             if not is_last:
                 ttk.Separator(card, orient="horizontal").grid(
                     row=sep_row, column=0, columnspan=7, padx=20, pady=4, sticky="ew")
 
-    def _admin_delete_review(self, review_id):
-        result = self._admin_confirm_action(
-            f"Type DELETE to remove review #{review_id}:", "Delete Review")
-        if result != "DELETE":
+    def _admin_delete_review(self, review_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            "Type DELETE to confirm:", "DELETE", "Delete Review")
+        if not confirmed:
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
-                resp = self.api.delete(f"/social/reviews/{review_id}", timeout=10)
+                resp = self.api.delete(f"/social/reviews/{review_id}",
+                                       params={"reason": reason}, timeout=10)
                 if resp.status_code == 204:
                     self.after(0, lambda: self.show_toast("Review deleted", is_error=False))
                 else:
                     self.after(0, lambda: self.show_toast("Failed to delete review", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Delete"))
             self.after(0, self._build_admin_reviews_content)
-
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
@@ -1778,6 +1911,9 @@ class AdminDashboardMixin:
         self._admin_refresh_reports()
 
     def _admin_refresh_reports(self):
+        if getattr(self, '_admin_refreshing', False):
+            return
+        self._admin_refreshing = True
         card = self._admin_reports_container
         for w in card.winfo_children():
             w.destroy()
@@ -1799,7 +1935,9 @@ class AdminDashboardMixin:
                 pass
             if status_filter != "All":
                 reports = [r for r in reports if r.get("status") == status_filter]
-            self.after(0, lambda: self._admin_populate_reports(reports))
+            self.after(0, lambda: (
+                setattr(self, '_admin_refreshing', False),
+                self._admin_populate_reports(reports)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1875,73 +2013,78 @@ class AdminDashboardMixin:
             actions_f.grid(row=data_row, column=6, padx=12, pady=(7, 7))
             col = 0
             if status in ("pending", "reviewed"):
-                ctk.CTkButton(actions_f, text="Resolve", font=self.body_description_font,
-                              fg_color="green", text_color="white",
-                              width=70, height=28, cursor="hand2",
-                              command=lambda rid=rid: self._admin_resolve_report(rid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
-                ctk.CTkButton(actions_f, text="Dismiss", font=self.body_description_font,
-                              fg_color=self.text_color, text_color="white",
-                              width=70, height=28, cursor="hand2",
-                              command=lambda rid=rid: self._admin_dismiss_report(rid)
-                              ).grid(row=0, column=col, padx=(0, 4)); col += 1
+                resolve_btn = ctk.CTkButton(actions_f, text="Resolve", font=self.body_description_font,
+                                            fg_color="green", text_color="white",
+                                            width=70, height=28, cursor="hand2")
+                resolve_btn.configure(command=lambda rid=rid, b=resolve_btn: self._admin_resolve_report(rid, b))
+                resolve_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
+                dismiss_btn = ctk.CTkButton(actions_f, text="Dismiss", font=self.body_description_font,
+                                            fg_color=self.text_color, text_color="white",
+                                            width=70, height=28, cursor="hand2")
+                dismiss_btn.configure(command=lambda rid=rid, b=dismiss_btn: self._admin_dismiss_report(rid, b))
+                dismiss_btn.grid(row=0, column=col, padx=(0, 4)); col += 1
 
             if not is_last:
                 ttk.Separator(card, orient="horizontal").grid(
                     row=sep_row, column=0, columnspan=7, padx=20, pady=4, sticky="ew")
 
-    def _admin_resolve_report(self, report_id):
-        result = self._admin_confirm_action(
-            f"Type RESOLVE to resolve report #{report_id}:", "Resolve Report")
-        if result != "RESOLVE":
+    def _admin_resolve_report(self, report_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            "Type RESOLVE to confirm:", "RESOLVE", "Resolve Report")
+        if not confirmed:
             return
-        admin_id = self.current_user.get("user_id", 0)
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
+        admin_id = getattr(self, "current_user", {}).get("user_id", 0)
         def _do():
             try:
                 resp = self.api.patch(f"/reports/{report_id}",
-                                      json={"status": "resolved", "resolved_by": admin_id}, timeout=10)
+                                      json={"status": "resolved", "resolved_by": admin_id, "reason": reason}, timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(f"Report {report_id} resolved", is_error=False))
                 else:
                     self.after(0, lambda: self.show_toast("Failed to resolve report", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Resolve"))
             self.after(0, self._admin_refresh_reports)
-
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_dismiss_report(self, report_id):
-        result = self._admin_confirm_action(
-            f"Type DISMISS to dismiss report #{report_id}:", "Dismiss Report")
-        if result != "DISMISS":
+    def _admin_dismiss_report(self, report_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            "Type DISMISS to confirm:", "DISMISS", "Dismiss Report")
+        if not confirmed:
             return
-        admin_id = self.current_user.get("user_id", 0)
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
+        admin_id = getattr(self, "current_user", {}).get("user_id", 0)
         def _do():
             try:
                 resp = self.api.patch(f"/reports/{report_id}",
-                                      json={"status": "dismissed", "resolved_by": admin_id}, timeout=10)
+                                      json={"status": "dismissed", "resolved_by": admin_id, "reason": reason}, timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(f"Report {report_id} dismissed", is_error=False))
                 else:
                     self.after(0, lambda: self.show_toast("Failed to dismiss report", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Dismiss"))
             self.after(0, self._admin_refresh_reports)
-
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
     #  PERMIT ACTION METHODS (used by combined listings)
     # ════════════════════════════════════
 
-    def _admin_approve_permit(self, listing_id):
+    def _admin_approve_permit(self, listing_id, btn=None):
         result = self._admin_confirm_action(
             f"Type APPROVE to verify permit for listing #{listing_id}:", "Approve Permit")
         if result != "APPROVE":
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(f"/boarding-houses/{listing_id}",
@@ -1953,20 +2096,23 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to approve permit", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Verify Permit"))
             self.after(0, self._admin_refresh_listings)
-
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_reject_permit(self, listing_id):
-        result = self._admin_confirm_action(
-            f"Type REJECT to reject permit for listing #{listing_id}:", "Reject Permit")
-        if result != "REJECT":
+    def _admin_reject_permit(self, listing_id, btn=None):
+        confirmed, reason = self._admin_confirm_with_reason(
+            f"Type REJECT to reject permit for listing #{listing_id}:",
+            "REJECT", "Reject Permit")
+        if not confirmed:
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(f"/boarding-houses/{listing_id}",
-                                      json={"is_verified": False}, timeout=10)
+                                      json={"is_verified": False, "reason": reason}, timeout=10)
                 if resp.status_code == 200:
                     self.after(0, lambda: self.show_toast(
                         f"Permit rejected for listing #{listing_id}", is_error=False))
@@ -1974,16 +2120,18 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to reject permit", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Reject"))
             self.after(0, self._admin_refresh_listings)
-
         threading.Thread(target=_do, daemon=True).start()
 
-    def _admin_revoke_permit(self, listing_id):
+    def _admin_revoke_permit(self, listing_id, btn=None):
         result = self._admin_confirm_action(
             f"Type REVOKE to revoke verification for listing #{listing_id}:", "Revoke Permit")
         if result != "REVOKE":
             return
-
+        if btn:
+            btn.configure(state="disabled", text="Processing...")
         def _do():
             try:
                 resp = self.api.patch(f"/boarding-houses/{listing_id}",
@@ -1995,8 +2143,9 @@ class AdminDashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to revoke", is_error=True))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.configure(state="normal", text="Revoke"))
             self.after(0, self._admin_refresh_listings)
-
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════
@@ -2160,7 +2309,7 @@ class AdminDashboardMixin:
         if len(password) < 8:
             self._admin_create_error.configure(text="Password must be at least 8 characters")
             return
-        if "@" not in email or "." not in email:
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
             self._admin_create_error.configure(text="Invalid email address")
             return
 
@@ -2192,6 +2341,9 @@ class AdminDashboardMixin:
         self._admin_refresh_admin_list()
 
     def _admin_refresh_admin_list(self):
+        if getattr(self, '_admin_refreshing', False):
+            return
+        self._admin_refreshing = True
         for w in self._admin_list_frame.winfo_children():
             w.destroy()
 
@@ -2206,7 +2358,9 @@ class AdminDashboardMixin:
                     admins = [u for u in all_users if u.get("role") == "admin"]
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load admins. Check your connection.", is_error=True))
-            self.after(0, lambda: self._admin_populate_admin_list(admins))
+            self.after(0, lambda: (
+                setattr(self, '_admin_refreshing', False),
+                self._admin_populate_admin_list(admins)))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -2236,29 +2390,4 @@ class AdminDashboardMixin:
                           font=self.body_description_font,
                           text_color=self.text_color).pack(side="right")
 
-    # ── Notifications ──
 
-    def _admin_fetch_notif_count(self):
-        user_id = getattr(self, "current_user", {}).get("user_id")
-        if not user_id:
-            return
-
-        def _do():
-            try:
-                resp = self.api.get(f"/notifications/user/{user_id}", timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    unread = sum(1 for n in data if not n.get("is_read", False))
-                else:
-                    unread = 0
-            except Exception:
-                unread = 0
-            self.after(0, lambda: self._admin_update_notif_badge(unread))
-
-        threading.Thread(target=_do, daemon=True).start()
-
-    def _admin_update_notif_badge(self, count):
-        if count > 0:
-            self._admin_notif_badge.configure(text=str(count) if count <= 99 else "99+")
-        else:
-            self._admin_notif_badge.configure(text="")

@@ -53,12 +53,35 @@ def update_report(request: Request, report_id: int, report_update: schemas.Repor
 
     reports_crud = crud.ReportsCRUD(db)
 
-    report = reports_crud.update_status(report_id, **report_update.model_dump(exclude_unset=True))
+    update_data = report_update.model_dump(exclude_unset=True)
+    reason = update_data.pop("reason", None)
+
+    report = reports_crud.update_status(report_id, **update_data)
 
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found"
         )
-    
+
+    if reason:
+        admin_logs_crud = crud.AdminLogsCRUD(db)
+        admin_logs_crud.create(
+            admin_id=current_user.user_id,
+            action="update_report",
+            target_type="report",
+            target_id=report_id,
+            description=reason
+        )
+
+        if report.target_type == "review" and report.reviewed_id:
+            notif_crud = crud.NotificationsCRUD(db)
+            notif_crud.create(
+                user_id=report.reporter_id,
+                notif_type="system",
+                content=f"Your report (ID: {report_id}) has been {report_update.status}. Reason: {reason}",
+                triggered_by=current_user.user_id,
+                reference_type=f"report_{report_update.status}"
+            )
+
     return report

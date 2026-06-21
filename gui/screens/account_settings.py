@@ -88,12 +88,14 @@ class AccountSettingsMixin:
             width=100, height=100)
         self._settings_avatar.pack()
 
-        ctk.CTkButton(avatar_left, text="Edit Photo",
-                      font=self.body_description_font,
-                      fg_color="transparent",
-                      text_color=self.primary_color,
-                      hover_color=self.hover_color,
-                      command=self._pick_profile_photo).pack(pady=(4, 0))
+        self._settings_edit_photo_btn = ctk.CTkButton(
+            avatar_left, text="Edit Photo",
+            font=self.body_description_font,
+            fg_color="transparent",
+            text_color=self.primary_color,
+            hover_color=self.hover_color,
+            command=self._pick_profile_photo)
+        self._settings_edit_photo_btn.pack(pady=(4, 0))
 
         avatar_right = ctk.CTkFrame(avatar_row, fg_color="transparent")
         avatar_right.pack(side="left", fill="x", expand=True)
@@ -272,12 +274,14 @@ class AccountSettingsMixin:
             text_color=self.error_red)
         self._settings_profile_error.pack(anchor="w", pady=(4, 0))
 
-        ctk.CTkButton(pi_inner, text="SAVE CHANGES",
-                      font=self.body_paragraph_font,
-                      fg_color=self.primary_color,
-                      hover_color=self.hover_color,
-                      text_color="white",
-                      command=self._save_profile).pack(pady=(6, 0))
+        self._settings_save_btn = ctk.CTkButton(
+            pi_inner, text="SAVE CHANGES",
+            font=self.body_paragraph_font,
+            fg_color=self.primary_color,
+            hover_color=self.hover_color,
+            text_color="white",
+            command=self._save_profile)
+        self._settings_save_btn.pack(pady=(6, 0))
 
         info_card = ctk.CTkFrame(frame, fg_color="transparent",
                                  corner_radius=8, border_width=1,
@@ -322,6 +326,12 @@ class AccountSettingsMixin:
             self._settings_profile_error.configure(text="Name is required.")
             return
 
+        if phone:
+            if not re.match(r"^09\d{9}$", phone):
+                self._settings_profile_error.configure(
+                    text="Phone must start with '09' and be exactly 11 digits.")
+                return
+
         dob_str = f"{year}-{month}-{day}"
         try:
             datetime.strptime(dob_str, "%Y-%m-%d")
@@ -347,30 +357,48 @@ class AccountSettingsMixin:
             return
 
         user_id = self.current_user.get("user_id")
+        if not user_id:
+            self.show_toast("Session error. Please log in again.", is_error=True)
+            return
+
         accordion = self._settings_accordion
+        btn = self._settings_save_btn
+        btn.configure(state="disabled", text="SAVING...")
 
         def _do():
             try:
                 resp = self.api.patch(f"/users/{user_id}", json=payload,
                                       timeout=10)
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 if resp.status_code == 200:
-                    updated = resp.json()
+                    try:
+                        updated = resp.json()
+                    except Exception:
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast("Failed to parse response.", is_error=True))
+                        return
+                    if not isinstance(updated, dict):
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast("Invalid response format.", is_error=True))
+                        return
                     self.current_user.update(updated)
                     self.after(
-                        0, lambda: self.show_toast("Profile updated!",
-                                                    is_error=False))
+                        0, lambda: self.winfo_exists() and self.show_toast("Profile updated!",
+                                                                           is_error=False))
                 else:
-                    err = resp.json().get("detail",
-                                          "Failed to update profile.")
+                    try:
+                        err = resp.json().get("detail",
+                                              "Failed to update profile.")
+                    except Exception:
+                        err = "Failed to update profile."
                     self.after(
-                        0, lambda: self._settings_profile_error.configure(
+                        0, lambda: self._settings_profile_error.winfo_exists() and self._settings_profile_error.configure(
                             text=err))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="SAVE CHANGES"))
             except Exception as e:
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 self.after(
-                    0, lambda: self._settings_profile_error.configure(
+                    0, lambda: self._settings_profile_error.winfo_exists() and self._settings_profile_error.configure(
                         text=f"Error: {e}"))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="SAVE CHANGES"))
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()
@@ -394,7 +422,13 @@ class AccountSettingsMixin:
             self._settings_avatar.configure(image=photo)
 
             user_id = self.current_user.get("user_id")
+            if not user_id:
+                self.show_toast("Session error. Please log in again.", is_error=True)
+                return
+
             accordion = self._settings_accordion
+            btn = self._settings_edit_photo_btn
+            btn.configure(state="disabled")
 
             def _do():
                 try:
@@ -404,22 +438,31 @@ class AccountSettingsMixin:
                             files={"file": (os.path.basename(path), f,
                                             "image/jpeg")},
                             timeout=30)
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     if resp.status_code == 200:
-                        updated = resp.json()
+                        try:
+                            updated = resp.json()
+                        except Exception:
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Failed to parse response.", is_error=True))
+                            return
+                        if not isinstance(updated, dict):
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Invalid response format.", is_error=True))
+                            return
                         self.current_user.update(updated)
                         self.after(
-                            0, lambda: self.show_toast(
+                            0, lambda: self.winfo_exists() and self.show_toast(
                                 "Profile photo updated!", is_error=False))
                     else:
                         self.after(
-                            0, lambda: self.show_toast(
+                            0, lambda: self.winfo_exists() and self.show_toast(
                                 "Failed to upload photo.", is_error=True))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
                 except Exception as e:
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     self.after(
-                        0, lambda: self.show_toast(
+                        0, lambda: self.winfo_exists() and self.show_toast(
                             f"Upload error: {e}", is_error=True))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
             accordion.show_progress()
             threading.Thread(target=_do, daemon=True).start()
@@ -497,12 +540,14 @@ class AccountSettingsMixin:
             text_color=self.error_red)
         self._settings_pw_match_error.pack(anchor="w", pady=(2, 0))
 
-        ctk.CTkButton(pw_inner, text="UPDATE PASSWORD",
-                      font=self.body_paragraph_font,
-                      fg_color=self.primary_color,
-                      hover_color=self.hover_color,
-                      text_color="white",
-                      command=self._update_password).pack(pady=(6, 0))
+        self._settings_update_pw_btn = ctk.CTkButton(
+            pw_inner, text="UPDATE PASSWORD",
+            font=self.body_paragraph_font,
+            fg_color=self.primary_color,
+            hover_color=self.hover_color,
+            text_color="white",
+            command=self._update_password)
+        self._settings_update_pw_btn.pack(pady=(6, 0))
 
         ctk.CTkFrame(frame, height=1, fg_color=self.entry_border).pack(
             fill="x", pady=(0, 15))
@@ -525,13 +570,15 @@ class AccountSettingsMixin:
                      wraplength=400).pack(
                          anchor="w", padx=15, pady=(12, 8))
 
-        ctk.CTkButton(danger_card, text="Delete Account",
-                      font=self.body_paragraph_font,
-                      fg_color=self.error_red,
-                       hover_color=self.error_red,
-                       text_color="white",
-                       command=self._confirm_delete_account).pack(
-                           anchor="w", padx=15, pady=(0, 12))
+        self._settings_delete_account_btn = ctk.CTkButton(
+            danger_card, text="Delete Account",
+            font=self.body_paragraph_font,
+            fg_color=self.error_red,
+            hover_color=self.error_red,
+            text_color="white",
+            command=self._confirm_delete_account)
+        self._settings_delete_account_btn.pack(
+            anchor="w", padx=15, pady=(0, 12))
 
     def _make_pw_row(self, parent, label_text):
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -616,6 +663,8 @@ class AccountSettingsMixin:
             return
 
         accordion = self._settings_accordion
+        btn = self._settings_update_pw_btn
+        btn.configure(state="disabled", text="UPDATING...")
 
         def _do():
             try:
@@ -624,27 +673,32 @@ class AccountSettingsMixin:
                     json={"current_password": current,
                           "new_password": new},
                     timeout=10)
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 if resp.status_code == 200:
-                    self._settings_cur_pw_entry.delete(0, "end")
-                    self._settings_new_pw_entry.delete(0, "end")
-                    self._settings_conf_pw_entry.delete(0, "end")
-                    self._settings_pw_match_error.configure(text="")
-                    self._validate_sec_strength()
+                    self.after(0, lambda: self._settings_cur_pw_entry.winfo_exists() and self._settings_cur_pw_entry.delete(0, "end"))
+                    self.after(0, lambda: self._settings_new_pw_entry.winfo_exists() and self._settings_new_pw_entry.delete(0, "end"))
+                    self.after(0, lambda: self._settings_conf_pw_entry.winfo_exists() and self._settings_conf_pw_entry.delete(0, "end"))
+                    self.after(0, lambda: self._settings_pw_match_error.winfo_exists() and self._settings_pw_match_error.configure(text=""))
+                    self.after(0, lambda: self.winfo_exists() and self._validate_sec_strength())
                     self.after(
-                        0, lambda: self.show_toast(
+                        0, lambda: self.winfo_exists() and self.show_toast(
                             "Password updated!", is_error=False))
                 else:
-                    err = resp.json().get("detail",
-                                          "Failed to update password.")
+                    try:
+                        err = resp.json().get("detail",
+                                              "Failed to update password.")
+                    except Exception:
+                        err = "Failed to update password."
                     self.after(
                         0,
-                        lambda: self._settings_sec_error.configure(text=err))
+                        lambda: self._settings_sec_error.winfo_exists() and self._settings_sec_error.configure(text=err))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="UPDATE PASSWORD"))
             except Exception as e:
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 self.after(
-                    0, lambda: self._settings_sec_error.configure(
+                    0, lambda: self._settings_sec_error.winfo_exists() and self._settings_sec_error.configure(
                         text=f"Error: {e}"))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="UPDATE PASSWORD"))
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()
@@ -654,30 +708,44 @@ class AccountSettingsMixin:
             text='Type "DELETE" to confirm account deletion:',
             title="Delete Account")
         result = dialog.get_input()
+        if result is None:
+            return
         if result != "DELETE":
+            self.show_toast("You must type DELETE to confirm.", is_error=True)
             return
 
         user_id = self.current_user.get("user_id")
+        if not user_id:
+            self.show_toast("Session error. Please log in again.", is_error=True)
+            return
+
         accordion = self._settings_accordion
+        btn = self._settings_delete_account_btn
+        btn.configure(state="disabled")
 
         def _do():
             try:
                 resp = self.api.delete(f"/users/{user_id}", timeout=10)
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 if resp.status_code == 200:
                     self.after(
-                        0, lambda: self.show_toast(
+                        0, lambda: self.winfo_exists() and self.show_toast(
                             "Account deleted.", is_error=False))
                     self.after(500, self._handle_logout)
                 else:
-                    err = resp.json().get("detail",
-                                          "Failed to delete account.")
-                    self.after(0, lambda: self.show_toast(err, is_error=True))
+                    try:
+                        err = resp.json().get("detail",
+                                              "Failed to delete account.")
+                    except Exception:
+                        err = "Failed to delete account."
+                    self.after(0, lambda: self.winfo_exists() and self.show_toast(err, is_error=True))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
             except Exception as e:
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 self.after(
-                    0, lambda: self.show_toast(
+                    0, lambda: self.winfo_exists() and self.show_toast(
                         f"Error: {e}", is_error=True))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()
@@ -741,13 +809,15 @@ class AccountSettingsMixin:
             text_color=self.error_red)
         self._settings_id_error.pack(anchor="w", padx=15)
 
-        ctk.CTkButton(id_card, text="Upload ID",
-                      font=self.body_paragraph_font,
-                      fg_color=self.primary_color,
-                      hover_color=self.hover_color,
-                      text_color="white",
-                      command=self._pick_id_document).pack(
-                          anchor="w", padx=15, pady=(0, 12))
+        self._settings_upload_id_btn = ctk.CTkButton(
+            id_card, text="Upload ID",
+            font=self.body_paragraph_font,
+            fg_color=self.primary_color,
+            hover_color=self.hover_color,
+            text_color="white",
+            command=self._pick_id_document)
+        self._settings_upload_id_btn.pack(
+            anchor="w", padx=15, pady=(0, 12))
 
         ctk.CTkFrame(frame, height=1, fg_color=self.entry_border).pack(
             fill="x", pady=(0, 15))
@@ -777,7 +847,13 @@ class AccountSettingsMixin:
                 text=f"Selected: {os.path.basename(path)}")
 
             user_id = self.current_user.get("user_id")
+            if not user_id:
+                self.show_toast("Session error. Please log in again.", is_error=True)
+                return
+
             accordion = self._settings_accordion
+            btn = self._settings_upload_id_btn
+            btn.configure(state="disabled")
 
             def _do():
                 try:
@@ -791,28 +867,40 @@ class AccountSettingsMixin:
                             f"/users/{user_id}/upload-id",
                             files={"file": (os.path.basename(path), f, mime)},
                             timeout=30)
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     if resp.status_code == 200:
-                        updated = resp.json()
+                        try:
+                            updated = resp.json()
+                        except Exception:
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Failed to parse response.", is_error=True))
+                            return
+                        if not isinstance(updated, dict):
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Invalid response format.", is_error=True))
+                            return
                         self.current_user.update(updated)
                         self.after(
-                            0, lambda: self.show_toast(
+                            0, lambda: self.winfo_exists() and self.show_toast(
                                 "ID uploaded!", is_error=False))
                         self.after(
                             100,
-                            lambda: self.show_account_settings())
+                            lambda: self.winfo_exists() and self.show_account_settings())
                     else:
-                        err = resp.json().get("detail",
-                                              "Failed to upload ID.")
+                        try:
+                            err = resp.json().get("detail",
+                                                  "Failed to upload ID.")
+                        except Exception:
+                            err = "Failed to upload ID."
                         self.after(
                             0,
-                            lambda: self._settings_id_error.configure(
+                            lambda: self._settings_id_error.winfo_exists() and self._settings_id_error.configure(
                                 text=err))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
                 except Exception as e:
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     self.after(
-                        0, lambda: self._settings_id_error.configure(
+                        0, lambda: self._settings_id_error.winfo_exists() and self._settings_id_error.configure(
                             text=f"Error: {e}"))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
             accordion.show_progress()
             threading.Thread(target=_do, daemon=True).start()
@@ -878,13 +966,15 @@ class AccountSettingsMixin:
             text_color=self.error_red)
         self._settings_permit_error.pack(anchor="w", padx=15)
 
-        ctk.CTkButton(permit_card, text="Upload Permit",
-                      font=self.body_paragraph_font,
-                      fg_color=self.primary_color,
-                      hover_color=self.hover_color,
-                      text_color="white",
-                      command=self._pick_permit).pack(
-                          anchor="w", padx=15, pady=(0, 12))
+        self._settings_upload_permit_btn = ctk.CTkButton(
+            permit_card, text="Upload Permit",
+            font=self.body_paragraph_font,
+            fg_color=self.primary_color,
+            hover_color=self.hover_color,
+            text_color="white",
+            command=self._pick_permit)
+        self._settings_upload_permit_btn.pack(
+            anchor="w", padx=15, pady=(0, 12))
 
         ctk.CTkFrame(frame, height=1, fg_color=self.entry_border).pack(
             fill="x", pady=(0, 15))
@@ -914,7 +1004,13 @@ class AccountSettingsMixin:
                 text=f"Selected: {os.path.basename(path)}")
 
             user_id = self.current_user.get("user_id")
+            if not user_id:
+                self.show_toast("Session error. Please log in again.", is_error=True)
+                return
+
             accordion = self._settings_accordion
+            btn = self._settings_upload_permit_btn
+            btn.configure(state="disabled")
 
             def _do():
                 try:
@@ -928,28 +1024,40 @@ class AccountSettingsMixin:
                             f"/users/{user_id}/upload-permit",
                             files={"file": (os.path.basename(path), f, mime)},
                             timeout=30)
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     if resp.status_code == 200:
-                        updated = resp.json()
+                        try:
+                            updated = resp.json()
+                        except Exception:
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Failed to parse response.", is_error=True))
+                            return
+                        if not isinstance(updated, dict):
+                            self.after(0, lambda: self.winfo_exists() and self.show_toast("Invalid response format.", is_error=True))
+                            return
                         self.current_user.update(updated)
                         self.after(
-                            0, lambda: self.show_toast(
+                            0, lambda: self.winfo_exists() and self.show_toast(
                                 "Permit uploaded!", is_error=False))
                         self.after(
                             100,
-                            lambda: self.show_account_settings())
+                            lambda: self.winfo_exists() and self.show_account_settings())
                     else:
-                        err = resp.json().get("detail",
-                                              "Failed to upload permit.")
+                        try:
+                            err = resp.json().get("detail",
+                                                  "Failed to upload permit.")
+                        except Exception:
+                            err = "Failed to upload permit."
                         self.after(
                             0,
-                            lambda: self._settings_permit_error.configure(
+                            lambda: self._settings_permit_error.winfo_exists() and self._settings_permit_error.configure(
                                 text=err))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
                 except Exception as e:
-                    self.after(0, lambda: accordion.hide_progress())
+                    self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                     self.after(
-                        0, lambda: self._settings_permit_error.configure(
+                        0, lambda: self._settings_permit_error.winfo_exists() and self._settings_permit_error.configure(
                             text=f"Error: {e}"))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
             accordion.show_progress()
             threading.Thread(target=_do, daemon=True).start()
@@ -984,14 +1092,16 @@ class AccountSettingsMixin:
                          text_color=self.text_color).pack(
                              side="right", padx=(0, 6))
 
-            ctk.CTkButton(row, text="Unlink",
-                          font=self.body_description_font,
-                          fg_color=self.error_red,
-                          hover_color=self.error_red,
-                          text_color="white",
-                          width=60, height=28,
-                          command=self._unlink_google).pack(
-                              side="right", padx=(0, 6))
+            self._settings_unlink_google_btn = ctk.CTkButton(
+                row, text="Unlink",
+                font=self.body_description_font,
+                fg_color=self.error_red,
+                hover_color=self.error_red,
+                text_color="white",
+                width=60, height=28,
+                command=self._unlink_google)
+            self._settings_unlink_google_btn.pack(
+                side="right", padx=(0, 6))
         else:
             badge = ctk.CTkLabel(row, text="Not linked",
                                  fg_color=self.entry_border,
@@ -1022,30 +1132,48 @@ class AccountSettingsMixin:
             return
 
         user_id = self.current_user.get("user_id")
+        if not user_id:
+            self.show_toast("Session error. Please log in again.", is_error=True)
+            return
+
         accordion = self._settings_accordion
+        btn = self._settings_unlink_google_btn
+        btn.configure(state="disabled")
 
         def _do():
             try:
                 resp = self.api.patch(
                     f"/users/{user_id}",
                     json={"auth_provider": "email"}, timeout=10)
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 if resp.status_code == 200:
-                    updated = resp.json()
+                    try:
+                        updated = resp.json()
+                    except Exception:
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast("Failed to parse response.", is_error=True))
+                        return
+                    if not isinstance(updated, dict):
+                        self.after(0, lambda: self.winfo_exists() and self.show_toast("Invalid response format.", is_error=True))
+                        return
                     self.current_user.update(updated)
                     self.after(
-                        0, lambda: self.show_toast(
+                        0, lambda: self.winfo_exists() and self.show_toast(
                             "Google account unlinked.", is_error=False))
                     self.after(100, self.show_account_settings)
                 else:
-                    err = resp.json().get("detail",
-                                          "Failed to unlink Google.")
-                    self.after(0, lambda: self.show_toast(err, is_error=True))
+                    try:
+                        err = resp.json().get("detail",
+                                              "Failed to unlink Google.")
+                    except Exception:
+                        err = "Failed to unlink Google."
+                    self.after(0, lambda: self.winfo_exists() and self.show_toast(err, is_error=True))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
             except Exception as e:
-                self.after(0, lambda: accordion.hide_progress())
+                self.after(0, lambda: accordion.winfo_exists() and accordion.hide_progress())
                 self.after(
-                    0, lambda: self.show_toast(
+                    0, lambda: self.winfo_exists() and self.show_toast(
                         f"Error: {e}", is_error=True))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
         accordion.show_progress()
         threading.Thread(target=_do, daemon=True).start()

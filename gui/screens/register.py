@@ -1,4 +1,6 @@
 import re
+import threading
+import urllib.parse
 import requests
 import datetime
 
@@ -15,8 +17,6 @@ class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
         l_name = self.last_name_entry.get().strip()
         email = self.email_entry.get().strip()
         phone = self.phone_entry.get().strip()
-        if phone == "Enter your mobile number":
-            phone = ""
 
         month = self.month_box.get()
         day = self.day_box.get()
@@ -159,53 +159,62 @@ class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
             return
 
         self.create_acc_btn.configure(state="disabled", text="CREATING ACCOUNT...")
-        try:
-            # 3. Live Database Check for Existing Registration
+
+        def _register_task():
             try:
-                response = self.api.get(f"/users/check-email?email={email}", timeout=3)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("exists"):
-                        provider = data.get("provider")
-                        if provider in ("google", "both"):
-                            msg = "Already signed up with Google. Use Google login."
-                        else:
-                            msg = "This email is already registered."
-                        self.email_error_lbl.configure(text=msg)
-                        self.email_bg_frame.configure(border_color=self.error_red)
-                        return
-            except requests.exceptions.ConnectionError:
-                pass
-
-            # 4. Create Account Payload Submission
-            full_name = f"{f_name} {l_name}"
-            user_data = {
-                "name": full_name,
-                "email": email,
-                "password": password,
-                "role": self.selected_account_type,
-                "phone": phone,
-                "province": province,
-                "city": city,
-                "barangay": barangay,
-                "street": street,
-                "date_of_birth": dob_string
-            }
-
-            response = self.api.post("/users/", json=user_data)
-            if response.status_code == 201:
-                self.show_toast("Account created!", is_error=False)
                 try:
-                    self.api.post("/auth/send-verification", json={"email": email}, timeout=15)
-                except Exception:
-                    self.show_toast("Failed to send verification email. Check your connection.", is_error=True)
-                self.show_email_verification_page(email=email)
-            elif response.status_code == 400:
-                error_msg = response.json().get("detail", "Registration failed.")
-                self.show_toast(error_msg, is_error=True)
-            else:
-                self.show_toast("Server error. Try again later.", is_error=True)
-        except requests.exceptions.ConnectionError:
-            self.show_toast("Error: Is your backend server running?", is_error=True)
-        finally:
-            self.create_acc_btn.configure(state="normal", text="CREATE ACCOUNT")
+                    encoded_email = urllib.parse.quote(email)
+                    response = self.api.get(f"/users/check-email?email={encoded_email}", timeout=3)
+                    if response.status_code == 200:
+                        try:
+                            data = response.json()
+                        except Exception:
+                            data = {}
+                        if data.get("exists"):
+                            provider = data.get("provider")
+                            if provider in ("google", "both"):
+                                msg = "Already signed up with Google. Use Google login."
+                            else:
+                                msg = "This email is already registered."
+                            self.after(0, lambda m=msg: self.email_error_lbl.configure(text=m))
+                            self.after(0, lambda: self.email_bg_frame.configure(border_color=self.error_red))
+                            return
+                except requests.exceptions.RequestException:
+                    pass
+
+                full_name = f"{f_name} {l_name}"
+                user_data = {
+                    "name": full_name,
+                    "email": email,
+                    "password": password,
+                    "role": self.selected_account_type,
+                    "phone": phone,
+                    "province": province,
+                    "city": city,
+                    "barangay": barangay,
+                    "street": street,
+                    "date_of_birth": dob_string
+                }
+
+                response = self.api.post("/users/", json=user_data)
+                if response.status_code == 201:
+                    self.after(0, lambda: self.show_toast("Account created!", is_error=False))
+                    try:
+                        self.api.post("/auth/send-verification", json={"email": email}, timeout=15)
+                        self.after(0, lambda e=email: self.show_email_verification_page(email=e))
+                    except Exception:
+                        self.after(0, lambda: self.show_toast("Failed to send verification email. Check your connection.", is_error=True))
+                elif response.status_code == 400:
+                    try:
+                        error_msg = response.json().get("detail", "Registration failed.")
+                    except Exception:
+                        error_msg = "Registration failed."
+                    self.after(0, lambda m=error_msg: self.show_toast(m, is_error=True))
+                else:
+                    self.after(0, lambda: self.show_toast("Server error. Try again later.", is_error=True))
+            except requests.exceptions.RequestException:
+                self.after(0, lambda: self.show_toast("Error: Is your backend server running?", is_error=True))
+            finally:
+                self.after(0, lambda: self.create_acc_btn.configure(state="normal", text="CREATE ACCOUNT"))
+
+        threading.Thread(target=_register_task, daemon=True).start()

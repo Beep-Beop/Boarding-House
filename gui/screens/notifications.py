@@ -82,6 +82,10 @@ class NotificationsMixin:
             return
 
         self._notif_data = data
+        if len(data) > 50:
+            ctk.CTkLabel(self._notif_scroll, text="Showing latest 50 notifications",
+                         font=self.body_description_font, text_color=self.text_color).pack(pady=(0, 8))
+            data = data[:50]
         for notif in data:
             notif_id = notif.get("notif_id")
             is_read = notif.get("is_read", False)
@@ -121,36 +125,51 @@ class NotificationsMixin:
             self._notif_widgets[notif_id] = (card, dot)
 
     def _mark_one_read(self, notif_id):
+        widgets = self._notif_widgets.get(notif_id)
+        if widgets:
+            card, _ = widgets
+            card.unbind("<Button-1>")
+
         def _do():
+            success = True
             try:
                 self.api.patch(f"/notifications/{notif_id}/read", timeout=5)
             except Exception:
-                self.after(0, lambda: self.show_toast("Failed to mark notification as read. Check your connection.", is_error=True))
-            self.after(0, lambda: self._update_notif_read_ui(notif_id))
+                success = False
+            self.after(0, lambda: self._update_notif_read_ui(notif_id, success))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _update_notif_read_ui(self, notif_id):
+    def _update_notif_read_ui(self, notif_id, success=True):
         widgets = self._notif_widgets.get(notif_id)
         if not widgets:
             return
         card, dot = widgets
-        dot.configure(fg_color="transparent")
-        card.configure(cursor="")
-        card.unbind("<Button-1>")
+        if success:
+            dot.configure(fg_color="transparent")
+            card.configure(cursor="")
+        else:
+            card.bind("<Button-1>", lambda e, nid=notif_id: self._mark_one_read(nid))
+            card.configure(cursor="hand2")
 
     def _mark_all_read(self):
         self.mark_all_btn.configure(state="disabled", text="Marking...")
 
         def _do():
+            failures = 0
             for notif_id in self._notif_widgets:
                 try:
                     self.api.patch(f"/notifications/{notif_id}/read", timeout=5)
                 except Exception:
-                    self.after(0, lambda: self.show_toast("Failed to mark notifications as read. Check your connection.", is_error=True))
-            self.after(0, self._update_all_read_ui)
+                    failures += 1
+            self.after(0, lambda: self._mark_all_read_done(failures))
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def _mark_all_read_done(self, failures):
+        self._update_all_read_ui()
+        if failures:
+            self.show_toast(f"{failures} notification(s) failed to mark as read.", is_error=True)
 
     def _update_all_read_ui(self):
         self.mark_all_btn.configure(state="normal", text="Mark All Read")

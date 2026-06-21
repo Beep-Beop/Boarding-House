@@ -1,3 +1,5 @@
+import threading
+import requests
 import customtkinter as ctk
 
 
@@ -54,22 +56,33 @@ class EmailVerifyMixin:
                                   text_color="#FFFFFF", command=self.show_login_page)
         login_btn.pack(pady=(10, 10))
 
-        resend_btn = ctk.CTkButton(self.form_container, text="Resend verification email",
-                                   font=self.body_paragraph_font,
-                                   text_color=self.primary_color, fg_color="transparent",
-                                   hover_color=self.hover_color_text,
-                                   width=0, height=20, command=self._resend_verification)
-        resend_btn.pack(pady=(5, 0))
+        self.resend_btn = ctk.CTkButton(self.form_container, text="Resend verification email",
+                                        font=self.body_paragraph_font,
+                                        text_color=self.primary_color, fg_color="transparent",
+                                        hover_color=self.hover_color_text,
+                                        width=0, height=20, command=self._resend_verification)
+        self.resend_btn.pack(pady=(5, 0))
 
     def _resend_verification(self):
         if not self._verify_email:
             self.show_toast("No email to resend.", is_error=True)
             return
-        try:
-            resp = self.api.post("/auth/send-verification", json={"email": self._verify_email}, timeout=15)
-            if resp.status_code == 200:
-                self.show_toast("Verification email resent!", is_error=False)
-            else:
-                self.show_toast(resp.json().get("detail", "Failed to resend."), is_error=True)
-        except Exception:
-            self.show_toast("Cannot connect to server.", is_error=True)
+        self.resend_btn.configure(state="disabled", text="Resending...")
+
+        def _task():
+            try:
+                resp = self.api.post("/auth/send-verification", json={"email": self._verify_email}, timeout=15)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self.show_toast("Verification email resent!", is_error=False))
+                else:
+                    try:
+                        detail = resp.json().get("detail", "Failed to resend.")
+                    except Exception:
+                        detail = "Failed to resend."
+                    self.after(0, lambda d=detail: self.show_toast(d, is_error=True))
+            except requests.exceptions.RequestException:
+                self.after(0, lambda: self.show_toast("Cannot connect to server.", is_error=True))
+            finally:
+                self.after(0, lambda: self.resend_btn.configure(state="normal", text="Resend verification email"))
+
+        threading.Thread(target=_task, daemon=True).start()

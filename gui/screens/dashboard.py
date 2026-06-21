@@ -10,6 +10,7 @@ import io
 from src.logger import logger
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import quote
 
 
 class DashboardMixin:
@@ -219,6 +220,9 @@ class DashboardMixin:
 
     def _load_dashboard_data(self):
         user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self.show_toast("User session not found. Please log in again.", is_error=True)
+            return
 
         def _do():
             bookings = []
@@ -321,7 +325,7 @@ class DashboardMixin:
                          font=self.body_bold_paragraph_font,
                          text_color=self.text_color).pack(anchor="w")
 
-            room_info = f"Booking #{b.get('booking_id')} — Room #{b.get('room_id')}"
+            room_info = f"Booking #{b.get('booking_id', '?')} — Room #{b.get('room_id', '?')}"
             ctk.CTkLabel(inner, text=room_info,
                          font=self.body_paragraph_font,
                          text_color=self.text_color).pack(anchor="w")
@@ -380,7 +384,7 @@ class DashboardMixin:
             ("Active Bookings", str(len(active)), self.primary_color),
             ("Pending Bookings", str(len(pending_b)), self.hover_color),
             ("Saved Favorites", str(len(favorites)), self.text_color),
-            ("Next Payment", f"P{next_payment['amount']}" if next_payment else "—",
+            ("Next Payment", f"P{next_payment.get('amount', '—')}" if next_payment else "—",
              self.error_red if next_payment else self.text_color),
         ]
         for i, (title, val, accent_color) in enumerate(stats):
@@ -428,7 +432,7 @@ class DashboardMixin:
                          font=self.body_light_font,
                          text_color=self.text_color).pack(side="left", padx=12)
 
-            ctk.CTkLabel(row, text=f"P{p['amount']}",
+            ctk.CTkLabel(row, text=f"P{p.get('amount', '—')}",
                          font=self.body_paragraph_font,
                          text_color=self.text_color).pack(side="left", padx=12)
 
@@ -643,6 +647,9 @@ class DashboardMixin:
         self._bookings_scroll = None
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self.show_toast("User session not found. Please log in again.", is_error=True)
+            return
 
         def _do():
             bookings = []
@@ -682,7 +689,7 @@ class DashboardMixin:
             info_frame.pack(side="left", fill="x", expand=True, padx=15, pady=12)
 
             ctk.CTkLabel(info_frame,
-                         text=f"Booking #{b.get('booking_id')} — Room #{b.get('room_id')}",
+                         text=f"Booking #{b.get('booking_id', '?')} — Room #{b.get('room_id', '?')}",
                          font=self.body_paragraph_font,
                          text_color=self.text_color).pack(anchor="w")
 
@@ -708,9 +715,10 @@ class DashboardMixin:
                                            hover_color=self.error_red,
                                            text_color="white",
                                            font=self.body_paragraph_font,
-                                           width=120, height=32,
-                                           command=lambda bid=b.get("booking_id"): self._cancel_booking(bid))
+                                           width=120, height=32)
                 cancel_btn.pack(side="right", padx=15, pady=8)
+                bid = b.get('booking_id', '?')
+                cancel_btn.configure(command=lambda bid=bid, btn=cancel_btn: self._cancel_booking(bid, btn))
 
     # ── Favorites Content ──────────────────────────────────────────
 
@@ -728,6 +736,9 @@ class DashboardMixin:
         self._show_dash_loading(self._favorites_container)
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self.show_toast("User session not found. Please log in again.", is_error=True)
+            return
 
         def _do():
             items = []
@@ -810,6 +821,9 @@ class DashboardMixin:
 
     def _render_calendar_viewings(self):
         user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self.show_toast("User session not found. Please log in again.", is_error=True)
+            return
 
         def _do():
             viewings = []
@@ -1031,13 +1045,22 @@ class DashboardMixin:
                           command=lambda lid=listing_id: self._show_property_for_listing(lid)).pack(side="top", pady=(8, 2))
 
             if status in ("pending", "confirmed"):
-                ctk.CTkButton(btn_frame, text="Cancel",
-                              font=self.body_description_font,
-                              width=60, height=24,
-                              fg_color=self.error_red,
-                              command=lambda vid=v.get("viewing_id"): self._cancel_viewing(vid)).pack(side="bottom", pady=(0, 6))
+                cancel_v_btn = ctk.CTkButton(btn_frame, text="Cancel",
+                                             font=self.body_description_font,
+                                             width=60, height=24,
+                                             fg_color=self.error_red)
+                cancel_v_btn.pack(side="bottom", pady=(0, 6))
+                vid = v.get("viewing_id")
+                cancel_v_btn.configure(command=lambda vid=vid, btn=cancel_v_btn: self._cancel_viewing(vid, btn))
 
-    def _cancel_viewing(self, viewing_id):
+    def _cancel_viewing(self, viewing_id, btn=None):
+        dialog = ctk.CTkInputDialog(text="Type CANCEL to confirm cancellation:", title="Cancel Viewing")
+        if dialog.get_input() != "CANCEL":
+            return
+
+        if btn:
+            btn.configure(state="disabled", text="Cancelling...")
+
         def _do():
             try:
                 resp = self.api.patch(f"/viewings/{viewing_id}/status",
@@ -1047,8 +1070,12 @@ class DashboardMixin:
                 else:
                     err = resp.json().get("detail", "Failed to cancel")
                     self.after(0, lambda: self.show_toast(err, is_error=True))
+                    if btn:
+                        self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Cancel"))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                if btn:
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Cancel"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1243,11 +1270,12 @@ class DashboardMixin:
                       hover_color=self.hover_color,
                       command=self._close_schedule_overlay).pack(side="left", padx=(0, 10))
 
-        ctk.CTkButton(btn_row, text="Confirm",
-                      font=self.body_paragraph_font,
-                      fg_color=self.primary_color,
-                      text_color="white",
-                      command=lambda: self._confirm_schedule(listing_id)).pack(side="right")
+        self._schedule_confirm_btn = ctk.CTkButton(btn_row, text="Confirm",
+                                                    font=self.body_paragraph_font,
+                                                    fg_color=self.primary_color,
+                                                    text_color="white")
+        self._schedule_confirm_btn.pack(side="right")
+        self._schedule_confirm_btn.configure(command=lambda: self._confirm_schedule(listing_id))
 
     def _pick_schedule_date(self, day, idx):
         self._schedule_selected_date = day
@@ -1271,6 +1299,9 @@ class DashboardMixin:
             self.show_toast("Please select a date", is_error=True)
             return
 
+        if hasattr(self, '_schedule_confirm_btn') and self._schedule_confirm_btn:
+            self._schedule_confirm_btn.configure(state="disabled", text="Scheduling...")
+
         def _do():
             try:
                 resp = self.api.post("/viewings/", json={
@@ -1282,12 +1313,17 @@ class DashboardMixin:
                 else:
                     err = resp.json().get("detail", "Failed to schedule viewing")
                     self.after(0, lambda: self.show_toast(err, is_error=True))
+                    self.after(0, lambda: hasattr(self, '_schedule_confirm_btn') and self._schedule_confirm_btn and self._schedule_confirm_btn.winfo_exists() and self._schedule_confirm_btn.configure(state="normal", text="Confirm"))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                self.after(0, lambda: hasattr(self, '_schedule_confirm_btn') and self._schedule_confirm_btn and self._schedule_confirm_btn.winfo_exists() and self._schedule_confirm_btn.configure(state="normal", text="Confirm"))
 
         threading.Thread(target=_do, daemon=True).start()
 
     def _schedule_done(self):
+        if hasattr(self, '_schedule_confirm_btn') and self._schedule_confirm_btn:
+            if self._schedule_confirm_btn.winfo_exists():
+                self._schedule_confirm_btn.configure(state="normal", text="Confirm")
         self._close_schedule_overlay()
         self.show_toast("Viewing scheduled!", is_error=False)
         self.show_tenant_viewings_content()
@@ -1379,9 +1415,9 @@ class DashboardMixin:
                     img_data = requests.get(photo_url, timeout=3).content
                     pil_image = Image.open(io.BytesIO(img_data))
                     ctk_image = ctk.CTkImage(pil_image, size=(380, 200))
-                    self.after(0, lambda: card_img.configure(image=ctk_image))
+                    self.after(0, lambda: card_img.winfo_exists() and card_img.configure(image=ctk_image))
                 except Exception:
-                    self.after(0, lambda: card_img.configure(text="[ Image Unavailable ]",
+                    self.after(0, lambda: card_img.winfo_exists() and card_img.configure(text="[ Image Unavailable ]",
                                                              text_color=self.text_color))
 
             threading.Thread(target=load_image, daemon=True).start()
@@ -1391,17 +1427,17 @@ class DashboardMixin:
                                     corner_radius=6)
         card_img.pack(pady=(10, 0), padx=5)
 
-        card_name = ctk.CTkLabel(card, text=house_data["name"],
+        card_name = ctk.CTkLabel(card, text=house_data.get("name", "Unknown Property"),
                                  font=self.body_bold_paragraph_font,
                                  text_color=self.text_color)
         card_name.pack(anchor="w", padx=15, pady=(10, 0))
 
-        card_location = ctk.CTkLabel(card, text=house_data["location"],
+        card_location = ctk.CTkLabel(card, text=house_data.get("location", "Location not available"),
                                      font=self.body_paragraph_font,
                                      text_color=self.text_color)
         card_location.pack(anchor="w", padx=15)
 
-        card_amenities = ctk.CTkLabel(card, text=house_data["amenities"],
+        card_amenities = ctk.CTkLabel(card, text=house_data.get("amenities", ""),
                                       font=self.body_paragraph_font,
                                       text_color=self.text_color)
         card_amenities.pack(anchor="w", padx=15)
@@ -1409,7 +1445,19 @@ class DashboardMixin:
         card_title = ctk.CTkLabel(card, text="Description",
                                   font=self.body_description_font,
                                   text_color=self.text_color)
-        card_title.pack(anchor="w", padx=15, pady=(0, 5))
+        card_title.pack(anchor="w", padx=15, pady=(0, 2))
+
+        desc_text = house_data.get("desc", "No description available")
+        font = self.body_paragraph_font
+        max_width = 350 * 3
+        if font.measure(desc_text) > max_width:
+            while font.measure(desc_text + "...") > max_width and len(desc_text) > 0:
+                desc_text = desc_text[:-1]
+            desc_text += "..."
+        card_desc = ctk.CTkLabel(card, text=desc_text,
+                                 font=self.body_paragraph_font,
+                                 text_color=self.text_color, wraplength=350, justify="left")
+        card_desc.pack(anchor="w", padx=15, pady=(0, 5))
 
         card_bottom_frame = ctk.CTkFrame(card, fg_color="transparent")
         card_bottom_frame.pack(side="bottom", fill="x", padx=15, pady=15)
@@ -1426,7 +1474,7 @@ class DashboardMixin:
                                      width=25, height=25,
                                      fg_color="transparent",
                                      hover_color=self.hover_color,
-                                     command=lambda lid=listing_id: self.toggle_bookmark(lid))
+                                     command=lambda lid=listing_id, btn=bookmark_btn: self.toggle_bookmark(lid, btn))
         bookmark_btn.pack(side="right")
 
         # ── Make the entire card clickable to open property details ──
@@ -1602,10 +1650,10 @@ class DashboardMixin:
         self.load_more_btn.configure(state="normal", text="Load More")
         if is_error:
             self._load_more_error.configure(text=msg, text_color=self.error_red)
-            self.after(4000, lambda: self._load_more_error.configure(text=""))
+            self.after(4000, lambda: self._load_more_error.winfo_exists() and self._load_more_error.configure(text=""))
         else:
             self._load_more_error.configure(text=msg, text_color=self.text_color)
-            self.after(2000, lambda: self._load_more_error.configure(text=""))
+            self.after(2000, lambda: self._load_more_error.winfo_exists() and self._load_more_error.configure(text=""))
 
     def _do_search(self):
         query = self.search_entry.get().strip()
@@ -1618,15 +1666,15 @@ class DashboardMixin:
 
         def _do():
             try:
-                resp = self.api.get(f"/search/?q={query}", timeout=10)
+                resp = self.api.get(f"/search/?q={quote(query)}", timeout=10)
                 if resp.status_code == 200:
                     results = resp.json()
                     self.after(0, lambda: self._rebuild_cards(results))
                 else:
-                    self.after(0, lambda: self._search_error.configure(
+                    self.after(0, lambda: self._search_error.winfo_exists() and self._search_error.configure(
                         text="Search failed — try a different query"))
             except Exception:
-                self.after(0, lambda: self._search_error.configure(
+                self.after(0, lambda: self._search_error.winfo_exists() and self._search_error.configure(
                     text="Cannot connect to server"))
             finally:
                 self.after(0, lambda: self._search_done())
@@ -1640,12 +1688,24 @@ class DashboardMixin:
 
     def toggle_filter(self, selected_filter):
         for name, btn in self.filter_buttons.items():
+            btn.configure(state="disabled")
+        self._search_progress.pack(fill="x", padx=20, pady=(0, 10))
+        self._search_progress.start()
+
+        for name, btn in self.filter_buttons.items():
             btn.configure(fg_color=self.secondary_color, text_color=self.text_color)
 
         self.filter_buttons[selected_filter].configure(fg_color=self.primary_color,
                                                        text_color="white")
 
+        def _cleanup():
+            self._search_progress.stop()
+            self._search_progress.pack_forget()
+            for name, btn in self.filter_buttons.items():
+                btn.configure(state="normal")
+
         if selected_filter == "All":
+            _cleanup()
             self._load_initial_dashboard()
             return
 
@@ -1663,6 +1723,7 @@ class DashboardMixin:
             if not amenity_id:
                 self.after(0, lambda: self.show_toast(
                     "Could not load filter options", is_error=True))
+                self.after(0, _cleanup)
                 return
 
             try:
@@ -1676,14 +1737,18 @@ class DashboardMixin:
             except Exception:
                 self.after(0, lambda: self.show_toast(
                     "Cannot connect to server", is_error=True))
+            self.after(0, _cleanup)
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def toggle_bookmark(self, listing_id):
+    def toggle_bookmark(self, listing_id, btn=None):
         user_id = getattr(self, 'current_user', {}).get('user_id')
         if not user_id:
             self.show_toast("Please log in to bookmark listings", is_error=True)
             return
+
+        if btn:
+            btn.configure(state="disabled")
 
         def _do():
             try:
@@ -1694,12 +1759,16 @@ class DashboardMixin:
                     self.after(0, lambda: self.show_toast(f"Bookmark {action}!", is_error=False))
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to toggle bookmark", is_error=True))
+            finally:
+                if btn:
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
         threading.Thread(target=_do, daemon=True).start()
 
     def _rebuild_cards(self, houses):
         if hasattr(self, '_error_frame') and self._error_frame:
-            return
+            self._error_frame.destroy()
+            self._error_frame = None
         for card in self.cards_list:
             card.destroy()
         self.cards_list = []
@@ -1741,7 +1810,14 @@ class DashboardMixin:
 
     # ── Cancel Booking ─────────────────────────────────────────────
 
-    def _cancel_booking(self, booking_id):
+    def _cancel_booking(self, booking_id, btn=None):
+        dialog = ctk.CTkInputDialog(text="Type CANCEL to confirm cancellation:", title="Cancel Booking")
+        if dialog.get_input() != "CANCEL":
+            return
+
+        if btn:
+            btn.configure(state="disabled", text="Cancelling...")
+
         def _do():
             try:
                 resp = self.api.patch(f"/bookings/{booking_id}/status", json={
@@ -1752,8 +1828,12 @@ class DashboardMixin:
                 else:
                     err = resp.json().get("detail", "Failed to cancel")
                     self.after(0, lambda: self.show_toast(err, is_error=True))
+                    if btn:
+                        self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Cancel Booking"))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                if btn:
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Cancel Booking"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -2237,28 +2317,32 @@ class DashboardMixin:
         review_entry.bind("<FocusIn>", _clear_placeholder)
 
         if is_edit:
-            ctk.CTkButton(rev_section, text="Update Review",
-                           font=self.body_paragraph_font,
-                           fg_color=self.primary_color,
-                           text_color="white",
-                           hover_color=self.hover_color,
-                           cursor="hand2",
-                           command=lambda: self._update_review(
-                                existing_review["review_id"],
-                                listing_id,
-                                self._selected_review_stars,
-                                review_entry)).pack(anchor="w", padx=12, pady=(0, 12))
+            review_btn = ctk.CTkButton(rev_section, text="Update Review",
+                                       font=self.body_paragraph_font,
+                                       fg_color=self.primary_color,
+                                       text_color="white",
+                                       hover_color=self.hover_color,
+                                       cursor="hand2")
+            review_btn.configure(command=lambda btn=review_btn: self._update_review(
+                existing_review["review_id"],
+                listing_id,
+                self._selected_review_stars,
+                review_entry,
+                btn))
+            review_btn.pack(anchor="w", padx=12, pady=(0, 12))
         else:
-            ctk.CTkButton(rev_section, text="Submit Review",
-                           font=self.body_paragraph_font,
-                           fg_color=self.primary_color,
-                           text_color="white",
-                           hover_color=self.hover_color,
-                           cursor="hand2",
-                           command=lambda: self._submit_review(
-                               listing_id,
-                               self._selected_review_stars,
-                               review_entry)).pack(anchor="w", padx=12, pady=(0, 12))
+            review_btn = ctk.CTkButton(rev_section, text="Submit Review",
+                                       font=self.body_paragraph_font,
+                                       fg_color=self.primary_color,
+                                       text_color="white",
+                                       hover_color=self.hover_color,
+                                       cursor="hand2")
+            review_btn.configure(command=lambda btn=review_btn: self._submit_review(
+                listing_id,
+                self._selected_review_stars,
+                review_entry,
+                btn))
+            review_btn.pack(anchor="w", padx=12, pady=(0, 12))
 
     def _set_review_stars(self, val, btns):
         """Highlight star rating selector buttons up to `val`."""
@@ -2370,16 +2454,22 @@ class DashboardMixin:
         self._selected_room_price = 0
 
         if rooms:
+            def _safe_float(val, default=0):
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return default
+
             room_options = []
             for r in rooms:
                 label = f"Room #{r.get('room_id')}"
                 if r.get("room_type"):
                     label += f" ({r['room_type']})"
-                label += f"  —  ₱{float(r.get('price_per_month', 0)):,.2f}/mo"
+                label += f"  —  ₱{_safe_float(r.get('price_per_month', 0)):,.2f}/mo"
                 room_options.append(label)
             room_var = ctk.StringVar(value=room_options[0])
             self._selected_room = rooms[0]
-            self._selected_room_price = float(rooms[0].get("price_per_month", 0))
+            self._selected_room_price = _safe_float(rooms[0].get("price_per_month", 0))
 
             room_menu = ctk.CTkOptionMenu(room_body, values=room_options,
                                            variable=room_var,
@@ -2393,7 +2483,7 @@ class DashboardMixin:
             def _on_room_select(choice):
                 idx = room_options.index(choice)
                 self._selected_room = rooms[idx]
-                self._selected_room_price = float(rooms[idx].get("price_per_month", 0))
+                self._selected_room_price = _safe_float(rooms[idx].get("price_per_month", 0))
                 _update_fees()
 
             room_menu.configure(command=_on_room_select)
@@ -2694,9 +2784,14 @@ class DashboardMixin:
             months = max(1, round((self._selected_checkout_date - self._selected_checkin_date).days / 30))
             monthly = self._selected_room_price
             total_price = round(monthly * months * 1.05, 2)
+            room_id = self._selected_room.get("room_id")
+            if not room_id:
+                self.after(0, lambda: self.show_toast("Room data is missing. Please try again.", is_error=True))
+                booking_btn.configure(state="normal", text="Request Booking")
+                return
             payload = {
                 "user_id": user_id,
-                "room_id": self._selected_room["room_id"],
+                "room_id": room_id,
                 "check_in": self._selected_checkin_date.isoformat(),
                 "check_out": self._selected_checkout_date.isoformat(),
                 "total_price": total_price,
@@ -2707,7 +2802,7 @@ class DashboardMixin:
                     resp = self.api.post("/bookings/", json=payload, timeout=10)
                     if resp.status_code in (200, 201):
                         self.after(0, lambda: self.show_toast(
-                            f"Booking requested! Room #{self._selected_room['room_id']} "
+                            f"Booking requested! Room #{room_id} "
                             f"from {self._selected_checkin_date.isoformat()} "
                             f"to {self._selected_checkout_date.isoformat()}",
                             is_error=False))
@@ -2762,11 +2857,11 @@ class DashboardMixin:
                 display_w = int(img_w * scale)
                 display_h = int(img_h * scale)
                 ctk_img = ctk.CTkImage(pil_img, size=(display_w, display_h))
-                self.after(0, lambda: img_label.configure(image=ctk_img, text=""))
-                self.after(0, lambda: counter.configure(
+                self.after(0, lambda: img_label.winfo_exists() and img_label.configure(image=ctk_img, text=""))
+                self.after(0, lambda: counter.winfo_exists() and counter.configure(
                     text=f"{idx + 1} / {len(photos)}"))
             except Exception:
-                self.after(0, lambda: img_label.configure(
+                self.after(0, lambda: img_label.winfo_exists() and img_label.configure(
                     text="[ Unable to load image ]",
                     text_color="white", font=self.body_paragraph_font))
 
@@ -2829,14 +2924,14 @@ class DashboardMixin:
                 img_data = requests.get(url, timeout=5).content
                 pil_img = Image.open(io.BytesIO(img_data))
                 ctk_img = ctk.CTkImage(pil_img, size=size)
-                self.after(0, lambda: label.configure(image=ctk_img, text=""))
+                self.after(0, lambda: label.winfo_exists() and label.configure(image=ctk_img, text=""))
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load photo. Check your connection.", is_error=True))
         threading.Thread(target=_do, daemon=True).start()
 
     # ── SUBMIT REVIEW ──────────────────────────────────────────────
 
-    def _submit_review(self, listing_id, rating, textbox):
+    def _submit_review(self, listing_id, rating, textbox, btn=None):
         """Post a new review to the API and refresh the details view."""
         comment = textbox.get("1.0", "end-1c").strip()
         if not comment or comment == "Share your experience...":
@@ -2844,6 +2939,8 @@ class DashboardMixin:
             return
 
         textbox.configure(state="disabled")
+        if btn:
+            btn.configure(state="disabled", text="Submitting...")
 
         def _do():
             try:
@@ -2862,10 +2959,12 @@ class DashboardMixin:
                     "Cannot connect to server", is_error=True))
             finally:
                 self.after(0, lambda: textbox.winfo_exists() and textbox.configure(state="normal"))
+                if btn:
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Submit Review"))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _update_review(self, review_id, listing_id, rating, textbox):
+    def _update_review(self, review_id, listing_id, rating, textbox, btn=None):
         """Update an existing review via PUT and refresh."""
         comment = textbox.get("1.0", "end-1c").strip()
         if not comment or comment == "Share your experience...":
@@ -2873,6 +2972,8 @@ class DashboardMixin:
             return
 
         textbox.configure(state="disabled")
+        if btn:
+            btn.configure(state="disabled", text="Submitting...")
 
         def _do():
             try:
@@ -2890,6 +2991,8 @@ class DashboardMixin:
                     "Cannot connect to server", is_error=True))
             finally:
                 self.after(0, lambda: textbox.winfo_exists() and textbox.configure(state="normal"))
+                if btn:
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Update Review"))
 
         threading.Thread(target=_do, daemon=True).start()
 

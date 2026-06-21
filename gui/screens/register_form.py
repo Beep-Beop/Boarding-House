@@ -126,6 +126,8 @@ class RegisterFormMixin:
                                         text_color=self.text_color
                                         )
         self.first_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.first_name_entry.bind("<KeyRelease>", lambda e: self._validate_name(e, self.first_name_entry, self.first_name_error_lbl, self.first_name_bg_frame))
+        self.first_name_entry.bind("<FocusOut>", lambda e: self._validate_name(e, self.first_name_entry, self.first_name_error_lbl, self.first_name_bg_frame))
 
         # Last Name
         last_name_frame = ctk.CTkFrame(self.form_container,
@@ -162,6 +164,8 @@ class RegisterFormMixin:
                                             text_color=self.text_color
                                             )
         self.last_name_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
+        self.last_name_entry.bind("<KeyRelease>", lambda e: self._validate_name(e, self.last_name_entry, self.last_name_error_lbl, self.last_name_bg_frame))
+        self.last_name_entry.bind("<FocusOut>", lambda e: self._validate_name(e, self.last_name_entry, self.last_name_error_lbl, self.last_name_bg_frame))
 
         # Date of Birth
         dob_frame = ctk.CTkFrame(self.form_container,
@@ -187,16 +191,16 @@ class RegisterFormMixin:
         self.dob_error_lbl = ctk.CTkLabel(dob_frame, text="", height=14, font=self.inline_error_font, text_color=self.error_red)
         self.dob_error_lbl.pack(anchor="w", padx=100)
         months = [f"{i:02d}" for i in range(1, 13)]
-        self._make_dob_combo(self.dob_bg_frame, "month_box", months, 70, "MM", (35, 10))
+        self._make_dob_combo(self.dob_bg_frame, "month_box", months, 100, "MM", (20, 10))
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
                      text_color=self.text_color,
                      width=10
-                     ).pack(side="left", padx=(25, 20))
+                     ).pack(side="left", padx=(10, 10))
 
         days = [f"{i:02d}" for i in range(1, 32)]
-        self._make_dob_combo(self.dob_bg_frame, "day_box", days, 65, "DD", (0, 5))
+        self._make_dob_combo(self.dob_bg_frame, "day_box", days, 90, "DD", (0, 5))
 
         ctk.CTkLabel(self.dob_bg_frame,
                      text="/",
@@ -281,7 +285,7 @@ class RegisterFormMixin:
                                         placeholder_text="Enter your mobile number"
                                         )
         self.phone_entry.place(relx=0.5, rely=0.5, relwidth=0.95, anchor="center")
-        self.phone_entry.bind("<KeyRelease>", self.validate_phone_realtime)
+        self.phone_entry.bind("<KeyRelease>", self._on_phone_keyrelease)
 
     def _build_location_section(self):
         self.section_2_label = ctk.CTkLabel(self.form_container,
@@ -668,6 +672,38 @@ class RegisterFormMixin:
                                              command=self.attempt_register
                                              )
         self.create_acc_btn.pack(pady=(10, 40))
+
+    def _validate_name(self, event, entry, error_lbl, bg_frame):
+        import re
+        val = entry.get().strip()
+        pattern = r"^[A-Za-z\s\-']+$"
+        is_focusout = str(event.type) == "FocusOut" if event else False
+        if val and not re.match(pattern, val):
+            error_lbl.configure(text="Only letters, spaces, hyphens, and apostrophes allowed.")
+            bg_frame.configure(border_color=self.error_red)
+        elif is_focusout and not val:
+            error_lbl.configure(text="This field is required.")
+            bg_frame.configure(border_color=self.error_red)
+        else:
+            error_lbl.configure(text="")
+            bg_frame.configure(border_color=self.entry_border if not val else "green")
+
+    def _on_phone_keyrelease(self, event=None):
+        raw = self.phone_entry.get()
+        digits = "".join(c for c in raw if c.isdigit())
+        if digits != raw:
+            self.phone_entry.delete(0, "end")
+            self.phone_entry.insert(0, digits)
+        self.validate_phone_realtime()
+
+    def _on_phone_focusin(self, event=None):
+        self.phone_entry.configure(placeholder_text="")
+        self.validate_phone_realtime()
+
+    def _on_phone_focusout(self, event=None):
+        if not self.phone_entry.get():
+            self.phone_entry.configure(placeholder_text="Enter your mobile number")
+        self.validate_phone_realtime()
 
     def _on_province_blur(self, event=None):
         def check():

@@ -1,7 +1,7 @@
 import re
 import threading
 import customtkinter as ctk
-from requests.exceptions import ConnectionError
+import requests
 
 
 class ForgotPasswordMixin:
@@ -109,11 +109,11 @@ class ForgotPasswordMixin:
                                           font=self.inline_error_font)
         self.fp_code_error.pack(anchor="w", padx=(15, 0))
 
-        verify_btn = ctk.CTkButton(self.step2_frame, text="VERIFY CODE", width=400, height=45,
-                                   corner_radius=6, font=self.body_bold_font,
-                                   fg_color=self.primary_color, hover_color=self.hover_color,
-                                   text_color="#FFFFFF", command=self._verify_code)
-        verify_btn.pack(pady=(25, 0))
+        self.fp_verify_btn = ctk.CTkButton(self.step2_frame, text="VERIFY CODE", width=400, height=45,
+                                           corner_radius=6, font=self.body_bold_font,
+                                           fg_color=self.primary_color, hover_color=self.hover_color,
+                                           text_color="#FFFFFF", command=self._verify_code)
+        self.fp_verify_btn.pack(pady=(25, 0))
 
         back_step_btn = ctk.CTkButton(self.step2_frame, text="Back to email",
                                       font=self.body_paragraph_font,
@@ -226,11 +226,11 @@ class ForgotPasswordMixin:
                                                  font=self.inline_error_font)
         self.fp_confirm_pwd_error.pack(anchor="w", padx=(15, 0))
 
-        reset_btn = ctk.CTkButton(self.step3_frame, text="RESET PASSWORD", width=400, height=45,
-                                  corner_radius=6, font=self.body_bold_font,
-                                  fg_color=self.primary_color, hover_color=self.hover_color,
-                                  text_color="#FFFFFF", command=self._reset_password)
-        reset_btn.pack(pady=(25, 0))
+        self.fp_reset_btn = ctk.CTkButton(self.step3_frame, text="RESET PASSWORD", width=400, height=45,
+                                          corner_radius=6, font=self.body_bold_font,
+                                          fg_color=self.primary_color, hover_color=self.hover_color,
+                                          text_color="#FFFFFF", command=self._reset_password)
+        self.fp_reset_btn.pack(pady=(25, 0))
 
         back_step_btn = ctk.CTkButton(self.step3_frame, text="Back to code",
                                       font=self.body_paragraph_font,
@@ -256,6 +256,11 @@ class ForgotPasswordMixin:
             self.fp_email_fake_entry.configure(border_color=self.error_red)
             return
 
+        if not re.match(r'[^@]+@[^@]+\.[^@]+', email):
+            self.fp_email_error.configure(text="Please enter a valid email.")
+            self.fp_email_fake_entry.configure(border_color=self.error_red)
+            return
+
         self.fp_send_btn.configure(state="disabled", text="SENDING...")
 
         def _handle_send_result(resp):
@@ -268,14 +273,18 @@ class ForgotPasswordMixin:
                 self._show_step(2)
                 self.fp_code_entry.focus()
             else:
-                self.fp_email_error.configure(text=resp.json().get("detail", "Failed to send code."))
+                try:
+                    err = resp.json().get("detail", "Failed to send code.")
+                except Exception:
+                    err = "Failed to send code."
+                self.fp_email_error.configure(text=err)
                 self.fp_email_fake_entry.configure(border_color=self.error_red)
 
         def _do():
             try:
                 resp = self.api.post("/auth/forgot-password", json={"email": email}, timeout=15)
                 self.after(0, lambda: _handle_send_result(resp))
-            except ConnectionError:
+            except requests.exceptions.RequestException:
                 self.after(0, lambda: self.fp_email_error.configure(text="Cannot connect to server."))
             finally:
                 self.after(0, lambda: self.fp_send_btn.configure(state="normal", text="SEND CODE"))
@@ -294,8 +303,11 @@ class ForgotPasswordMixin:
 
         email = self._reset_data.get("email", "")
         if not email:
+            self.show_toast("Session expired. Please start again.", is_error=True)
             self._show_step(1)
             return
+
+        self.fp_verify_btn.configure(state="disabled", text="VERIFYING...")
 
         def _handle_verify_result(resp):
             if resp.status_code == 200:
@@ -309,15 +321,21 @@ class ForgotPasswordMixin:
                 self._show_step(3)
                 self.fp_new_pwd_entry.focus()
             else:
-                self.fp_code_error.configure(text=resp.json().get("detail", "Invalid code."))
+                try:
+                    err = resp.json().get("detail", "Invalid code.")
+                except Exception:
+                    err = "Invalid code."
+                self.fp_code_error.configure(text=err)
                 self.fp_code_fake_entry.configure(border_color=self.error_red)
 
         def _do():
             try:
                 resp = self.api.post("/auth/verify-reset-code", json={"email": email, "code": code}, timeout=5)
                 self.after(0, lambda: _handle_verify_result(resp))
-            except ConnectionError:
+            except requests.exceptions.RequestException:
                 self.after(0, lambda: self.fp_code_error.configure(text="Cannot connect to server."))
+            finally:
+                self.after(0, lambda: self.fp_verify_btn.configure(state="normal", text="VERIFY CODE"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -394,13 +412,23 @@ class ForgotPasswordMixin:
 
         email = self._reset_data.get("email", "")
         code = self._reset_data.get("code", "")
+        if not email or not code:
+            self.show_toast("Session expired. Please start again.", is_error=True)
+            self._show_step(1)
+            return
+
+        self.fp_reset_btn.configure(state="disabled", text="RESETTING...")
 
         def _handle_reset_result(resp):
             if resp.status_code == 200:
                 self.show_toast("Password reset successfully!", is_error=False)
                 self.after(2000, self.show_login_page)
             else:
-                self.fp_new_pwd_error.configure(text=resp.json().get("detail", "Failed to reset password."))
+                try:
+                    err = resp.json().get("detail", "Failed to reset password.")
+                except Exception:
+                    err = "Failed to reset password."
+                self.fp_new_pwd_error.configure(text=err)
                 self.fp_new_pwd_fake_entry.configure(border_color=self.error_red)
 
         def _do():
@@ -411,7 +439,9 @@ class ForgotPasswordMixin:
                     "new_password": new_pwd
                 }, timeout=5)
                 self.after(0, lambda: _handle_reset_result(resp))
-            except ConnectionError:
+            except requests.exceptions.RequestException:
                 self.after(0, lambda: self.fp_new_pwd_error.configure(text="Cannot connect to server."))
+            finally:
+                self.after(0, lambda: self.fp_reset_btn.configure(state="normal", text="RESET PASSWORD"))
 
         threading.Thread(target=_do, daemon=True).start()

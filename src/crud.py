@@ -342,6 +342,21 @@ class BoardingHousesCRUD:
             joinedload(BoardingHouse.photos)
         ).all()
 
+        # Get latest admin log reason for each listing
+        listing_ids = [h.listing_id for h in houses]
+        latest_reasons = {}
+        if listing_ids:
+            logs = self.db.query(AdminLogs).filter(
+                AdminLogs.target_type == "listing",
+                AdminLogs.target_id.in_(listing_ids),
+                AdminLogs.action.in_(["REJECTED_PERMIT", "BANNED_LISTING"]),
+            ).order_by(AdminLogs.performed_at.desc()).all()
+            seen = set()
+            for log in logs:
+                if log.target_id not in seen:
+                    latest_reasons[log.target_id] = log.description
+                    seen.add(log.target_id)
+
         result = []
         for house in houses:
             house: BoardingHouse
@@ -369,6 +384,7 @@ class BoardingHousesCRUD:
                 "status": house.status,
                 "is_verified": house.is_verified,
                 "permit_url": house.permit_url,
+                "rejection_reason": latest_reasons.get(house.listing_id),
             })
 
         return result

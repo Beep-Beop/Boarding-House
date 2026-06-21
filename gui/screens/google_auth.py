@@ -50,10 +50,19 @@ class GoogleAuthHandler:
                     is_new = params.get("is_new", ["false"])[0] == "true"
                     account_setup_complete = params.get("account_setup_complete", ["false"])[0] == "true"
 
-                    if access_token and user_id:
+                    if (access_token and user_id and name and email and role and
+                            isinstance(access_token, str) and
+                            isinstance(user_id, str) and
+                            isinstance(name, str) and
+                            isinstance(email, str) and
+                            isinstance(role, str)):
+                        try:
+                            parsed_user_id = int(user_id)
+                        except (ValueError, TypeError):
+                            parsed_user_id = 0
                         self.server._result = {
                             "access_token": access_token,
-                            "user_id": int(user_id),
+                            "user_id": parsed_user_id,
                             "role": role,
                             "name": name,
                             "email": email,

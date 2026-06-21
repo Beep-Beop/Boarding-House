@@ -1,6 +1,7 @@
+import re
 import threading
+import requests
 import customtkinter as ctk
-from requests.exceptions import ConnectionError
 from gui.screens.google_auth import GoogleAuthHandler
 
 
@@ -249,65 +250,82 @@ class LoginMixin:
         if has_error:
             return
 
-        self.login_btn.configure(state="disabled", text="LOGGING IN...")
-        print("[DEBUG] attempt_login: sending POST /auth/login")
-        try:
-            login_data = {
-                "email": email,
-                "password": password,
-                "remember_me": bool(self.remember_checkbox.get())
-            }
-
-            response = self.api.post("/auth/login", json=login_data)
-
-            if response.status_code == 200:
-                user_info = response.json()
-                print(f"[DEBUG] Login OK — role={user_info.get('role')}, routing to dashboard")
-                self.access_token = user_info.get("access_token")
-                self.api.access_token = self.access_token
-                self.current_user = user_info
-
-                if self.remember_checkbox.get():
-                    self._save_session(user_info)
-
-                role = user_info.get('role')
-                if role == 'admin':
-                    self.show_admin_dashboard()
-                elif role == 'owner':
-                    self.show_owner_dashboard()
-                else:
-                    self.show_tenant_dashboard()
-
-            elif response.status_code in [401, 403]:
-                error_msg = response.json().get("detail", "Login Failed.")
-                auth_hint = response.headers.get("X-Auth-Hint")
-                if auth_hint == "google_login":
-                    self._google_hint_cleared = False
-                    self.login_email_error.configure(text=error_msg)
-                    self.login_password_error.configure(text="")
-                    self.email_fake_entry.configure(border_color=self.error_red)
-                    self.password_fake_entry.configure(border_color=self.entry_border)
-                    self.google_btn.configure(fg_color=self.error_red)
-                    self.after(2000, lambda: self.google_btn.configure(fg_color="transparent"))
-                    self._google_hint_label.configure(text="\u2b06 Sign in with Google above")
-                    self._google_hint_label.pack(pady=(0, 5))
-                    self.email_entry.bind("<Key>", self._clear_google_hint, add="+")
-                    self.password_entry.bind("<Key>", self._clear_google_hint, add="+")
-                else:
-                    self.login_email_error.configure(text=error_msg)
-                    self.login_password_error.configure(text=error_msg)
-                    self.email_fake_entry.configure(border_color=self.error_red)
-                    self.password_fake_entry.configure(border_color=self.error_red)
-
-            else:
-                self.login_email_error.configure(text="Server error, Try again Later.")
-        except ConnectionError:
-            print("[DEBUG] Login failed: ConnectionError — backend unreachable")
-            self.login_email_error.configure(text="Error: Cannot connect to backend server")
+        if not re.match(r'[^@]+@[^@]+\.[^@]+', email):
+            self.login_email_error.configure(text="Please enter a valid email address.")
             self.email_fake_entry.configure(border_color=self.error_red)
-        finally:
-            if self.login_btn.winfo_exists():
-                self.login_btn.configure(state="normal", text="LOG IN")
+            return
+
+        self.login_btn.configure(state="disabled", text="LOGGING IN...")
+        remember_me = bool(self.remember_checkbox.get())
+
+        def _login_task():
+            try:
+                login_data = {
+                    "email": email,
+                    "password": password,
+                    "remember_me": remember_me
+                }
+
+                response = self.api.post("/auth/login", json=login_data)
+
+                if response.status_code == 200:
+                    try:
+                        user_info = response.json()
+                    except Exception:
+                        self.after(0, lambda: self.show_toast("Invalid server response.", is_error=True))
+                        return
+
+                    def _on_success(ui=user_info):
+                        self.access_token = ui.get("access_token")
+                        self.api.access_token = self.access_token
+                        self.current_user = ui
+                        if remember_me:
+                            self._save_session(ui)
+                        role = ui.get('role')
+                        if role == 'admin':
+                            self.show_admin_dashboard()
+                        elif role == 'owner':
+                            self.show_owner_dashboard()
+                        else:
+                            self.show_tenant_dashboard()
+                    self.after(0, _on_success)
+
+                elif response.status_code in [401, 403]:
+                    try:
+                        error_msg = response.json().get("detail", "Login Failed.")
+                    except Exception:
+                        error_msg = "Login Failed."
+                    auth_hint = response.headers.get("X-Auth-Hint")
+
+                    def _on_auth_error(em=error_msg, ah=auth_hint):
+                        if ah == "google_login":
+                            self._google_hint_cleared = False
+                            self.login_email_error.configure(text=em)
+                            self.login_password_error.configure(text="")
+                            self.email_fake_entry.configure(border_color=self.error_red)
+                            self.password_fake_entry.configure(border_color=self.entry_border)
+                            self.google_btn.configure(fg_color=self.error_red)
+                            self.after(2000, lambda: self.google_btn.configure(fg_color="transparent"))
+                            self._google_hint_label.configure(text="\u2b06 Sign in with Google above")
+                            self._google_hint_label.pack(pady=(0, 5))
+                            self.email_entry.bind("<Key>", self._clear_google_hint, add="+")
+                            self.password_entry.bind("<Key>", self._clear_google_hint, add="+")
+                        else:
+                            self.login_email_error.configure(text=em)
+                            self.login_password_error.configure(text=em)
+                            self.email_fake_entry.configure(border_color=self.error_red)
+                            self.password_fake_entry.configure(border_color=self.error_red)
+                    self.after(0, _on_auth_error)
+
+                else:
+                    self.after(0, lambda: self.login_email_error.configure(text="Server error, Try again Later."))
+            except requests.exceptions.RequestException:
+                self.after(0, lambda: self.login_email_error.configure(text="Error: Cannot connect to backend server"))
+                self.after(0, lambda: self.email_fake_entry.configure(border_color=self.error_red))
+            finally:
+                self.after(0, lambda: self.login_btn.configure(state="normal", text="LOG IN") if self.login_btn.winfo_exists() else None)
+
+        threading.Thread(target=_login_task, daemon=True).start()
 
     def _save_session(self, user_info):
         import json, os
@@ -334,8 +352,13 @@ class LoginMixin:
             os.remove(path)
 
     def start_google_login(self):
+        if getattr(self, "_google_login_in_progress", False):
+            return
+        self._google_login_in_progress = True
         print("[DEBUG] Starting Google Login flow")
+
         def on_success(user_info):
+            self._google_login_in_progress = False
             self.access_token = user_info.get("access_token")
             self.api.access_token = self.access_token
             self.current_user = user_info
@@ -347,7 +370,7 @@ class LoginMixin:
                 self.show_google_account_type(user_info)
                 return
 
-            self.show_toast(f"Welcome, {user_info['name']}", is_error=False)
+            self.show_toast(f"Welcome, {user_info.get('name', 'User')}", is_error=False)
             role = user_info.get('role')
             if role == 'admin':
                 self.show_admin_dashboard()
@@ -357,6 +380,7 @@ class LoginMixin:
                 self.show_tenant_dashboard()
 
         def on_error(msg):
+            self._google_login_in_progress = False
             self.show_toast(msg, is_error=True)
 
         GoogleAuthHandler(self.api, self, on_success, on_error).start()
