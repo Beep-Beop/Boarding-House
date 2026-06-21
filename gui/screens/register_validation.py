@@ -2,8 +2,7 @@ import re
 import requests
 import threading
 
-PHONE_PREFIX = "09"
-PHONE_LENGTH = 11
+PHONE_PATTERN = re.compile(r'^\+?[\d\s\-\(\)]{7,20}$')
 
 
 class RegisterValidationMixin:
@@ -76,12 +75,9 @@ class RegisterValidationMixin:
         if not phone:
             self.phone_bg_frame.configure(border_color=self.entry_border)
             self.phone_error_lbl.configure(text="")
-        elif not phone.startswith(PHONE_PREFIX):
+        elif not PHONE_PATTERN.match(phone):
             self.phone_bg_frame.configure(border_color=self.error_red)
-            self.phone_error_lbl.configure(text=f"Phone numbers must start with {PHONE_PREFIX}.")
-        elif len(phone) != PHONE_LENGTH:
-            self.phone_bg_frame.configure(border_color=self.error_red)
-            self.phone_error_lbl.configure(text=f"Must be {PHONE_LENGTH} digits. ({len(phone)}/{PHONE_LENGTH})")
+            self.phone_error_lbl.configure(text="Enter a valid phone number (e.g. +639123456789).")
         else:
             self.phone_bg_frame.configure(border_color="green")
             self.phone_error_lbl.configure(text="")
@@ -128,16 +124,13 @@ class RegisterValidationMixin:
     def validate_phone(self, text):
         if text == "":
             return True
-        if not text.isdigit() or len(text) > 11:
+        if len(text) > 20:
             return False
-        if len(text) >= 1 and text[0] != "0":
-            return False
-        if len(text) >= 2 and text[1] != "9":
-            return False
-        return True
+        allowed = set("0123456789+()- ")
+        return all(c in allowed for c in text)
 
     def _filter_phone_input(self, *args):
         val = self.phone_var.get()
-        filtered = "".join(c for c in val if c.isdigit())[:PHONE_LENGTH]
+        filtered = "".join(c for c in val if c.isdigit() or c in "+()- ")[:20]
         if filtered != val:
             self.phone_var.set(filtered)

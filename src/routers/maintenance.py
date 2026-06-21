@@ -19,8 +19,14 @@ def create_maintenance_request(
     bh = crud.BoardingHousesCRUD(db).get(req.listing_id)
     if not bh:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+    if current_user.role == "admin" or (current_user.role == "owner" and bh.owner_id == current_user.user_id):
+        tenant_id = req.tenant_id
+    elif current_user.user_id != req.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to create request for another user")
+    else:
+        tenant_id = current_user.user_id
     maint_crud = crud.MaintenanceCRUD(db)
-    return maint_crud.create(listing_id=req.listing_id, tenant_id=current_user.user_id, title=req.title, description=req.description)
+    return maint_crud.create(listing_id=req.listing_id, tenant_id=tenant_id, title=req.title, description=req.description)
 
 
 @router.get("/listing/{listing_id}", response_model=List[schemas.MaintenanceRequestResponse])

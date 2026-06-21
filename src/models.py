@@ -31,6 +31,7 @@ class Users(Base):
     reset_code_expires = Column(DateTime, nullable=True)
     account_setup_complete = Column(Boolean, default=False)
     auth_provider = Column(Enum('email', 'google', 'both'), default='email', nullable=False)
+    token_version = Column(Integer, default=0)
 
     # Relationships: If a user is deleted, delete their houses, bookings, and reviews.
     location = relationship("Location", backref="users")
@@ -303,11 +304,18 @@ class Payments(Base):
 
     payment_id = Column(Integer, primary_key=True, autoincrement=True)
     booking_id = Column(Integer, ForeignKey("BOOKINGS.booking_id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True)
     amount = Column(DECIMAL(10, 2), nullable=False)
-    method = Column(Enum('gcash', 'bank_transfer', 'cash', 'card'), nullable=False)
-    status = Column(Enum('pending', 'completed', 'failed', 'refunded'), default='pending')
-    paid_at = Column(DateTime, nullable=True) # Nullable until the payment is confirmed 'completed'
-    reference_no = Column(String(100)) # e.g., GCash transaction ID
+    method = Column(Enum('gcash', 'bank_transfer', 'cash'), nullable=True)
+    status = Column(Enum('pending', 'paid', 'completed', 'failed', 'refunded'), default='pending')
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    due_date = Column(Date, nullable=False)
+    submitted_at = Column(DateTime, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    verified_by = Column(Integer, ForeignKey("USERS.user_id", ondelete="SET NULL"), nullable=True)
+    reference_no = Column(String(100))
+    notes = Column(Text, nullable=True)
 
 
 class Viewings(Base):

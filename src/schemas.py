@@ -327,6 +327,20 @@ class FavoritesResponse(FavoritesBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class FavoriteDetailResponse(BaseModel):
+    favorite_id: int
+    listing_id: int
+    saved_at: datetime
+    notes: Optional[str] = None
+    listing_name: str
+    location: str
+    photo_url: Optional[str] = None
+    price_range: Optional[str] = None
+    property_type: Optional[str] = None
+    is_active: bool = True
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 # THIRD-LEVEL DEPENDENT TABLES
 
@@ -376,6 +390,7 @@ class BookingAdminResponse(BookingsResponse):
     payment_status: Optional[str] = None
     payment_method: Optional[str] = None
     payment_amount: Optional[Decimal] = None
+    listing_id: Optional[int] = None
 
 class BookingStats(BaseModel):
     total_bookings: int
@@ -384,27 +399,50 @@ class BookingStats(BaseModel):
     active_count: int
     cancelled_count: int
     total_revenue: Decimal
+    model_config = ConfigDict(from_attributes=True)
 
 # --- PAYMENTS ---
 class PaymentsBase(BaseModel):
     amount: Decimal = Field(..., max_digits=10, decimal_places=2)
-    method: Literal['gcash', 'bank_transfer', 'cash', 'card'] = Field(..., examples=["gcash"])
-    paid_at: Optional[datetime] = None 
-    reference_no: Optional[str] = Field(None, max_length=100) 
+    method: Optional[Literal['gcash', 'bank_transfer', 'cash']] = None
+    reference_no: Optional[str] = Field(None, max_length=100)
 
 class PaymentsCreate(PaymentsBase):
     booking_id: int
+    period_start: date
+    period_end: date
+    due_date: date
+    notes: Optional[str] = Field(None, max_length=500)
 
 class PaymentsResponse(PaymentsBase):
     payment_id: int
     booking_id: int
+    tenant_id: Optional[int] = None
     amount: Decimal
-    method: Literal['gcash', 'bank_transfer', 'cash', 'card']
-    paid_at: Optional[datetime]
-    reference_no: Optional[str]
-    status: Literal['pending', 'completed', 'failed', 'refunded']
+    method: Optional[Literal['gcash', 'bank_transfer', 'cash']] = None
+    status: Literal['pending', 'paid', 'completed', 'failed', 'refunded']
+    period_start: date
+    period_end: date
+    due_date: date
+    submitted_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    verified_by: Optional[int] = None
+    reference_no: Optional[str] = None
+    notes: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class PaymentSubmit(BaseModel):
+    method: Literal['gcash', 'bank_transfer', 'cash']
+    reference_no: str = Field(..., max_length=100)
+    notes: Optional[str] = Field(None, max_length=500)
+
+class PaymentVerify(BaseModel):
+    status: Literal['completed', 'failed']
+
+class PaymentApprovalResponse(PaymentsResponse):
+    tenant_name: Optional[str] = None
+    property_name: Optional[str] = None
 
 
 # --- BOOKING HISTORY ---
@@ -534,6 +572,7 @@ class MaintenanceRequestBase(BaseModel):
 
 class MaintenanceRequestCreate(MaintenanceRequestBase):
     listing_id: int
+    tenant_id: int
 
 class MaintenanceRequestUpdate(BaseModel):
     status: Literal['pending', 'in_progress', 'completed']
@@ -559,6 +598,7 @@ class DashboardCardResponse(BaseModel):
     amenities: str
     desc: Optional[str] = None
     photo_url: Optional[str] = None
+    is_favorite: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

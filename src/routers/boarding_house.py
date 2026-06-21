@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from src import crud, schemas, database
-from src.dependencies import get_current_user, limiter
+from src.dependencies import get_current_user, get_current_user_optional, limiter
 from src.models import AdminLogs
 
 router = APIRouter(prefix="/boarding-houses", tags=["Boarding Houses"])
@@ -166,9 +166,16 @@ def get_admin_listings(request: Request, db: Session = Depends(database.get_db),
 
 @router.get("/feed/dashboard", response_model=List[schemas.DashboardCardResponse])
 @limiter.limit("30/minute")
-def get_dashboard_feed(request: Request, limit: int = 20, offset: int = 0, db: Session = Depends(database.get_db)):
+def get_dashboard_feed(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(database.get_db),
+    current_user: Optional[schemas.TokenData] = Depends(get_current_user_optional)
+):
     bh_crud = crud.BoardingHousesCRUD(db)
-    houses = bh_crud.get_dashboard_listings(limit=limit, offset=offset)
+    user_id = current_user.user_id if current_user else None
+    houses = bh_crud.get_dashboard_listings(limit=limit, offset=offset, user_id=user_id)
 
     if not houses:
         raise HTTPException(

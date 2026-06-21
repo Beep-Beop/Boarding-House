@@ -11,6 +11,12 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 def create_notification(request: Request, notification: schemas.NotificationsCreate, db: Session = Depends(database.get_db), current_user: schemas.TokenData = Depends(get_current_user)):
     notif_crud = crud.NotificationsCRUD(db)
 
+    if current_user.role != "admin" and notification.triggered_by != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only create notifications as yourself"
+        )
+
     return notif_crud.create(**notification.model_dump())
 
 

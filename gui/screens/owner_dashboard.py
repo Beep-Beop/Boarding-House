@@ -161,6 +161,24 @@ class OwnerDashboardMixin:
 
         self._maint_card = maint_card
 
+        # Payment Approvals Section
+        approvals_frame = ctk.CTkFrame(self.main_content, fg_color=self.secondary_color,
+                                       corner_radius=6, border_width=1, border_color=self.entry_border)
+        approvals_frame.pack(fill="x", pady=(0, 20))
+        ctk.CTkLabel(approvals_frame, text="Payment Approvals", font=self.body_big_font,
+                     text_color=self.primary_color).pack(anchor="w", padx=15, pady=(15, 10))
+        sep2 = ctk.CTkFrame(approvals_frame, height=1, fg_color=self.entry_border)
+        sep2.pack(fill="x", padx=15)
+        header_row = ctk.CTkFrame(approvals_frame, fg_color="transparent")
+        header_row.pack(fill="x", padx=15, pady=(10, 0))
+        for j, h in enumerate(["Tenant", "Property", "Period", "Amount", "Reference", "Action"]):
+            ctk.CTkLabel(header_row, text=h, font=self.body_paragraph_font,
+                         text_color=self.text_color).pack(side="left", padx=(10, 30))
+        self._approvals_container = ctk.CTkFrame(approvals_frame, fg_color="transparent")
+        self._approvals_container.pack(fill="x", padx=15, pady=(5, 15))
+        ctk.CTkLabel(self._approvals_container, text="Loading...",
+                     font=self.body_light_font, text_color=self.text_color).pack(pady=10)
+
         def _do():
             try:
                 resp = self.api.get(f"/boarding-houses/owner/{owner_id}", timeout=5)
@@ -194,6 +212,12 @@ class OwnerDashboardMixin:
                     self._owner_dashboard_cards_data["total_income"] = f"\u20B1{total_income:,.0f}"
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load payments. Check your connection.", is_error=True))
+            try:
+                resp5 = self.api.get(f"/payments/owner/pending", timeout=5)
+                if resp5.status_code == 200:
+                    self._owner_dashboard_cards_data["pending_approvals"] = resp5.json()
+            except Exception:
+                pass
             self.after(0, self._populate_owner_dashboard_cards)
 
         threading.Thread(target=_do, daemon=True).start()
@@ -250,6 +274,7 @@ class OwnerDashboardMixin:
             self.maint_detail_frames[req_title] = detail_frame
 
         self._populate_payment_history()
+        self._populate_pending_approvals()
 
     def _populate_payment_history(self):
         for w in self._payment_rows_frame.winfo_children():
@@ -298,6 +323,201 @@ class OwnerDashboardMixin:
                                       fg_color=badge_color, text_color="#FFFFFF",
                                       corner_radius=4, padx=8, pady=2)
             status_lbl.grid(row=row, column=2, padx=15, pady=(7, bottom_pady), sticky="w")
+
+    def _populate_pending_approvals(self):
+        import threading
+        for w in self._approvals_container.winfo_children():
+            w.destroy()
+
+        data = self._owner_dashboard_cards_data.get("pending_approvals", [])
+        if not data:
+            ctk.CTkLabel(self._approvals_container, text="No pending approvals.",
+                         font=self.body_light_font, text_color=self.text_color).pack(pady=10)
+            return
+
+        for pay in data:
+            row = ctk.CTkFrame(self._approvals_container, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+
+            tenant_name = pay.get("tenant_name", "—")
+            ctk.CTkLabel(row, text=str(tenant_name)[:12], font=self.body_light_font,
+                         text_color=self.text_color).pack(side="left", width=80, anchor="w")
+
+            property_name = pay.get("property_name", "—")
+            ctk.CTkLabel(row, text=str(property_name)[:12], font=self.body_light_font,
+                         text_color=self.text_color).pack(side="left", width=80, anchor="w")
+
+            ps = str(pay.get("period_start", ""))[:10] if pay.get("period_start") else ""
+            pe = str(pay.get("period_end", ""))[:10] if pay.get("period_end") else ""
+            ctk.CTkLabel(row, text=f"{ps[:5]}-{pe[:5]}" if ps else "—",
+                         font=self.body_light_font, text_color=self.text_color).pack(side="left", width=70, anchor="w")
+
+            ctk.CTkLabel(row, text=f"P{pay.get('amount', 0)}",
+                         font=self.body_light_font, text_color=self.text_color).pack(side="left", width=60, anchor="w")
+
+            ref = pay.get("reference_no", "—")
+            ctk.CTkLabel(row, text=str(ref)[:10], font=self.body_light_font,
+                         text_color=self.text_color).pack(side="left", width=80, anchor="w")
+
+            pid = pay.get("payment_id")
+            confirm_btn = ctk.CTkButton(row, text="Confirm", font=self.body_description_font,
+                                        fg_color=self.primary_color, hover_color=self.hover_color,
+                                        text_color="white", width=60, height=26,
+                                        command=lambda p=pid: self._verify_payment(p, "completed"))
+            confirm_btn.pack(side="left", padx=(0, 4))
+            decline_btn = ctk.CTkButton(row, text="Decline", font=self.body_description_font,
+                                        fg_color=self.error_red, hover_color="#b3302e",
+                                        text_color="white", width=60, height=26,
+                                        command=lambda p=pid: self._verify_payment(p, "failed"))
+            decline_btn.pack(side="left")
+
+    def _verify_payment(self, payment_id, new_status):
+        def _do():
+            try:
+                resp = self.api.patch(f"/payments/{payment_id}/verify", json={
+                    "status": new_status
+                }, timeout=10)
+                if resp.status_code == 200:
+                    msg = "Payment confirmed!" if new_status == "completed" else "Payment declined."
+                    self.after(0, lambda: self.show_toast(msg, is_error=(new_status != "completed")))
+                    self.after(0, lambda: self._reload_dashboard())
+                else:
+                    err = resp.json().get("detail", "Failed to verify payment")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _show_create_payment_dialog(self, booking_id):
+        from datetime import date, timedelta
+        import calendar
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Create Payment")
+        dialog.geometry("380x450")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.attributes("-topmost", True)
+        dialog.update_idletasks()
+        dialog.wait_visibility()
+        dialog.grab_set()
+
+        main = ctk.CTkFrame(dialog, fg_color=self.secondary_color, corner_radius=6)
+        main.pack(fill="both", expand=True, padx=10, pady=10)
+
+        today = date.today()
+        first_day = today.replace(day=1)
+        last_day = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+
+        ctk.CTkLabel(main, text="Create Payment",
+                     font=self.body_bold_paragraph_font,
+                     text_color=self.text_color).pack(pady=(15, 10))
+
+        fields_frame = ctk.CTkFrame(main, fg_color="transparent")
+        fields_frame.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(fields_frame, text="Amount:",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(anchor="w")
+        amount_entry = ctk.CTkEntry(fields_frame, font=self.body_paragraph_font, height=32)
+        amount_entry.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(fields_frame, text="Period Start (YYYY-MM-DD):",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(anchor="w")
+        ps_entry = ctk.CTkEntry(fields_frame, font=self.body_paragraph_font, height=32)
+        ps_entry.insert(0, first_day.isoformat())
+        ps_entry.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(fields_frame, text="Period End (YYYY-MM-DD):",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(anchor="w")
+        pe_entry = ctk.CTkEntry(fields_frame, font=self.body_paragraph_font, height=32)
+        pe_entry.insert(0, last_day.isoformat())
+        pe_entry.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(fields_frame, text="Due Date (YYYY-MM-DD):",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(anchor="w")
+        dd_entry = ctk.CTkEntry(fields_frame, font=self.body_paragraph_font, height=32)
+        dd_entry.insert(0, first_day.isoformat())
+        dd_entry.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(fields_frame, text="Notes (optional):",
+                     font=self.body_description_font,
+                     text_color=self.text_color).pack(anchor="w")
+        notes_text = ctk.CTkTextbox(fields_frame, font=self.body_light_font, height=60)
+        notes_text.pack(fill="x", pady=(0, 8))
+
+        err_lbl = ctk.CTkLabel(fields_frame, text="",
+                               font=self.body_light_font,
+                               text_color=self.error_red)
+        err_lbl.pack()
+
+        def on_create():
+            amount_raw = amount_entry.get().strip()
+            ps_raw = ps_entry.get().strip()
+            pe_raw = pe_entry.get().strip()
+            dd_raw = dd_entry.get().strip()
+            notes_val = notes_text.get("1.0", "end-1c").strip()
+
+            if not amount_raw:
+                err_lbl.configure(text="Amount is required")
+                return
+            try:
+                amount_val = float(amount_raw)
+                if amount_val <= 0:
+                    raise ValueError
+            except ValueError:
+                err_lbl.configure(text="Invalid amount")
+                return
+            try:
+                ps_date = date.fromisoformat(ps_raw)
+                pe_date = date.fromisoformat(pe_raw)
+                dd_date = date.fromisoformat(dd_raw)
+            except ValueError:
+                err_lbl.configure(text="Invalid date format. Use YYYY-MM-DD")
+                return
+
+            def _do():
+                try:
+                    resp = self.api.post("/payments/", json={
+                        "booking_id": booking_id,
+                        "amount": amount_val,
+                        "period_start": ps_date.isoformat(),
+                        "period_end": pe_date.isoformat(),
+                        "due_date": dd_date.isoformat(),
+                        "notes": notes_val or None,
+                    }, timeout=10)
+                    if resp.status_code == 201:
+                        self.after(0, lambda: dialog.destroy())
+                        self.after(0, lambda: self.show_toast("Payment created successfully!", is_error=False))
+                        self.after(0, lambda: self.show_owner_active_tenants())
+                    else:
+                        detail = resp.json().get("detail", "Failed to create payment")
+                        self.after(0, lambda: err_lbl.configure(text=detail))
+                except Exception:
+                    self.after(0, lambda: err_lbl.configure(text="Cannot connect to server"))
+            threading.Thread(target=_do, daemon=True).start()
+
+        def on_cancel():
+            dialog.destroy()
+
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(5, 15))
+        ctk.CTkButton(btn_frame, text="Cancel",
+                      font=self.body_description_font,
+                      fg_color=self.hover_color, text_color="white",
+                      command=on_cancel).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(btn_frame, text="Create",
+                      font=self.body_description_font,
+                      fg_color=self.primary_color, text_color="white",
+                      command=on_create).pack(side="right")
+
+        dialog.wait_window()
+
+    def _reload_dashboard(self):
+        self.build_dashboard_content()
 
     def animate_sidebar(self):
         self._animate_sidebar_shared(
@@ -430,6 +650,18 @@ class OwnerDashboardMixin:
                                         )
         self.tenant_btn.grid(row=1, column=0, padx=10, pady=(0, 30))
 
+        self.active_tenants_btn = ctk.CTkButton(self.menu_btn_frame,
+                                                text="Active Tenants",
+                                                width=230,
+                                                height=40,
+                                                hover_color=self.hover_color,
+                                                fg_color="transparent",
+                                                text_color=self.text_color,
+                                                font=self.body_big_font,
+                                                command=self.show_owner_active_tenants
+                                                )
+        self.active_tenants_btn.grid(row=2, column=0, padx=10, pady=(0, 30))
+
         self.property_btn = ctk.CTkButton(self.menu_btn_frame,
                                           text="Property",
                                           width=230,
@@ -440,7 +672,7 @@ class OwnerDashboardMixin:
                                           font=self.body_big_font,
                                           command=self.show_owner_property
                                           )
-        self.property_btn.grid(row=2, column=0, padx=10, pady=(0, 30))
+        self.property_btn.grid(row=3, column=0, padx=10, pady=(0, 30))
 
         self.bookings_btn = ctk.CTkButton(self.menu_btn_frame,
                                            text="Bookings",
@@ -452,12 +684,13 @@ class OwnerDashboardMixin:
                                            font=self.body_big_font,
                                            command=self.show_owner_bookings
                                            )
-        self.bookings_btn.grid(row=3, column=0, padx=10, pady=(0, 30))
+        self.bookings_btn.grid(row=4, column=0, padx=10, pady=(0, 30))
 
     def _set_owner_sidebar_btn(self, active):
         buttons = {
             "dashboard": self.dashboard_btn,
             "tenants": self.tenant_btn,
+            "active_tenants": self.active_tenants_btn,
             "property": self.property_btn,
             "bookings": self.bookings_btn,
         }
@@ -466,6 +699,346 @@ class OwnerDashboardMixin:
                 btn.configure(fg_color=self.primary_color, text_color="white")
             else:
                 btn.configure(fg_color="transparent", text_color=self.text_color)
+
+    def show_owner_active_tenants(self):
+        for widget in self.content_wrapper.winfo_children():
+            widget.destroy()
+        self._set_owner_sidebar_btn("active_tenants")
+        self.build_active_tenants_content()
+
+    def build_active_tenants_content(self):
+        main = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ctk.CTkLabel(main, text="Active Tenants", font=self.alt_title_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 20))
+
+        self._show_owner_loading(main)
+
+        owner_id = getattr(self, 'current_user', {}).get('user_id', 0)
+
+        def _do():
+            enriched = []
+            maintenance = []
+            payments = []
+            try:
+                resp = self.api.get(f"/bookings/owner/{owner_id}/enriched?status=active", timeout=5)
+                if resp.status_code == 200:
+                    enriched = resp.json()
+            except Exception:
+                pass
+            try:
+                resp = self.api.get(f"/maintenance/owner/{owner_id}", timeout=5)
+                if resp.status_code == 200:
+                    maintenance = resp.json()
+            except Exception:
+                pass
+            try:
+                resp = self.api.get(f"/payments/owner/{owner_id}", timeout=5)
+                if resp.status_code == 200:
+                    payments = resp.json()
+            except Exception:
+                pass
+            self.after(0, lambda: self._populate_active_tenants(enriched, maintenance, payments))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _populate_active_tenants(self, enriched, maintenance, payments):
+        self._hide_owner_loading()
+        main = self.content_wrapper.winfo_children()
+        if not main:
+            return
+        main = main[0]
+        if not main.winfo_exists():
+            return
+
+        maint_by_listing = {}
+        for m in maintenance:
+            lid = m.get("listing_id")
+            maint_by_listing.setdefault(lid, []).append(m)
+
+        pay_by_booking = {}
+        for p in payments:
+            bid = p.get("booking_id")
+            pay_by_booking.setdefault(bid, []).append(p)
+
+        scroll = ctk.CTkScrollableFrame(main, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
+
+        if not enriched:
+            ctk.CTkLabel(scroll, text="No active tenants yet.",
+                         font=self.body_paragraph_font,
+                         text_color=self.text_color).pack(pady=40)
+            return
+
+        for b in enriched:
+            card = ctk.CTkFrame(scroll, fg_color=self.secondary_color,
+                                corner_radius=8, border_width=1,
+                                border_color=self.entry_border)
+            card.pack(fill="x", pady=(0, 15))
+
+            tenant_name = b.get("tenant_name", f"Tenant #{b.get('user_id', '?')}")
+            property_name = b.get("property_name", "Unknown")
+            room_number = b.get("room_number", "?")
+            room_type = b.get("room_type", "")
+            check_in = b.get("check_in", "?")
+            check_out = b.get("check_out", "?")
+            listing_id = b.get("listing_id")
+            booking_id = b.get("booking_id")
+            booking_status = b.get("status", "?")
+
+            # Header row
+            header = ctk.CTkFrame(card, fg_color="transparent")
+            header.pack(fill="x", padx=15, pady=(12, 5))
+            ctk.CTkLabel(header, text=tenant_name,
+                         font=self.body_bold_paragraph_font,
+                         text_color=self.text_color).pack(side="left")
+            ctk.CTkLabel(header, text=f"Room #{room_number}",
+                         font=self.body_paragraph_font,
+                         text_color=self.text_color).pack(side="right")
+
+            ctk.CTkLabel(card, text=f"{property_name}  |  {check_in} → {check_out}",
+                         font=self.body_light_font,
+                         text_color=self.text_color).pack(anchor="w", padx=15)
+
+            # Payments section
+            ten_payments = pay_by_booking.get(booking_id, [])
+            pay_section = ctk.CTkFrame(card, fg_color="transparent")
+            pay_section.pack(fill="x", padx=15, pady=(10, 5))
+
+            pay_header = ctk.CTkFrame(pay_section, fg_color="transparent")
+            pay_header.pack(fill="x")
+            ctk.CTkLabel(pay_header, text="Payments",
+                         font=self.body_paragraph_font,
+                         text_color=self.primary_color).pack(side="left")
+            ctk.CTkButton(pay_header, text="+ Add",
+                          fg_color=self.primary_color,
+                          hover_color=self.hover_color,
+                          text_color="white",
+                          font=self.body_description_font,
+                          width=60, height=24, cursor="hand2",
+                          command=lambda bid=booking_id: self._show_create_payment_dialog(bid)
+                          ).pack(side="right")
+
+            if not ten_payments:
+                ctk.CTkLabel(pay_section, text="No payments recorded.",
+                             font=self.body_light_font,
+                             text_color=self.text_color).pack(anchor="w", pady=(0, 5))
+            else:
+                for p in ten_payments:
+                    row = ctk.CTkFrame(pay_section, fg_color="transparent")
+                    row.pack(fill="x", pady=1)
+
+                    ps = str(p.get("period_start", ""))[:10] if p.get("period_start") else ""
+                    pe = str(p.get("period_end", ""))[:10] if p.get("period_end") else ""
+                    period_text = f"{ps} - {pe}" if ps and pe else "—"
+                    ctk.CTkLabel(row, text=period_text,
+                                 font=self.body_light_font,
+                                 text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                    ctk.CTkLabel(row, text=f"P{p.get('amount', '—')}",
+                                 font=self.body_paragraph_font,
+                                 text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                    pstatus = p.get("status", "unknown")
+                    pcolor = {
+                        "pending": self.hover_color,
+                        "paid": self.primary_color,
+                        "completed": self.primary_color,
+                        "failed": self.error_red,
+                    }.get(pstatus, self.text_color)
+                    ctk.CTkLabel(row, text=pstatus.title(),
+                                 fg_color=pcolor, text_color="white",
+                                 corner_radius=4, padx=6, pady=2,
+                                 font=ctk.CTkFont(size=10, weight="bold")).pack(side="right", padx=(0, 4))
+
+                    if pstatus == "paid":
+                        pid = p.get("payment_id")
+                        ctk.CTkButton(row, text="Verify",
+                                      fg_color=self.primary_color,
+                                      hover_color=self.hover_color,
+                                      text_color="white",
+                                      font=self.body_description_font,
+                                      width=60, height=26, cursor="hand2",
+                                      command=lambda pp=pid: self._verify_payment(pp, "completed")
+                                      ).pack(side="right", padx=(0, 2))
+
+            # Maintenance section
+            ten_maint = maint_by_listing.get(listing_id, [])
+            maint_section = ctk.CTkFrame(card, fg_color="transparent")
+            maint_section.pack(fill="x", padx=15, pady=(5, 12))
+
+            maint_header = ctk.CTkFrame(maint_section, fg_color="transparent")
+            maint_header.pack(fill="x")
+            ctk.CTkLabel(maint_header, text="Maintenance",
+                         font=self.body_paragraph_font,
+                         text_color=self.primary_color).pack(side="left")
+
+            ctk.CTkButton(maint_header, text="+ Add",
+                          font=self.body_description_font,
+                          fg_color=self.primary_color,
+                          hover_color=self.hover_color,
+                          text_color="white",
+                          width=50, height=24, cursor="hand2",
+                          command=lambda lid=listing_id, uid=b.get('user_id'): self._owner_add_maintenance(lid, uid)
+                          ).pack(side="right")
+
+            if not ten_maint:
+                ctk.CTkLabel(maint_section, text="No maintenance requests.",
+                             font=self.body_light_font,
+                             text_color=self.text_color).pack(anchor="w", pady=(0, 5))
+            else:
+                for mr in ten_maint:
+                    row = ctk.CTkFrame(maint_section, fg_color="transparent")
+                    row.pack(fill="x", pady=1)
+
+                    title = mr.get("title", f"#{mr.get('request_id', '?')}")
+                    ctk.CTkLabel(row, text=title,
+                                 font=self.body_light_font,
+                                 text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                    rstatus = mr.get("status", "unknown")
+                    rcolor = {
+                        "pending": self.hover_color,
+                        "in_progress": self.hover_color,
+                        "completed": self.primary_color,
+                    }.get(rstatus, self.text_color)
+                    status_lbl = ctk.CTkLabel(row, text=rstatus.replace("_", " ").capitalize(),
+                                              fg_color=rcolor, text_color="white",
+                                              corner_radius=4, padx=6, pady=2,
+                                              font=ctk.CTkFont(size=10, weight="bold"))
+                    status_lbl.pack(side="right", padx=(0, 4))
+
+                    rid = mr.get("request_id")
+                    next_status = {"pending": "in_progress", "in_progress": "completed"}.get(rstatus)
+                    if next_status:
+                        ctk.CTkButton(row, text="\u25B6",
+                                      fg_color="transparent",
+                                      text_color=self.text_color,
+                                      hover_color=self.hover_color,
+                                      width=24, height=24, cursor="hand2",
+                                      command=lambda rrid=rid, ns=next_status, sl=status_lbl: self._owner_update_maint_status(rrid, ns, sl)
+                                      ).pack(side="right", padx=(0, 2))
+
+                    if rstatus != "completed":
+                        ctk.CTkButton(row, text="X",
+                                      fg_color="transparent",
+                                      text_color=self.error_red,
+                                      hover_color=self.hover_color,
+                                      width=24, height=24, cursor="hand2",
+                                      command=lambda rrid=rid: self._owner_delete_maint(rrid)
+                                      ).pack(side="right", padx=(0, 2))
+
+    def _owner_add_maintenance(self, listing_id, tenant_id):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Add Maintenance Issue")
+        dialog.geometry("400x300")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        main = ctk.CTkFrame(dialog, fg_color=self.fg_color, corner_radius=8)
+        main.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(main, text="New Maintenance Issue", font=self.body_big_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 15))
+
+        ctk.CTkLabel(main, text="Title", font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+        title_entry = ctk.CTkEntry(main, placeholder_text="e.g. Broken window",
+                                   font=self.body_paragraph_font,
+                                   fg_color=self.fg_color,
+                                   border_color=self.entry_border,
+                                   text_color=self.text_color)
+        title_entry.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(main, text="Description", font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+        desc_text = ctk.CTkTextbox(main, height=80,
+                                   font=self.body_paragraph_font,
+                                   fg_color=self.fg_color,
+                                   border_color=self.entry_border,
+                                   border_width=1,
+                                   text_color=self.text_color)
+        desc_text.pack(fill="x", pady=(0, 15))
+
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x")
+
+        submit_btn = ctk.CTkButton(btn_frame, text="Submit",
+                                   fg_color=self.primary_color,
+                                   hover_color=self.hover_color,
+                                   text_color="white",
+                                   font=self.body_paragraph_font,
+                                   height=36, cursor="hand2")
+        submit_btn.pack(side="right", padx=(5, 0))
+
+        ctk.CTkButton(btn_frame, text="Cancel",
+                      fg_color="transparent",
+                      text_color=self.text_color,
+                      hover_color=self.hover_color,
+                      font=self.body_paragraph_font,
+                      height=36,
+                      command=dialog.destroy).pack(side="right")
+
+        def _submit():
+            title = title_entry.get().strip()
+            desc = desc_text.get("1.0", "end-1c").strip()
+            if not title or not desc:
+                self.show_toast("Please fill in all fields.", is_error=True)
+                return
+            submit_btn.configure(state="disabled", text="Sending...")
+
+            def _do():
+                try:
+                    resp = self.api.post("/maintenance/", json={
+                        "listing_id": listing_id,
+                        "tenant_id": tenant_id,
+                        "title": title,
+                        "description": desc,
+                    }, timeout=10)
+                    if resp.status_code == 201:
+                        self.after(0, lambda: (dialog.destroy(),
+                                               self.show_toast("Issue added!", is_error=False),
+                                               self.show_owner_active_tenants()))
+                    else:
+                        err = resp.json().get("detail", "Failed to submit")
+                        self.after(0, lambda: self.show_toast(err, is_error=True))
+                        self.after(0, lambda: submit_btn.configure(state="normal", text="Submit"))
+                except Exception:
+                    self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+                    self.after(0, lambda: submit_btn.configure(state="normal", text="Submit"))
+
+            threading.Thread(target=_do, daemon=True).start()
+
+        submit_btn.configure(command=_submit)
+
+    def _owner_update_maint_status(self, request_id, new_status, status_label):
+        def _do():
+            try:
+                resp = self.api.patch(f"/maintenance/{request_id}", json={"status": new_status}, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: status_label.configure(
+                        text=new_status.replace("_", " ").capitalize(),
+                        fg_color=self.primary_color if new_status == "completed" else self.hover_color
+                    ))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to update status", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _owner_delete_maint(self, request_id):
+        def _do():
+            try:
+                resp = self.api.delete(f"/maintenance/{request_id}", timeout=10)
+                if resp.status_code == 204:
+                    self.after(0, lambda: (self.show_toast("Request removed.", is_error=False),
+                                           self.show_owner_active_tenants()))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to delete", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+        threading.Thread(target=_do, daemon=True).start()
 
     def show_owner_tenants(self):
         for widget in self.content_wrapper.winfo_children():
@@ -521,7 +1094,8 @@ class OwnerDashboardMixin:
                         unit = str(b.get('room_number', '')) or f"Room #{b.get('room_id', '?')}"
                         contact = b.get('tenant_phone', '') or ''
                         move_in = b.get('check_in', '')
-                        payment_status = (b.get('payment_status') or '').capitalize() or b.get('status', 'Pending').capitalize()
+                        payment_status = (b.get('payment_status') or '').capitalize() or '—'
+                        booking_status = (b.get('status') or '').lower()
                         profile_complete = bool(b.get('tenant_phone'))
                         tenant_data.append((
                             name,
@@ -531,6 +1105,7 @@ class OwnerDashboardMixin:
                             payment_status,
                             profile_complete,
                             b.get('user_id', 0),
+                            booking_status,
                         ))
             except Exception:
                 self.after(0, lambda: self.show_toast("Failed to load tenants. Check your connection.", is_error=True))
@@ -548,12 +1123,12 @@ class OwnerDashboardMixin:
 
         if not tenant_data:
             tenant_data = [
-                ("No tenants yet", "", "", "", "", True, 0),
+                ("No tenants yet", "", "", "", "", True, 0, ""),
             ]
         self.tenant_action_menus = {}
         self.tenant_action_btns = {}
 
-        for r, (name, unit, contact, move_in, status, profile_complete, user_id) in enumerate(tenant_data):
+        for r, (name, unit, contact, move_in, status, profile_complete, user_id, booking_status) in enumerate(tenant_data):
             data_row = 1 + r * 2
             sep_row = data_row + 1
             is_last = r == len(tenant_data) - 1
@@ -567,13 +1142,21 @@ class OwnerDashboardMixin:
             ctk.CTkLabel(name_frame, text=name, font=self.body_paragraph_font,
                          text_color=self.text_color).pack(side="left")
 
+            if booking_status == "active":
+                badge = ctk.CTkLabel(
+                    name_frame, text="Active",
+                    font=self.body_description_font, fg_color=self.primary_color, text_color="white",
+                    corner_radius=4, padx=6, pady=2
+                )
+                badge.pack(side="left", padx=(4, 0))
+
             if not profile_complete:
-                incomplete_badge = ctk.CTkLabel(
+                badge = ctk.CTkLabel(
                     name_frame, text="Incomplete Profile",
                     font=self.body_description_font, fg_color="#F59E0B", text_color="white",
                     corner_radius=4, padx=6, pady=2
                 )
-                incomplete_badge.pack(side="left", padx=(4, 0))
+                badge.pack(side="left", padx=(4, 0))
 
             ctk.CTkLabel(table_frame, text=unit, font=self.body_paragraph_font,
                          text_color=self.text_color).grid(row=data_row, column=1, padx=15, pady=(7, 7), sticky="w")
@@ -734,9 +1317,9 @@ class OwnerDashboardMixin:
             card = ctk.CTkFrame(self._property_main, fg_color=self.secondary_color, corner_radius=6)
             card.pack(fill="x", pady=5)
 
-            def _bind_hover(widget):
-                widget.bind("<Enter>", lambda e: card.configure(fg_color=self.hover_color))
-                widget.bind("<Leave>", lambda e: card.configure(fg_color=self.secondary_color))
+            def _bind_hover(widget, c=card):
+                widget.bind("<Enter>", lambda e, c=c: c.configure(fg_color=self.hover_color))
+                widget.bind("<Leave>", lambda e, c=c: c.configure(fg_color=self.secondary_color))
 
             _bind_hover(card)
 
@@ -1100,7 +1683,7 @@ class OwnerDashboardMixin:
                                              hover_color=self.hover_color, text_color="white",
                                              height=45, corner_radius=6, cursor="hand2",
                                              command=self._save_edit_property)
-        self._prop_save_btn.pack(fill="x")
+        self._prop_save_btn.pack(anchor="center")
 
     def _save_edit_property(self):
         if getattr(self, '_prop_is_submitting', False):
@@ -2693,12 +3276,13 @@ class OwnerDashboardMixin:
         street_err.pack(anchor="w", padx=5)
         self._prop_form_widgets["street"] = (street_txt, street_err)
 
-        self._prop_create_btn = ctk.CTkButton(parent, text="Create Property",
-                                               font=self.body_big_font, fg_color=self.primary_color,
-                                               hover_color=self.hover_color, text_color="white",
-                                               height=45, corner_radius=6, cursor="hand2",
-                                               command=self._submit_property)
-        self._prop_create_btn.pack(pady=(20, 10))
+        if existing is None:
+            self._prop_create_btn = ctk.CTkButton(parent, text="Create Property",
+                                                   font=self.body_big_font, fg_color=self.primary_color,
+                                                   hover_color=self.hover_color, text_color="white",
+                                                   height=45, corner_radius=6, cursor="hand2",
+                                                   command=self._submit_property)
+            self._prop_create_btn.pack(pady=(20, 10))
 
     def _load_provinces(self):
         cached = getattr(self, "_cached_provinces", None)
@@ -2740,7 +3324,8 @@ class OwnerDashboardMixin:
             if val and val in opts and not val.startswith("Select") and val != getattr(self, "_last_province_val", ""):
                 self._last_province_val = val
                 self._handle_province_selected(val)
-            self.after(500, poll)
+            aid = self.after(500, poll)
+            self.after_ids.append(aid)
         poll()
 
     def on_province_selected(self, choice):
@@ -2794,7 +3379,8 @@ class OwnerDashboardMixin:
             if val and val in opts and not val.startswith("Select") and not val.startswith("Loading") and val != getattr(self, "_last_city_val", ""):
                 self._last_city_val = val
                 self._handle_city_selected(val)
-            self.after(500, poll)
+            aid = self.after(500, poll)
+            self.after_ids.append(aid)
         poll()
 
     def on_city_selected(self, choice):

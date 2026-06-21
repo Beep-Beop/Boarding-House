@@ -18,8 +18,10 @@ class DashboardMixin:
     STATUS_COLORS = {
         "completed": ("#2E7D32", "#4CAF50"),
         "pending": ("#E65100", "#FF9800"),
+        "paid": ("#1565C0", "#42A5F5"),
         "failed": ("#C62828", "#EF5350"),
         "refunded": ("#1565C0", "#42A5F5"),
+        "overdue": ("#C62828", "#EF5350"),
         "active": ("#2E7D32", "#4CAF50"),
         "cancelled": ("#757575", "#9E9E9E"),
         "confirmed": ("#1565C0", "#42A5F5"),
@@ -47,8 +49,6 @@ class DashboardMixin:
 
         self.body_frame = ctk.CTkFrame(self.form_container, fg_color="transparent")
         self.body_frame.pack(fill="both", expand=True)
-
-        self._build_tenant_sidebar()
 
         self.content_wrapper = ctk.CTkFrame(self.body_frame, fg_color="transparent")
         self.content_wrapper.pack(side="left", fill="both", expand=True, padx=(10, 10), pady=20)
@@ -118,12 +118,14 @@ class DashboardMixin:
     # ── Sidebar ────────────────────────────────────────────────────
 
     def _build_tenant_sidebar(self):
+        if hasattr(self, 'sidebar_main_frame') and self.sidebar_main_frame.winfo_exists():
+            return
         self.sidebar_main_frame = ctk.CTkFrame(self.body_frame,
                                                fg_color="transparent",
                                                width=250, corner_radius=0,
                                                border_color=self.entry_border,
                                                border_width=1)
-        self.sidebar_main_frame.pack(side="left", fill="y")
+        self.sidebar_main_frame.pack(side="left", fill="y", before=self.content_wrapper)
         self.sidebar_main_frame.pack_propagate(False)
 
         self.menu_btn_frame = ctk.CTkFrame(self.sidebar_main_frame, fg_color="transparent")
@@ -138,13 +140,21 @@ class DashboardMixin:
                                            command=self.show_tenant_dashboard_content)
         self.dashboard_btn.grid(row=0, column=0, padx=10, pady=(10, 30))
 
+        self.tenancy_btn = ctk.CTkButton(self.menu_btn_frame, text="My Tenancy",
+                                         width=230, height=40,
+                                         hover_color=self.hover_color,
+                                         fg_color="transparent", text_color=self.text_color,
+                                         font=self.body_big_font,
+                                         command=self.show_tenant_tenancy_content)
+        self.tenancy_btn.grid(row=1, column=0, padx=10, pady=(0, 30))
+
         self.explore_btn = ctk.CTkButton(self.menu_btn_frame, text="Explore",
                                          width=230, height=40,
                                          hover_color=self.hover_color,
                                          fg_color="transparent", text_color=self.text_color,
                                          font=self.body_big_font,
                                          command=self.show_tenant_explore_content)
-        self.explore_btn.grid(row=1, column=0, padx=10, pady=(0, 30))
+        self.explore_btn.grid(row=2, column=0, padx=10, pady=(0, 30))
 
         self.viewing_btn = ctk.CTkButton(self.menu_btn_frame, text="Viewing",
                                          width=230, height=40,
@@ -152,7 +162,7 @@ class DashboardMixin:
                                          fg_color="transparent", text_color=self.text_color,
                                          font=self.body_big_font,
                                          command=self.show_tenant_viewings_content)
-        self.viewing_btn.grid(row=2, column=0, padx=10, pady=(0, 30))
+        self.viewing_btn.grid(row=3, column=0, padx=10, pady=(0, 30))
 
         self.favorite_btn = ctk.CTkButton(self.menu_btn_frame, text="Favorite",
                                           width=230, height=40,
@@ -160,7 +170,7 @@ class DashboardMixin:
                                           fg_color="transparent", text_color=self.text_color,
                                           font=self.body_big_font,
                                           command=self.show_tenant_favorites_content)
-        self.favorite_btn.grid(row=3, column=0, padx=10, pady=(0, 30))
+        self.favorite_btn.grid(row=4, column=0, padx=10, pady=(0, 30))
 
         self.bookings_btn = ctk.CTkButton(self.menu_btn_frame, text="My Bookings",
                                           width=230, height=40,
@@ -168,11 +178,17 @@ class DashboardMixin:
                                           fg_color="transparent", text_color=self.text_color,
                                           font=self.body_big_font,
                                           command=self.show_tenant_bookings_content)
-        self.bookings_btn.grid(row=4, column=0, padx=10, pady=(0, 30))
+        self.bookings_btn.grid(row=5, column=0, padx=10, pady=(0, 30))
+
+        self._sidebar_buttons = [
+            self.dashboard_btn, self.tenancy_btn, self.explore_btn,
+            self.viewing_btn, self.favorite_btn, self.bookings_btn,
+        ]
 
     def _set_active_sidebar_btn(self, active):
         buttons = {
             "dashboard": self.dashboard_btn,
+            "tenancy": self.tenancy_btn,
             "explore": self.explore_btn,
             "viewing": self.viewing_btn,
             "favorite": self.favorite_btn,
@@ -183,6 +199,18 @@ class DashboardMixin:
                 btn.configure(fg_color=self.primary_color, text_color="white")
             else:
                 btn.configure(fg_color="transparent", text_color=self.text_color)
+
+    def _refresh_tenant_sidebar(self):
+        has_active = getattr(self, '_has_active_booking', False)
+        for btn in [self.explore_btn, self.viewing_btn, self.favorite_btn, self.bookings_btn]:
+            if has_active:
+                btn.grid_remove()
+            else:
+                btn.grid()
+        if has_active:
+            self.tenancy_btn.grid()
+        else:
+            self.tenancy_btn.grid_remove()
 
     # ── Dashboard Content (default landing) ────────────────────────
 
@@ -270,15 +298,19 @@ class DashboardMixin:
                     self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
 
             active = [b for b in bookings if b.get("status") == "active"]
+            self._has_active_booking = bool(active)
             pending_b = [b for b in bookings if b.get("status") == "pending"]
             next_payment = None
             for p in payments:
                 if p.get("status") == "pending":
-                    next_payment = p
-                    break
+                    if next_payment is None or p.get("due_date", "9999-12-31") < next_payment.get("due_date", "9999-12-31"):
+                        next_payment = p
 
-            self.after(0, lambda: self._build_dashboard_content(
-                active, pending_b, payments, favorites, next_payment
+            self.after(0, lambda: (
+                self._build_tenant_sidebar(),
+                self._build_dashboard_content(
+                    active, pending_b, payments, favorites, next_payment
+                )
             ))
 
         threading.Thread(target=_do, daemon=True).start()
@@ -301,6 +333,7 @@ class DashboardMixin:
                                pending_bookings, favorites, next_payment)
         self._build_recent_payments(self._dash_payments_frame, payments)
         self._build_quick_actions(self._dash_actions_frame)
+        self._refresh_tenant_sidebar()
 
     # ── Dashboard Section 1: Active Lease Card ─────────────────────
 
@@ -414,36 +447,32 @@ class DashboardMixin:
         for w in parent.winfo_children():
             w.destroy()
 
-        ctk.CTkLabel(parent, text="Recent Payments",
+        ctk.CTkLabel(parent, text="Monthly Bills",
                      font=self.body_paragraph_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 8))
 
-        recent = payments[:5]
-        if not recent:
-            ctk.CTkLabel(parent, text="No payments yet — payments will appear here once you book a place.",
+        if not payments:
+            ctk.CTkLabel(parent, text="No bills yet — bills will appear here once your booking is approved.",
                          font=self.body_light_font,
                          text_color=self.text_color).pack(pady=20)
             return
 
-        for p in recent:
+        for p in payments:
             row = ctk.CTkFrame(parent, fg_color=self.secondary_color,
-                               corner_radius=6, height=36,
+                               corner_radius=6, height=40,
                                border_width=1, border_color=self.entry_border)
             row.pack(fill="x", pady=2)
             row.pack_propagate(False)
 
-            paid_at = p.get("paid_at", "—")[:10] if p.get("paid_at") else "—"
-            ctk.CTkLabel(row, text=paid_at,
+            ps = str(p.get("period_start", ""))[:10] if p.get("period_start") else ""
+            pe = str(p.get("period_end", ""))[:10] if p.get("period_end") else ""
+            period_text = f"{ps} - {pe}" if ps and pe else "—"
+            ctk.CTkLabel(row, text=period_text,
                          font=self.body_light_font,
                          text_color=self.text_color).pack(side="left", padx=12)
 
             ctk.CTkLabel(row, text=f"P{p.get('amount', '—')}",
                          font=self.body_paragraph_font,
-                         text_color=self.text_color).pack(side="left", padx=12)
-
-            method = p.get("method", "—")
-            ctk.CTkLabel(row, text=method.replace("_", " ").title(),
-                         font=self.body_light_font,
                          text_color=self.text_color).pack(side="left", padx=12)
 
             status = p.get("status", "unknown")
@@ -452,8 +481,25 @@ class DashboardMixin:
                                  fg_color=color, text_color="white",
                                  corner_radius=4,
                                  font=ctk.CTkFont(size=10, weight="bold"),
-                                 width=60)
+                                 width=70)
             badge.pack(side="right", padx=12)
+
+            if status == "pending":
+                pay_btn = ctk.CTkButton(row, text="Pay Now",
+                                        fg_color=self.primary_color,
+                                        hover_color=self.hover_color,
+                                        text_color="white",
+                                        font=self.body_description_font,
+                                        width=70, height=28)
+                pay_btn.pack(side="right", padx=(0, 8))
+                payment_id = p.get("payment_id")
+                pay_btn.configure(command=lambda pid=payment_id, r=row, b=pay_btn: self._show_monthly_pay_form(pid, r, b))
+
+            method = p.get("method")
+            if method:
+                ctk.CTkLabel(row, text=method.replace("_", " ").title(),
+                             font=self.body_light_font,
+                             text_color=self.text_color).pack(side="left", padx=12)
 
     # ── Dashboard Section 4: Quick Actions ─────────────────────────
 
@@ -465,16 +511,24 @@ class DashboardMixin:
                      font=self.body_paragraph_font,
                      text_color=self.text_color).pack(anchor="w", pady=(0, 8))
 
-        actions = [
-            ("Browse Listings", self.show_tenant_explore_content),
-            ("My Bookings", self.show_tenant_bookings_content),
-            ("Saved", self.show_tenant_favorites_content),
-            ("Notifications", self.show_notifications_page),
-        ]
+        has_active = getattr(self, '_has_active_booking', False)
+        if has_active:
+            actions = [
+                ("My Tenancy", self.show_tenant_tenancy_content),
+                ("Notifications", self.show_notifications_page),
+            ]
+        else:
+            actions = [
+                ("Browse Listings", self.show_tenant_explore_content),
+                ("My Bookings", self.show_tenant_bookings_content),
+                ("Saved", self.show_tenant_favorites_content),
+                ("Notifications", self.show_notifications_page),
+            ]
 
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x")
-        frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="actions")
+        for i in range(len(actions)):
+            frame.grid_columnconfigure(i, weight=1, uniform="actions")
 
         for i, (label, cmd) in enumerate(actions):
             card = ctk.CTkFrame(frame, fg_color=self.secondary_color,
@@ -493,6 +547,310 @@ class DashboardMixin:
             card.bind("<Button-1>", lambda e, c=cmd: c())
             for child in card.winfo_children():
                 child.bind("<Button-1>", lambda e, c=cmd: c())
+
+    # ── My Tenancy Content ─────────────────────────────────────────
+
+    def show_tenant_tenancy_content(self):
+        for widget in self.content_wrapper.winfo_children():
+            widget.destroy()
+        self._set_active_sidebar_btn("tenancy")
+
+        main = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        main.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(main, text="My Tenancy", font=self.alt_title_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 15))
+
+        progress = ctk.CTkProgressBar(main, mode="indeterminate",
+                                       fg_color=self.entry_border,
+                                       progress_color=self.primary_color)
+        progress.pack(fill="x", pady=(0, 10))
+        progress.start()
+
+        scroll = ctk.CTkScrollableFrame(main, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
+
+        self._tenancy_scroll = scroll
+        self._tenancy_progress = progress
+
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id:
+            self.show_toast("User session not found.", is_error=True)
+            return
+
+        def _do():
+            bookings = []
+            payments = []
+            maintenance = []
+            room_data = None
+            listing_id = None
+            try:
+                resp = self.api.get(f"/bookings/user/{user_id}", timeout=5)
+                if resp.status_code == 200:
+                    bookings = resp.json()
+            except Exception:
+                pass
+            active = [b for b in bookings if b.get("status") == "active"]
+            if active:
+                b = active[0]
+                booking_id = b.get("booking_id")
+                room_id = b.get("room_id")
+                try:
+                    resp = self.api.get(f"/rooms/{room_id}", timeout=5)
+                    if resp.status_code == 200:
+                        room_data = resp.json()
+                        listing_id = room_data.get("listing_id")
+                except Exception:
+                    pass
+                try:
+                    resp = self.api.get(f"/payments/booking/{booking_id}", timeout=5)
+                    if resp.status_code == 200:
+                        payments = resp.json()
+                except Exception:
+                    pass
+                if listing_id:
+                    try:
+                        resp = self.api.get(f"/maintenance/listing/{listing_id}", timeout=5)
+                        if resp.status_code == 200:
+                            maintenance = resp.json()
+                    except Exception:
+                        pass
+            self.after(0, lambda: self._build_tenancy_content(active, payments, maintenance, room_data))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _build_tenancy_content(self, active_bookings, payments, maintenance, room_data=None):
+        if hasattr(self, '_tenancy_progress') and self._tenancy_progress:
+            self._tenancy_progress.stop()
+            self._tenancy_progress.pack_forget()
+            self._tenancy_progress = None
+
+        scroll = self._tenancy_scroll if hasattr(self, '_tenancy_scroll') else None
+        if not scroll or not scroll.winfo_exists():
+            return
+
+        if not active_bookings:
+            ctk.CTkLabel(scroll, text="You don't have an active tenancy yet.",
+                         font=self.body_paragraph_font,
+                         text_color=self.text_color).pack(pady=40)
+            ctk.CTkButton(scroll, text="Browse Listings",
+                          font=self.body_paragraph_font,
+                          fg_color=self.primary_color,
+                          hover_color=self.hover_color,
+                          text_color="white",
+                          cursor="hand2",
+                          command=self.show_tenant_explore_content).pack()
+            return
+
+        b = active_bookings[0]
+        room_id = b.get("room_id", "?")
+        check_in = b.get("check_in", "?")
+        check_out = b.get("check_out", "?")
+        listing_id = room_data.get("listing_id") if room_data else None
+
+        # Lease info card
+        lease_card = ctk.CTkFrame(scroll, fg_color=self.secondary_color,
+                                  corner_radius=8, border_width=1,
+                                  border_color=self.entry_border)
+        lease_card.pack(fill="x", pady=(0, 15))
+
+        ctk.CTkLabel(lease_card, text="Active Lease",
+                     font=self.body_bold_paragraph_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(lease_card, text=f"Room #{room_id}",
+                     font=self.body_paragraph_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15)
+        ctk.CTkLabel(lease_card, text=f"{check_in} → {check_out}",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 12))
+
+        # Payments section
+        pay_card = ctk.CTkFrame(scroll, fg_color=self.secondary_color,
+                                corner_radius=8, border_width=1,
+                                border_color=self.entry_border)
+        pay_card.pack(fill="x", pady=(0, 15))
+
+        pay_header = ctk.CTkFrame(pay_card, fg_color="transparent")
+        pay_header.pack(fill="x", padx=15, pady=(12, 5))
+        ctk.CTkLabel(pay_header, text="Payments",
+                     font=self.body_bold_paragraph_font,
+                     text_color=self.text_color).pack(side="left")
+
+        if not payments:
+            ctk.CTkLabel(pay_card, text="No payment records yet.",
+                         font=self.body_light_font,
+                         text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 12))
+        else:
+            for p in payments:
+                row = ctk.CTkFrame(pay_card, fg_color="transparent")
+                row.pack(fill="x", padx=15, pady=2)
+
+                ps = str(p.get("period_start", ""))[:10] if p.get("period_start") else ""
+                pe = str(p.get("period_end", ""))[:10] if p.get("period_end") else ""
+                period_text = f"{ps} - {pe}" if ps and pe else "—"
+                ctk.CTkLabel(row, text=period_text,
+                             font=self.body_light_font,
+                             text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                ctk.CTkLabel(row, text=f"P{p.get('amount', '—')}",
+                             font=self.body_paragraph_font,
+                             text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                status = p.get("status", "unknown")
+                color = self.STATUS_COLORS.get(status, ("#757575", "#9E9E9E"))
+                ctk.CTkLabel(row, text=status.title(),
+                             fg_color=color, text_color="white",
+                             corner_radius=4,
+                             font=ctk.CTkFont(size=10, weight="bold"),
+                             width=70).pack(side="right", padx=(0, 4))
+
+                if status == "pending":
+                    pay_btn = ctk.CTkButton(row, text="Pay Now",
+                                            fg_color=self.primary_color,
+                                            hover_color=self.hover_color,
+                                            text_color="white",
+                                            font=self.body_description_font,
+                                            width=70, height=28)
+                    pay_btn.pack(side="right", padx=(0, 4))
+                    pid = p.get("payment_id")
+                    pay_btn.configure(command=lambda pid=pid, r=row, b=pay_btn: self._show_monthly_pay_form(pid, r, b))
+
+                method = p.get("method")
+                if method:
+                    ctk.CTkLabel(row, text=method.replace("_", " ").title(),
+                                 font=self.body_light_font,
+                                 text_color=self.text_color).pack(side="left", padx=10)
+
+        # Maintenance section
+        maint_card = ctk.CTkFrame(scroll, fg_color=self.secondary_color,
+                                  corner_radius=8, border_width=1,
+                                  border_color=self.entry_border)
+        maint_card.pack(fill="x", pady=(0, 15))
+
+        maint_header = ctk.CTkFrame(maint_card, fg_color="transparent")
+        maint_header.pack(fill="x", padx=15, pady=(12, 5))
+        ctk.CTkLabel(maint_header, text="Maintenance",
+                     font=self.body_bold_paragraph_font,
+                     text_color=self.text_color).pack(side="left")
+
+        ctk.CTkButton(maint_header, text="+ Report Issue",
+                      font=self.body_description_font,
+                      fg_color=self.primary_color,
+                      hover_color=self.hover_color,
+                      text_color="white",
+                      width=100, height=28, cursor="hand2",
+                      command=lambda: self._show_maintenance_dialog(listing_id)
+                      ).pack(side="right")
+
+        if not maintenance:
+            ctk.CTkLabel(maint_card, text="No maintenance requests.",
+                         font=self.body_light_font,
+                         text_color=self.text_color).pack(anchor="w", padx=15, pady=(0, 12))
+        else:
+            for req in maintenance:
+                row = ctk.CTkFrame(maint_card, fg_color="transparent")
+                row.pack(fill="x", padx=15, pady=2)
+
+                title = req.get("title", f"Request #{req.get('request_id', '?')}")
+                ctk.CTkLabel(row, text=title,
+                             font=self.body_paragraph_font,
+                             text_color=self.text_color).pack(side="left", padx=(0, 10))
+
+                req_status = req.get("status", "unknown")
+                status_colors = {
+                    "pending": self.hover_color,
+                    "in_progress": self.hover_color,
+                    "completed": self.primary_color,
+                }
+                sc = status_colors.get(req_status, self.text_color)
+                ctk.CTkLabel(row, text=req_status.replace("_", " ").capitalize(),
+                             fg_color=sc, text_color="white",
+                             corner_radius=4, padx=8, pady=2,
+                             font=ctk.CTkFont(size=10, weight="bold")).pack(side="right")
+
+    def _show_maintenance_dialog(self, listing_id):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Report Maintenance Issue")
+        dialog.geometry("400x300")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        main = ctk.CTkFrame(dialog, fg_color=self.fg_color, corner_radius=8)
+        main.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(main, text="Report Issue", font=self.body_big_font,
+                     text_color=self.text_color).pack(anchor="w", pady=(0, 15))
+
+        ctk.CTkLabel(main, text="Title", font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+        title_entry = ctk.CTkEntry(main, placeholder_text="e.g. Leaky faucet",
+                                   font=self.body_paragraph_font,
+                                   fg_color=self.secondary_color,
+                                   border_color=self.entry_border,
+                                   text_color=self.text_color)
+        title_entry.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(main, text="Description", font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+        desc_text = ctk.CTkTextbox(main, height=80,
+                                   font=self.body_paragraph_font,
+                                   fg_color=self.secondary_color,
+                                   border_color=self.entry_border,
+                                   border_width=1,
+                                   text_color=self.text_color)
+        desc_text.pack(fill="x", pady=(0, 15))
+
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x")
+
+        submit_btn = ctk.CTkButton(btn_frame, text="Submit",
+                                   fg_color=self.primary_color,
+                                   hover_color=self.hover_color,
+                                   text_color="white",
+                                   font=self.body_paragraph_font,
+                                   height=36, cursor="hand2")
+        submit_btn.pack(side="right", padx=(5, 0))
+
+        ctk.CTkButton(btn_frame, text="Cancel",
+                      fg_color="transparent",
+                      text_color=self.text_color,
+                      hover_color=self.hover_color_text,
+                      font=self.body_paragraph_font,
+                      height=36,
+                      command=dialog.destroy).pack(side="right")
+
+        def _submit():
+            title = title_entry.get().strip()
+            desc = desc_text.get("1.0", "end-1c").strip()
+            if not title or not desc:
+                self.show_toast("Please fill in all fields.", is_error=True)
+                return
+            submit_btn.configure(state="disabled", text="Sending...")
+            user_id = getattr(self, 'current_user', {}).get('user_id', 0)
+
+            def _do():
+                try:
+                    resp = self.api.post("/maintenance/", json={
+                        "listing_id": listing_id,
+                        "tenant_id": user_id,
+                        "title": title,
+                        "description": desc,
+                    }, timeout=10)
+                    if resp.status_code == 201:
+                        self.after(0, lambda: (dialog.destroy(),
+                                               self.show_toast("Issue reported!", is_error=False),
+                                               self.show_tenant_tenancy_content()))
+                    else:
+                        err = resp.json().get("detail", "Failed to submit")
+                        self.after(0, lambda: self.show_toast(err, is_error=True))
+                        self.after(0, lambda: submit_btn.configure(state="normal", text="Submit"))
+                except Exception:
+                    self.after(0, lambda: self.show_toast("Connection error.", is_error=True))
+                    self.after(0, lambda: submit_btn.configure(state="normal", text="Submit"))
+
+            threading.Thread(target=_do, daemon=True).start()
+
+        submit_btn.configure(command=_submit)
 
     # ── Explore Content ────────────────────────────────────────────
 
@@ -730,26 +1088,25 @@ class DashboardMixin:
             btn_frame = ctk.CTkFrame(card, fg_color="transparent")
             btn_frame.pack(side="right", padx=15, pady=8)
 
-            if status in ("pending", "approved"):
-                if status == "approved" and not move_in_req:
-                    pay_btn = ctk.CTkButton(btn_frame, text="Pay & Request Move-in",
-                                            fg_color=self.primary_color,
-                                            hover_color=self.hover_color,
-                                            text_color="white",
-                                            font=ctk.CTkFont(size=16),
-                                            width=200, height=32)
-                    pay_btn.pack(side="right", padx=(8, 0))
-                    total_price = b.get("total_price", 0)
-                    pay_btn.configure(command=lambda b=bid, btn=pay_btn, crd=card, tp=total_price: self._show_payment_form(b, crd, btn, tp))
+        if status in ("pending", "approved"):
+            if status == "approved" and not move_in_req:
+                move_btn = ctk.CTkButton(btn_frame, text="Request Move-in",
+                                         fg_color=self.primary_color,
+                                         hover_color=self.hover_color,
+                                         text_color="white",
+                                         font=ctk.CTkFont(size=16),
+                                         width=180, height=32)
+                move_btn.pack(side="right", padx=(8, 0))
+                move_btn.configure(command=lambda b=bid, btn=move_btn: self._request_move_in(b, btn))
 
-                cancel_btn = ctk.CTkButton(btn_frame, text="Cancel Booking",
+            cancel_btn = ctk.CTkButton(btn_frame, text="Cancel Booking",
                                            fg_color=self.error_red,
                                            hover_color=self.error_red,
                                            text_color="white",
                                            font=self.body_paragraph_font,
                                            width=120, height=32)
-                cancel_btn.pack(side="right")
-                cancel_btn.configure(command=lambda bid=bid, btn=cancel_btn: self._cancel_booking(bid, btn))
+            cancel_btn.pack(side="right")
+            cancel_btn.configure(command=lambda bid=bid, btn=cancel_btn: self._cancel_booking(bid, btn))
 
     # ── Favorites Content ──────────────────────────────────────────
 
@@ -758,13 +1115,53 @@ class DashboardMixin:
             widget.destroy()
         self._set_active_sidebar_btn("favorite")
 
-        self._favorites_container = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
-        self._favorites_container.pack(fill="both", expand=True)
+        container = ctk.CTkFrame(self.content_wrapper, fg_color="transparent")
+        container.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(self._favorites_container, text="SAVED FAVORITES", font=self.alt_title_font,
-                     text_color=self.text_color).pack(pady=(0, 20))
+        toolbar = ctk.CTkFrame(container, fg_color="transparent")
+        toolbar.pack(fill="x", padx=20, pady=(10, 0))
 
-        self._show_dash_loading(self._favorites_container)
+        ctk.CTkLabel(toolbar, text="SAVED FAVORITES",
+                     font=self.alt_title_font,
+                     text_color=self.text_color).pack(side="left")
+
+        self._fav_sort_var = ctk.StringVar(value="Newest First")
+        sort_menu = ctk.CTkOptionMenu(toolbar,
+                                       values=["Newest First", "Oldest First", "A\u2013Z"],
+                                       variable=self._fav_sort_var,
+                                       font=self.body_paragraph_font,
+                                       fg_color=self.secondary_color,
+                                       button_color=self.hover_color,
+                                       button_hover_color=self.entry_border,
+                                       dropdown_fg_color=self.secondary_color,
+                                       command=self._on_fav_sort_change)
+        sort_menu.pack(side="right", padx=(10, 0))
+
+        self._fav_search_var = ctk.StringVar()
+        search_entry = ctk.CTkEntry(toolbar,
+                                     placeholder_text="Search favorites...",
+                                     textvariable=self._fav_search_var,
+                                     font=self.body_paragraph_font,
+                                     fg_color=self.secondary_color,
+                                     border_color=self.entry_border,
+                                     width=200)
+        search_entry.pack(side="right", padx=(0, 10))
+        self._fav_search_var.trace_add("write", self._on_fav_search_change)
+
+        self._fav_body = ctk.CTkFrame(container, fg_color="transparent")
+        self._fav_body.pack(fill="both", expand=True, pady=(10, 0))
+
+        self._fav_progress = ctk.CTkProgressBar(self._fav_body, mode="indeterminate",
+                                                 fg_color=self.entry_border,
+                                                 progress_color=self.primary_color)
+        self._fav_progress.pack(fill="x", padx=20, pady=10)
+        self._fav_progress.start()
+
+        self._fav_scroll = ctk.CTkScrollableFrame(self._fav_body, fg_color="transparent")
+        self._fav_scroll.pack(fill="both", expand=True, padx=20)
+
+        self._fav_all_items = []
+        self._fav_filtered = []
 
         user_id = getattr(self, 'current_user', {}).get('user_id')
         if not user_id:
@@ -774,45 +1171,269 @@ class DashboardMixin:
         def _do():
             items = []
             try:
-                resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
+                resp = self.api.get(f"/favorites/user/{user_id}/detailed", timeout=5)
                 if resp.status_code == 200:
                     items = resp.json()
             except Exception:
-                self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
+                self.after(0, lambda: self.show_toast(
+                    "Failed to load favorites. Check your connection.", is_error=True))
             self.after(0, lambda: self._show_favorites(items))
 
         threading.Thread(target=_do, daemon=True).start()
 
     def _show_favorites(self, items):
-        self._hide_dash_loading()
-        container = self._favorites_container
+        if hasattr(self, '_fav_progress') and self._fav_progress:
+            self._fav_progress.stop()
+            self._fav_progress.pack_forget()
+            self._fav_progress = None
+
+        if hasattr(self, '_fav_scroll'):
+            for w in self._fav_scroll.winfo_children():
+                w.destroy()
+
+        self._fav_all_items = items
+        self._fav_filtered = list(items)
 
         if not items:
-            ctk.CTkLabel(container, text="You have no saved favorites yet.",
-                         font=self.body_paragraph_font,
-                         text_color=self.text_color).pack(pady=40)
+            self._show_fav_empty_state()
             return
 
-        scroll = ctk.CTkScrollableFrame(container, fg_color="transparent")
-        scroll.pack(fill="both", expand=True)
+        self._render_fav_cards()
 
-        for fav in items:
-            card = ctk.CTkFrame(scroll, fg_color=self.secondary_color,
-                                corner_radius=8, height=50,
-                                border_width=1, border_color=self.entry_border)
-            card.pack(fill="x", pady=3, padx=10)
-            card.pack_propagate(False)
+    def _show_fav_empty_state(self):
+        frame = ctk.CTkFrame(self._fav_scroll, fg_color=self.secondary_color,
+                             corner_radius=12, border_width=1,
+                             border_color=self.entry_border)
+        frame.pack(fill="x", padx=40, pady=40)
 
-            listing_id = fav.get("listing_id", "?")
-            saved_at = fav.get("saved_at", "?")[:10] if fav.get("saved_at") else "?"
+        ctk.CTkLabel(frame, text="\u2764\ufe0f",
+                     font=ctk.CTkFont(size=48)).pack(pady=(30, 10))
 
-            ctk.CTkLabel(card, text=f"Listing #{listing_id}",
-                         font=self.body_paragraph_font,
-                         text_color=self.text_color).pack(side="left", padx=15)
+        ctk.CTkLabel(frame, text="No saved favorites yet!",
+                     font=self.alt_title_font,
+                     text_color=self.text_color).pack()
 
-            ctk.CTkLabel(card, text=f"Saved: {saved_at}",
+        ctk.CTkLabel(frame, text="Start exploring listings and tap the heart icon\nto save your favorite boarding houses.",
+                     font=self.body_paragraph_font,
+                     text_color=self.text_color,
+                     justify="center").pack(pady=(5, 10))
+
+        ctk.CTkButton(frame, text="Browse Listings",
+                      font=self.body_paragraph_font,
+                      fg_color=self.primary_color,
+                      hover_color=self.hover_color,
+                      command=self.show_tenant_explore_content).pack(pady=(10, 30))
+
+    def _render_fav_cards(self):
+        scroll = self._fav_scroll
+        for w in scroll.winfo_children():
+            w.destroy()
+
+        if not self._fav_filtered:
+            self._show_fav_empty_state()
+            return
+
+        available_width = scroll.winfo_width() or 800
+        card_width = 340
+        columns = max(1, available_width // card_width)
+        for i in range(columns):
+            scroll.grid_columnconfigure(i, weight=1, uniform="favcol")
+
+        for idx, fav in enumerate(self._fav_filtered):
+            row = idx // columns
+            col = idx % columns
+            self._build_fav_card(scroll, fav, row, col)
+
+    def _build_fav_card(self, parent, fav, row, col):
+        card = ctk.CTkFrame(parent, fg_color=self.secondary_color,
+                            corner_radius=10, border_width=1,
+                            border_color=self.entry_border)
+        card.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
+
+        listing_id = fav.get("listing_id")
+        listing_name = fav.get("listing_name", "Unknown Property")
+        location = fav.get("location", "")
+        photo_url = fav.get("photo_url")
+        saved_at = fav.get("saved_at", "")
+        notes = fav.get("notes", "")
+        is_active = fav.get("is_active", True)
+
+        photo_label = ctk.CTkLabel(card, text="", width=120, height=90,
+                                   fg_color=self.fg_color, corner_radius=6)
+        photo_label.grid(row=0, column=0, rowspan=3, padx=(8, 0), pady=8, sticky="nw")
+
+        if photo_url:
+            def load_thumb(url=photo_url, lbl=photo_label):
+                try:
+                    img_data = requests.get(url, timeout=3).content
+                    pil_img = Image.open(io.BytesIO(img_data))
+                    ctk_img = ctk.CTkImage(pil_img, size=(120, 90))
+                    self.after(0, lambda: lbl.winfo_exists() and lbl.configure(image=ctk_img))
+                except Exception:
+                    self.after(0, lambda: lbl.winfo_exists() and lbl.configure(
+                        text="[No Image]", text_color=self.text_color))
+            threading.Thread(target=load_thumb, daemon=True).start()
+        else:
+            photo_label.configure(text="[No Image]", text_color=self.text_color)
+
+        info_frame = ctk.CTkFrame(card, fg_color="transparent")
+        info_frame.grid(row=0, column=1, padx=(10, 8), pady=(8, 0), sticky="nsew")
+        card.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(info_frame, text=listing_name,
+                     font=self.body_bold_paragraph_font,
+                     text_color=self.text_color,
+                     anchor="w").pack(fill="x")
+
+        if location:
+            ctk.CTkLabel(info_frame, text=location,
                          font=self.body_light_font,
-                         text_color=self.text_color).pack(side="left", padx=15)
+                         text_color=self.text_color,
+                         anchor="w").pack(fill="x")
+
+        ptype = fav.get("property_type")
+        if ptype:
+            badge = ctk.CTkLabel(info_frame, text=ptype,
+                                 fg_color=self.primary_color,
+                                 text_color="white",
+                                 corner_radius=4,
+                                 font=ctk.CTkFont(size=10),
+                                 width=60)
+            badge.pack(anchor="w", pady=(2, 0))
+
+        meta_frame = ctk.CTkFrame(card, fg_color="transparent")
+        meta_frame.grid(row=1, column=1, padx=(10, 8), sticky="ew")
+
+        relative = self._fav_relative_time(saved_at)
+        ctk.CTkLabel(meta_frame, text=f"Saved {relative}",
+                     font=self.body_light_font,
+                     text_color=self.text_color).pack(anchor="w")
+
+        if notes:
+            ctk.CTkLabel(meta_frame, text=f"\U0001f4dd {notes}",
+                         font=self.body_light_font,
+                         text_color=self.text_color,
+                         anchor="w").pack(anchor="w")
+
+        if not is_active:
+            inactive_badge = ctk.CTkLabel(card, text="LISTING UNAVAILABLE",
+                                          fg_color=self.error_red,
+                                          text_color="white",
+                                          corner_radius=4,
+                                          font=ctk.CTkFont(size=9, weight="bold"))
+            inactive_badge.grid(row=2, column=1, padx=(10, 8), pady=(0, 8), sticky="w")
+
+        actions = ctk.CTkFrame(card, fg_color="transparent")
+        actions.grid(row=3, column=0, columnspan=2, padx=8, pady=(0, 8), sticky="ew")
+        actions.grid_columnconfigure((0, 1, 2), weight=1)
+
+        view_btn = ctk.CTkButton(actions, text="View",
+                                 font=self.body_description_font,
+                                 fg_color=self.primary_color,
+                                 height=28,
+                                 cursor="hand2",
+                                 command=lambda lid=listing_id: self._open_property_details(lid))
+        view_btn.grid(row=0, column=0, padx=2)
+
+        sched_btn = ctk.CTkButton(actions, text="Schedule",
+                                  font=self.body_description_font,
+                                  fg_color="transparent",
+                                  text_color=self.primary_color,
+                                  border_width=1, border_color=self.primary_color,
+                                  height=28,
+                                  cursor="hand2",
+                                  command=lambda lid=listing_id: self._schedule_viewing(lid))
+        sched_btn.grid(row=0, column=1, padx=2)
+
+        unfav_btn = ctk.CTkButton(actions, text="\u2665",
+                                  font=ctk.CTkFont(size=14),
+                                  fg_color="transparent",
+                                  text_color=self.error_red,
+                                  hover_color=self.hover_color,
+                                  width=30, height=28,
+                                  cursor="hand2",
+                                  command=lambda lid=listing_id, btn=unfav_btn: self._unfavorite_from_tab(lid, btn))
+        unfav_btn.grid(row=0, column=2, padx=2)
+
+        card.bind("<Enter>", lambda e, c=card: c.configure(border_color=self.primary_color))
+        card.bind("<Leave>", lambda e, c=card: c.configure(border_color=self.entry_border))
+
+    def _fav_relative_time(self, iso_string):
+        if not iso_string:
+            return ""
+        try:
+            dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+            now = datetime.now(dt.tzinfo)
+            diff = now - dt
+            days = diff.days
+            if days == 0:
+                return "today"
+            elif days == 1:
+                return "yesterday"
+            elif days < 7:
+                return f"{days} days ago"
+            elif days < 30:
+                return f"{days // 7} week{'s' if days // 7 > 1 else ''} ago"
+            elif days < 365:
+                return f"{days // 30} month{'s' if days // 30 > 1 else ''} ago"
+            else:
+                return f"{days // 365} year{'s' if days // 365 > 1 else ''} ago"
+        except Exception:
+            return iso_string[:10] if iso_string else ""
+
+    def _on_fav_sort_change(self, _=None):
+        if not self._fav_all_items:
+            return
+        key = self._fav_sort_var.get()
+        if key == "Newest First":
+            self._fav_filtered.sort(key=lambda x: x.get("saved_at", ""), reverse=True)
+        elif key == "Oldest First":
+            self._fav_filtered.sort(key=lambda x: x.get("saved_at", ""))
+        elif key == "A\u2013Z":
+            self._fav_filtered.sort(key=lambda x: x.get("listing_name", "").lower())
+        self._render_fav_cards()
+
+    def _on_fav_search_change(self, *_):
+        query = self._fav_search_var.get().lower().strip()
+        if not query:
+            self._fav_filtered = list(self._fav_all_items)
+        else:
+            self._fav_filtered = [
+                f for f in self._fav_all_items
+                if query in f.get("listing_name", "").lower()
+                or query in f.get("location", "").lower()
+                or query in f.get("notes", "").lower()
+            ]
+        self._on_fav_sort_change()
+
+    def _unfavorite_from_tab(self, listing_id, btn=None):
+        if btn:
+            btn.configure(state="disabled", text="...")
+
+        def _do():
+            try:
+                resp = self.api.post("/favorites/toggle",
+                                     json={"user_id": self.current_user["user_id"],
+                                           "listing_id": listing_id})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    action = data.get("action", "")
+                    self.after(0, lambda: self.show_toast(f"Favorite {action}!", is_error=False))
+                    self.after(0, lambda: self._remove_fav_from_list(listing_id))
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to unfavorite", is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _remove_fav_from_list(self, listing_id):
+        self._fav_all_items = [f for f in self._fav_all_items if f.get("listing_id") != listing_id]
+        self._fav_filtered = [f for f in self._fav_filtered if f.get("listing_id") != listing_id]
+        self._render_fav_cards()
+        self._fetch_dashboard_stats()
 
     # ── Viewing Content (60/40 split) ──────────────────────────────
 
@@ -1140,7 +1761,9 @@ class DashboardMixin:
                                         text_color=self.primary_color)
         self._prop_price.pack(anchor="w", pady=(4, 0))
 
-        self._prop_rating_frame = ctk.CTkFrame(self._prop_scroll, fg_color="transparent")
+        self._prop_rating_frame = ctk.CTkLabel(self._prop_scroll, text="",
+                                                font=self.body_paragraph_font,
+                                                text_color=self.text_color)
         self._prop_rating_frame.pack(anchor="w", pady=(4, 0))
 
         self._prop_desc = ctk.CTkLabel(self._prop_scroll, text="",
@@ -1246,52 +1869,78 @@ class DashboardMixin:
     # ── Schedule Viewing ───────────────────────────────────────────
 
     def _schedule_viewing(self, listing_id):
-        if hasattr(self, '_schedule_overlay') and self._schedule_overlay:
-            try:
-                self._schedule_overlay.destroy()
-            except Exception:
-                pass
+        top = ctk.CTkToplevel(self.content_wrapper)
+        top.title("Schedule a Viewing")
+        top.geometry("320x340")
+        top.resizable(False, False)
+        top.transient(self)
+        top.wait_visibility()
+        top.grab_set()
 
-        overlay = ctk.CTkFrame(self.content_wrapper, fg_color="#00000080")
-        overlay.place(x=0, y=0, relwidth=1, relheight=1)
-        overlay.lift()
-        self._schedule_overlay = overlay
+        self._schedule_top = top
 
-        card = ctk.CTkFrame(overlay, fg_color=self.secondary_color,
-                            corner_radius=12, border_width=1,
-                            border_color=self.entry_border, width=350, height=280)
-        card.place(relx=0.5, rely=0.5, anchor="center")
-        card.pack_propagate(False)
+        cy, cm, cd = date.today().year, date.today().month, date.today().day
+        self._schedule_selected_date = date.today()
 
-        ctk.CTkLabel(card, text="Schedule a Viewing",
-                     font=self.body_bold_paragraph_font,
-                     text_color=self.text_color).pack(pady=(20, 8))
+        nav_frame = ctk.CTkFrame(top, fg_color="transparent")
+        nav_frame.pack(fill="x", padx=10, pady=(10, 4))
 
-        ctk.CTkLabel(card, text="Pick a date:",
-                     font=self.body_paragraph_font,
-                     text_color=self.text_color).pack(pady=(0, 10))
+        month_lbl = ctk.CTkLabel(nav_frame, text="",
+                                  font=self.body_paragraph_font,
+                                  text_color=self.text_color)
+        month_lbl.pack(side="left", expand=True)
 
-        date_frame = ctk.CTkFrame(card, fg_color="transparent")
-        date_frame.pack(pady=(0, 10))
+        def _nav(delta):
+            nonlocal cy, cm
+            cm += delta
+            if cm < 1:
+                cm = 12; cy -= 1
+            elif cm > 12:
+                cm = 1; cy += 1
+            _rebuild()
 
-        today = date.today()
-        self._schedule_selected_date = today
-        self._schedule_date_buttons = []
+        def _rebuild():
+            month_lbl.configure(text=f"{calendar.month_name[cm]} {cy}")
+            for w in cal_grid.winfo_children():
+                w.destroy()
+            for i, d in enumerate(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]):
+                ctk.CTkLabel(cal_grid, text=d, font=ctk.CTkFont(size=11, weight="bold"),
+                             width=36).grid(row=0, column=i, padx=1, pady=1)
+            for ri, week in enumerate(calendar.monthcalendar(cy, cm)):
+                for ci, day_num in enumerate(week):
+                    if day_num == 0:
+                        continue
+                    sel = day_num == cd and cy == self._schedule_selected_date.year and cm == self._schedule_selected_date.month
+                    bg = self.primary_color if sel else "transparent"
+                    fg = "white" if bg != "transparent" else self.text_color
+                    lbl = ctk.CTkLabel(cal_grid, text=str(day_num),
+                                        font=self.body_light_font,
+                                        text_color=fg, fg_color=bg,
+                                        corner_radius=16, width=32, height=28,
+                                        cursor="hand2")
+                    lbl.grid(row=ri + 1, column=ci, padx=1, pady=1)
+                    lbl.bind("<Button-1>", lambda e, d=day_num: _pick(d))
 
-        for i in range(7):
-            d = today + timedelta(days=i)
-            label = "Today" if i == 0 else ("Tomorrow" if i == 1 else d.strftime("%a %d"))
-            btn = ctk.CTkButton(date_frame, text=label,
-                                font=self.body_description_font,
-                                width=80, height=32,
-                                fg_color=self.primary_color if i == 0 else self.secondary_color,
-                                text_color="white" if i == 0 else self.text_color,
-                                hover_color=self.hover_color,
-                                command=lambda day=d, idx=i: self._pick_schedule_date(day, idx))
-            btn.pack(side="left", padx=3)
-            self._schedule_date_buttons.append(btn)
+        def _pick(d):
+            nonlocal cd
+            cd = d
+            self._schedule_selected_date = date(cy, cm, cd)
+            _rebuild()
 
-        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        ctk.CTkButton(nav_frame, text="◀", width=30,
+                       fg_color="transparent", text_color=self.text_color,
+                       hover_color=self.hover_color,
+                       command=lambda: _nav(-1)).pack(side="left")
+        ctk.CTkButton(nav_frame, text="▶", width=30,
+                       fg_color="transparent", text_color=self.text_color,
+                       hover_color=self.hover_color,
+                       command=lambda: _nav(1)).pack(side="right")
+
+        cal_grid = ctk.CTkFrame(top, fg_color="transparent")
+        cal_grid.pack(padx=10, pady=4)
+        _rebuild()
+
+        btn_row = ctk.CTkFrame(top, fg_color="transparent")
         btn_row.pack(fill="x", padx=20, pady=(10, 15))
 
         ctk.CTkButton(btn_row, text="Cancel",
@@ -1308,21 +1957,13 @@ class DashboardMixin:
         self._schedule_confirm_btn.pack(side="right")
         self._schedule_confirm_btn.configure(command=lambda: self._confirm_schedule(listing_id))
 
-    def _pick_schedule_date(self, day, idx):
-        self._schedule_selected_date = day
-        for i, btn in enumerate(self._schedule_date_buttons):
-            if i == idx:
-                btn.configure(fg_color=self.primary_color, text_color="white")
-            else:
-                btn.configure(fg_color=self.secondary_color, text_color=self.text_color)
-
     def _close_schedule_overlay(self):
-        if hasattr(self, '_schedule_overlay') and self._schedule_overlay:
+        if hasattr(self, '_schedule_top') and self._schedule_top:
             try:
-                self._schedule_overlay.destroy()
+                self._schedule_top.destroy()
             except Exception:
                 pass
-            self._schedule_overlay = None
+            self._schedule_top = None
 
     def _confirm_schedule(self, listing_id):
         selected = self._schedule_selected_date
@@ -1358,6 +1999,35 @@ class DashboardMixin:
         self._close_schedule_overlay()
         self.show_toast("Viewing scheduled!", is_error=False)
         self.show_tenant_viewings_content()
+
+    # ── Report Listing ────────────────────────────────────────────
+
+    def _report_listing(self, listing_id):
+        if not getattr(self, 'current_user', {}).get('user_id'):
+            self.show_toast("Please log in to report a listing", is_error=True)
+            return
+
+        dialog = ctk.CTkInputDialog(text="Describe why you are reporting this listing:", title="Report Listing")
+        reason = dialog.get_input()
+        if not reason or not reason.strip():
+            return
+
+        def _do():
+            try:
+                resp = self.api.post("/reports/", json={
+                    "target_type": "listing",
+                    "target_id": listing_id,
+                    "reason": reason.strip(),
+                }, timeout=8)
+                if resp.status_code == 201:
+                    self.after(0, lambda: self.show_toast("Report submitted!", is_error=False))
+                else:
+                    err = resp.json().get("detail", "Failed to submit report")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     # ── Debug ──────────────────────────────────────────────────────
 
@@ -1412,7 +2082,8 @@ class DashboardMixin:
 
             if current_width < target_width:
                 self.search_bg_frame.configure(width=min(target_width, current_width + 40))
-                self.after(10, self.animate_search_bar)
+                aid = self.after(10, self.animate_search_bar)
+                self.after_ids.append(aid)
             else:
                 self.is_search_expanded = True
                 self.search_entry.pack(side="left", fill="x", expand=True, padx=(5, 15))
@@ -1421,7 +2092,8 @@ class DashboardMixin:
             self.search_entry.pack_forget()
             if current_width > 40:
                 self.search_bg_frame.configure(width=max(40, current_width - 40))
-                self.after(10, self.animate_search_bar)
+                aid = self.after(10, self.animate_search_bar)
+                self.after_ids.append(aid)
             else:
                 self.search_bg_frame.configure(fg_color="transparent")
                 self.is_search_expanded = False
@@ -1430,11 +2102,10 @@ class DashboardMixin:
 
     def create_listing_card(self, parent_frame, house_data):
         card = ctk.CTkFrame(parent_frame,
-                            width=400, height=450,
+                            width=400,
                             fg_color=self.secondary_color,
                             corner_radius=12,
                             border_width=1, border_color=self.entry_border)
-        card.pack_propagate(False)
 
         photo_url = house_data.get("photo_url")
         if photo_url:
@@ -1468,7 +2139,14 @@ class DashboardMixin:
                                      text_color=self.text_color)
         card_location.pack(anchor="w", padx=15)
 
-        card_amenities = ctk.CTkLabel(card, text=house_data.get("amenities", ""),
+        amenities_text = house_data.get("amenities", "")
+        font = self.body_paragraph_font
+        max_amenity_width = 370
+        if font.measure(amenities_text) > max_amenity_width:
+            while font.measure(amenities_text + "...") > max_amenity_width and len(amenities_text) > 0:
+                amenities_text = amenities_text[:-1]
+            amenities_text += "..."
+        card_amenities = ctk.CTkLabel(card, text=amenities_text,
                                       font=self.body_paragraph_font,
                                       text_color=self.text_color)
         card_amenities.pack(anchor="w", padx=15)
@@ -1500,21 +2178,74 @@ class DashboardMixin:
                                      fg_color=self.primary_color,
                                      command=lambda lid=listing_id: self._schedule_viewing(lid))
         schedule_btn.pack(side="left", padx=(0, 5))
-        bookmark_btn = ctk.CTkButton(card_bottom_frame, text=None,
-                                     image=self.bookmark_icon,
-                                     width=25, height=25,
-                                     fg_color="transparent",
-                                     hover_color=self.hover_color,
-                                     )
-        bookmark_btn.configure(command=lambda lid=listing_id, btn=bookmark_btn: self.toggle_bookmark(lid, btn))
-        bookmark_btn.pack(side="right")
+
+        is_fav = house_data.get("is_favorite", False)
+        fav_btn = ctk.CTkButton(card_bottom_frame, text=None,
+                                image=self.favorite_icon if is_fav else self.heart_icon,
+                                width=25, height=25,
+                                fg_color="transparent",
+                                hover_color=self.hover_color,
+                                )
+        fav_btn.is_favorite = is_fav
+        fav_btn.configure(command=lambda lid=listing_id, btn=fav_btn: self.toggle_favorite(lid, btn))
+        fav_btn.pack(side="right", padx=(0, 5))
+        if not hasattr(self, '_card_fav_btns'):
+            self._card_fav_btns = {}
+        self._card_fav_btns[listing_id] = fav_btn
+
+        menu_btn = ctk.CTkButton(card_bottom_frame, text="⋮",
+                                 width=25, height=25,
+                                 fg_color="transparent",
+                                 text_color=self.text_color,
+                                 hover_color=self.hover_color,
+                                 font=ctk.CTkFont(size=18))
+        menu_btn.pack(side="right")
+
+        menu_popup = ctk.CTkFrame(card_bottom_frame, fg_color=self.secondary_color,
+                                  corner_radius=6, border_width=1, border_color=self.entry_border)
+        report_opt = ctk.CTkButton(menu_popup, text="  Report",
+                                   font=self.body_paragraph_font,
+                                   text_color=self.text_color,
+                                   fg_color="transparent",
+                                   hover_color=self.hover_color,
+                                   anchor="w",
+                                   command=lambda lid=listing_id, pop=menu_popup: (
+                                       pop.place_forget(), self._report_listing(lid)
+                                   ))
+        report_opt.pack(fill="x")
+        menu_popup.place_forget()
+
+        def _toggle_menu():
+            if hasattr(self, '_open_menu_popup') and self._open_menu_popup:
+                try:
+                    self._open_menu_popup.place_forget()
+                except Exception:
+                    pass
+            if menu_popup.winfo_viewable():
+                menu_popup.place_forget()
+                self._open_menu_popup = None
+            else:
+                menu_btn.update_idletasks()
+                menu_popup.place(x=menu_btn.winfo_x() - 70, y=menu_btn.winfo_y() + 28)
+                menu_popup.lift()
+                self._open_menu_popup = menu_popup
+
+        menu_btn.configure(command=_toggle_menu)
+        menu_popup.bind("<Button-1>", lambda e: "break")
 
         # ── Make the entire card clickable to open property details ──
         card.configure(cursor="hand2")
         card.listing_id = listing_id
 
         def _on_card_click(event, lid=listing_id):
+            if hasattr(self, '_open_menu_popup') and self._open_menu_popup:
+                try:
+                    self._open_menu_popup.place_forget()
+                except Exception:
+                    pass
+                self._open_menu_popup = None
             self._open_property_details(lid)
+            return "break"
 
         card.bind("<Button-1>", _on_card_click)
         for child in card.winfo_children():
@@ -1594,6 +2325,31 @@ class DashboardMixin:
 
         threading.Thread(target=_do, daemon=True).start()
 
+    def _sync_favorite_icons(self):
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if not user_id or not hasattr(self, '_card_fav_btns') or not self._card_fav_btns:
+            return
+        def _do():
+            try:
+                resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
+                if resp.status_code == 200:
+                    favs = resp.json()
+                    fav_ids = {f.get("listing_id") for f in favs}
+                    self.after(0, lambda: self._apply_favorite_icons(fav_ids))
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _apply_favorite_icons(self, fav_ids):
+        if not hasattr(self, '_card_fav_btns'):
+            return
+        for lid, btn in list(self._card_fav_btns.items()):
+            if btn.winfo_exists():
+                is_fav = lid in fav_ids
+                btn.is_favorite = is_fav
+                icon = self.favorite_icon if is_fav else self.heart_icon
+                btn.configure(image=icon)
+
     def _refresh_explore(self):
         for card in self.cards_list:
             try:
@@ -1601,6 +2357,7 @@ class DashboardMixin:
             except Exception:
                 pass
         self.cards_list = []
+        self._card_fav_btns = {}
         if hasattr(self, '_error_frame') and self._error_frame:
             self._error_frame.destroy()
             self._error_frame = None
@@ -1620,6 +2377,7 @@ class DashboardMixin:
             card_widget = self.create_listing_card(self.cards_grid_frame, house_data)
             self.cards_list.append(card_widget)
         self.reflow_cards()
+        self._sync_favorite_icons()
 
     def _show_dashboard_error(self, message="Could not load listings"):
         if hasattr(self, '_explore_progress') and self._explore_progress:
@@ -1684,6 +2442,7 @@ class DashboardMixin:
             self.cards_list.append(card_widget)
         self.reflow_cards()
         self.load_more_btn.configure(state="normal", text="Load More")
+        self._sync_favorite_icons()
 
     def _load_more_done(self, msg, is_error=True):
         self.load_more_btn.configure(state="normal", text="Load More")
@@ -1780,10 +2539,10 @@ class DashboardMixin:
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def toggle_bookmark(self, listing_id, btn=None):
+    def toggle_favorite(self, listing_id, btn=None):
         user_id = getattr(self, 'current_user', {}).get('user_id')
         if not user_id:
-            self.show_toast("Please log in to bookmark listings", is_error=True)
+            self.show_toast("Please log in to save favorites", is_error=True)
             return
 
         if btn:
@@ -1794,13 +2553,21 @@ class DashboardMixin:
                 resp = self.api.post("/favorites/toggle",
                                      json={"user_id": user_id, "listing_id": listing_id})
                 if resp.status_code == 200:
-                    action = resp.json().get("action", "")
-                    self.after(0, lambda: self.show_toast(f"Bookmark {action}!", is_error=False))
+                    data = resp.json()
+                    is_fav = data.get("is_favorite", False)
+                    action = data.get("action", "")
+                    self.after(0, lambda: self.show_toast(f"Favorite {action}!", is_error=False))
+                    if btn and btn.winfo_exists():
+                        btn.is_favorite = is_fav
+                        icon = self.favorite_icon if is_fav else self.heart_icon
+                        btn.configure(image=icon, state="normal")
+                    self.after(0, self._fetch_dashboard_stats)
+                else:
+                    self.after(0, lambda: self.show_toast("Failed to toggle favorite", is_error=True))
             except Exception:
-                self.after(0, lambda: self.show_toast("Failed to toggle bookmark", is_error=True))
-            finally:
-                if btn:
-                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+            if btn:
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal"))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1811,6 +2578,7 @@ class DashboardMixin:
         for card in self.cards_list:
             card.destroy()
         self.cards_list = []
+        self._card_fav_btns = {}
         if hasattr(self, '_empty_state') and self._empty_state:
             self._empty_state.destroy()
             self._empty_state = None
@@ -1841,6 +2609,7 @@ class DashboardMixin:
             card_widget = self.create_listing_card(self.cards_grid_frame, house_data)
             self.cards_list.append(card_widget)
         self.reflow_cards()
+        self._sync_favorite_icons()
 
     def _reset_to_all(self):
         if hasattr(self, 'filter_buttons') and "All" in self.filter_buttons:
@@ -1882,17 +2651,16 @@ class DashboardMixin:
         self.show_toast("Booking cancelled!", is_error=False)
         self.show_tenant_bookings_content()
 
-    # ── Payment Form (Pay & Request Move-in) ──────────────────────
+    # ── Monthly Payment Form ─────────────────────────────────────
 
-    def _show_payment_form(self, booking_id, card, pay_btn, total_price=0):
+    def _show_monthly_pay_form(self, payment_id, row, pay_btn):
         pay_btn.pack_forget()
-        form_frame = ctk.CTkFrame(card, fg_color="transparent")
-        form_frame.pack(side="right", padx=15, pady=8)
-        form_frame._pay_form_ref = True
+        form_frame = ctk.CTkFrame(row, fg_color="transparent")
+        form_frame.pack(side="right", padx=(0, 8))
 
         method_combo = ctk.CTkComboBox(
-            form_frame, values=["GCash", "Bank Transfer", "Cash", "Card"],
-            width=140, height=32, font=self.body_paragraph_font,
+            form_frame, values=["GCash", "Bank Transfer", "Cash"],
+            width=120, height=28, font=self.body_description_font,
             fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
             button_color=self.primary_color, button_hover_color=self.hover_color,
             dropdown_fg_color=self.fg_color, dropdown_text_color=self.text_color,
@@ -1900,94 +2668,111 @@ class DashboardMixin:
             text_color=self.text_color
         )
         method_combo.set("GCash")
-        method_combo.pack(side="left", padx=(0, 6))
+        method_combo.pack(side="left", padx=(0, 4))
 
         ref_entry = ctk.CTkEntry(
-            form_frame, placeholder_text="Reference # (optional)",
-            font=self.body_paragraph_font, width=140, height=32,
+            form_frame, placeholder_text="Ref #",
+            font=self.body_description_font, width=100, height=28,
             fg_color=self.fg_color, border_color=self.entry_border, border_width=1,
             text_color=self.text_color
         )
-        ref_entry.pack(side="left", padx=(0, 6))
+        ref_entry.pack(side="left", padx=(0, 4))
 
-        submit_btn = ctk.CTkButton(form_frame, text="Submit Payment",
+        submit_btn = ctk.CTkButton(form_frame, text="Submit",
                                    fg_color=self.primary_color,
                                    hover_color=self.hover_color,
                                    text_color="white",
-                                   font=self.body_paragraph_font,
-                                   height=32)
-        submit_btn.pack(side="left", padx=(0, 4))
+                                   font=self.body_description_font,
+                                   height=28, width=60)
+        submit_btn.pack(side="left", padx=(0, 2))
 
-        cancel_link = ctk.CTkButton(form_frame, text="Cancel",
-                                    fg_color="transparent",
-                                    text_color=self.primary_color,
-                                    hover_color=self.hover_color,
-                                    font=self.body_paragraph_font,
-                                    height=32, width=60)
-        cancel_link.pack(side="left")
+        cancel_btn = ctk.CTkButton(form_frame, text="X",
+                                   fg_color="transparent",
+                                   text_color=self.text_color,
+                                   hover_color=self.hover_color_text,
+                                   font=self.body_description_font,
+                                   height=28, width=24)
+        cancel_btn.pack(side="left")
 
-        submit_btn.configure(command=lambda: self._payment_submit(booking_id, form_frame, method_combo, ref_entry, submit_btn, cancel_link, pay_btn, total_price))
-        cancel_link.configure(command=lambda: self._close_payment_form(form_frame, pay_btn))
+        submit_btn.configure(command=lambda: self._submit_monthly_payment(payment_id, form_frame, method_combo, ref_entry, submit_btn, cancel_btn, pay_btn, row))
+        cancel_btn.configure(command=lambda: self._close_monthly_form(form_frame, pay_btn))
 
-    def _close_payment_form(self, form_frame, pay_btn):
+    def _close_monthly_form(self, form_frame, pay_btn):
         try:
             form_frame.destroy()
         except Exception:
             pass
-        pay_btn.pack(side="right", padx=(8, 0))
+        pay_btn.pack(side="right", padx=(0, 8))
 
-    def _payment_submit(self, booking_id, form_frame, method_combo, ref_entry, submit_btn, cancel_link, pay_btn, total_price=0):
+    def _submit_monthly_payment(self, payment_id, form_frame, method_combo, ref_entry, submit_btn, cancel_btn, pay_btn, row):
         method = method_combo.get().strip()
-        ref_no = ref_entry.get().strip() or None
+        ref_no = ref_entry.get().strip()
 
-        if not method:
-            self.show_toast("Please select a payment method.", is_error=True)
+        if not ref_no:
+            self.show_toast("Please enter a reference number.", is_error=True)
             return
 
-        submit_btn.configure(state="disabled", text="Submitting...")
+        submit_btn.configure(state="disabled", text="...")
 
         def _do():
             try:
-                resp = self.api.post("/payments/", json={
-                    "booking_id": booking_id,
-                    "amount": total_price,
-                    "method": method,
+                resp = self.api.patch(f"/payments/{payment_id}/submit", json={
+                    "method": method.lower().replace(" ", "_"),
                     "reference_no": ref_no,
                 }, timeout=10)
-                if resp.status_code not in (200, 201):
+                if resp.status_code == 200:
+                    self.after(0, lambda: self._monthly_pay_done(form_frame, pay_btn, row))
+                else:
                     err = resp.json().get("detail", "Payment failed")
                     self.after(0, lambda: self.show_toast(err, is_error=True))
-                    self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
-                    return
+                    self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit"))
             except Exception:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
-                self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
-                return
-
-            try:
-                user_id = getattr(self, 'current_user', {}).get('user_id', 0)
-                resp2 = self.api.patch(f"/bookings/{booking_id}/status", json={
-                    "status": "active",
-                    "changed_by_user_id": user_id
-                }, timeout=10)
-                if resp2.status_code == 200:
-                    self.after(0, lambda: self._payment_done(form_frame, pay_btn))
-                else:
-                    err2 = resp2.json().get("detail", "Failed to update booking")
-                    self.after(0, lambda: self.show_toast(err2, is_error=True))
-                    self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
-            except Exception:
-                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
-                self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit Payment"))
+                self.after(0, lambda: submit_btn.winfo_exists() and submit_btn.configure(state="normal", text="Submit"))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _payment_done(self, form_frame, pay_btn):
+    def _monthly_pay_done(self, form_frame, pay_btn, row):
         try:
             form_frame.destroy()
         except Exception:
             pass
-        self.show_toast("Payment submitted! Move-in request sent to owner.", is_error=False)
+        self.show_toast("Payment submitted! Waiting for owner to verify.", is_error=False)
+        user_id = getattr(self, 'current_user', {}).get('user_id')
+        if user_id:
+            def _reload():
+                try:
+                    resp = self.api.get(f"/payments/user/{user_id}", timeout=5)
+                    if resp.status_code == 200:
+                        self._build_recent_payments(row.master, resp.json())
+                except Exception:
+                    pass
+            threading.Thread(target=_reload, daemon=True).start()
+
+    def _request_move_in(self, booking_id, btn):
+        btn.configure(state="disabled", text="Requesting...")
+
+        def _do():
+            try:
+                user_id = getattr(self, 'current_user', {}).get('user_id', 0)
+                resp = self.api.patch(f"/bookings/{booking_id}/status", json={
+                    "status": "active",
+                    "changed_by_user_id": user_id
+                }, timeout=10)
+                if resp.status_code == 200:
+                    self.after(0, lambda: self._move_in_done(btn))
+                else:
+                    err = resp.json().get("detail", "Failed to request move-in")
+                    self.after(0, lambda: self.show_toast(err, is_error=True))
+                    self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Request Move-in"))
+            except Exception:
+                self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
+                self.after(0, lambda: btn.winfo_exists() and btn.configure(state="normal", text="Request Move-in"))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _move_in_done(self, btn):
+        self.show_toast("Move-in requested! Waiting for owner to confirm.", is_error=False)
         self.show_tenant_bookings_content()
 
     # ── Notification Badge ─────────────────────────────────────────
@@ -2040,30 +2825,36 @@ class DashboardMixin:
                 self.profile_chevron.configure(text="▴")
 
     # ── Dashboard Stats (Explore) ──────────────────────────────────
-
     def _fetch_dashboard_stats(self):
+        if getattr(self, '_stats_fetching', False):
+            return
         user_id = getattr(self, 'current_user', {}).get('user_id')
         if not user_id:
             return
 
+        self._stats_fetching = True
+
         def _do():
-            bookings_count = "0"
-            favorites_count = "0"
             try:
-                resp = self.api.get(f"/bookings/user/{user_id}", timeout=5)
-                if resp.status_code == 200:
-                    bookings = resp.json()
-                    bookings_count = str(len(bookings))
-            except Exception:
-                self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
-            try:
-                resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
-                if resp.status_code == 200:
-                    favorites = resp.json()
-                    favorites_count = str(len(favorites))
-            except Exception:
-                self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
-            self.after(0, lambda: self._update_stat_labels(bookings_count, favorites_count, "0"))
+                bookings_count = "0"
+                favorites_count = "0"
+                try:
+                    resp = self.api.get(f"/bookings/user/{user_id}", timeout=5)
+                    if resp.status_code == 200:
+                        bookings = resp.json()
+                        bookings_count = str(len(bookings))
+                except Exception:
+                    self.after(0, lambda: self.show_toast("Failed to load bookings. Check your connection.", is_error=True))
+                try:
+                    resp = self.api.get(f"/favorites/user/{user_id}", timeout=5)
+                    if resp.status_code == 200:
+                        favorites = resp.json()
+                        favorites_count = str(len(favorites))
+                except Exception:
+                    self.after(0, lambda: self.show_toast("Failed to load favorites. Check your connection.", is_error=True))
+                self.after(0, lambda: self._update_stat_labels(bookings_count, favorites_count, "0"))
+            finally:
+                self.after(0, lambda: setattr(self, '_stats_fetching', False))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -3021,7 +3812,7 @@ class DashboardMixin:
         if not photos:
             return
 
-        overlay = ctk.CTkFrame(self.content_wrapper, fg_color="#000000E0")
+        overlay = ctk.CTkFrame(self.content_wrapper, fg_color=("#111111", "#000000"))
         overlay.place(x=0, y=0, relwidth=1, relheight=1)
         overlay.lift()
         overlay.focus_set()
@@ -3072,7 +3863,7 @@ class DashboardMixin:
                          width=50, height=50,
                          fg_color="transparent",
                          text_color="white",
-                         hover_color="#FFFFFF40",
+                         hover_color=("#555555", "#555555"),
                          cursor="hand2")
 
         prev_btn = ctk.CTkButton(overlay, text="◀", **btn_style,
@@ -3088,7 +3879,7 @@ class DashboardMixin:
                                    width=40, height=40,
                                    fg_color="transparent",
                                    text_color="white",
-                                   hover_color="#FF000060",
+                                   hover_color=("#CC0000", "#CC0000"),
                                    cursor="hand2",
                                    command=overlay.destroy)
         close_btn.place(relx=0.97, rely=0.04, anchor="ne")

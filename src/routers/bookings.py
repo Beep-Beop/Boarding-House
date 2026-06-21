@@ -125,6 +125,15 @@ def update_booking_status(
             detail="Booking not found"
         )
 
+    if status_update.status == "approved" and booking.check_in and booking.check_out:
+        payments_crud = crud.PaymentsCRUD(db)
+        payments_crud.create_monthly_payments(
+            booking_id=booking_id,
+            amount=room.price_per_month,
+            check_in=booking.check_in,
+            check_out=booking.check_out
+        )
+
     return booking
 
 
@@ -168,6 +177,7 @@ def get_owner_bookings_enriched(
             move_in_requested=item.get("move_in_requested"),
             property_name=listing.bh_name if listing else None,
             property_type=listing.property_type if listing else None,
+            listing_id=listing.listing_id if listing else None,
             room_number=room.room_id if room else None,
             room_type=room.room_type if room else None,
             payment_status=item["payment_status"],
@@ -192,6 +202,7 @@ def get_owner_booking_stats(
 
 # GET /{booking_id}/owner-detail → Owner: get full booking detail they own
 @router.get("/{booking_id}/owner-detail", response_model=schemas.BookingDetailResponse)
+@limiter.limit("30/minute")
 def get_owner_booking_detail(
     booking_id: int,
     db: Session = Depends(database.get_db),
@@ -285,6 +296,7 @@ def get_all_bookings(
             move_in_requested=b.move_in_requested,
             property_name=listing.bh_name if listing else None,
             property_type=listing.property_type if listing else None,
+            listing_id=listing.listing_id if listing else None,
             room_number=room.room_id if room else None,
             room_type=room.room_type if room else None,
             payment_status=payment_status,

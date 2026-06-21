@@ -90,44 +90,48 @@ class NotificationsMixin:
             notif_id = notif.get("notif_id")
             is_read = notif.get("is_read", False)
             content = notif.get("content", "")
-            notif_type = notif.get("type", "system")
+            notif_type = notif.get("notif_type", "system")
             created_at = str(notif.get("created_at", ""))[:16] if notif.get("created_at") else ""
 
-            card = ctk.CTkFrame(self._notif_scroll, fg_color=self.secondary_color,
-                                corner_radius=6, border_width=1, border_color=self.entry_border)
+            card = ctk.CTkFrame(self._notif_scroll,
+                                fg_color=self.fg_color if is_read else self.secondary_color,
+                                corner_radius=6, border_width=1, border_color=self.entry_border,
+                                height=60)
             card.pack(fill="x", pady=4)
             card.pack_propagate(False)
 
             inner = ctk.CTkFrame(card, fg_color="transparent")
             inner.pack(fill="x", padx=15, pady=12)
 
-            # Unread dot
             dot = ctk.CTkLabel(inner, text="", width=8, height=8,
-                               fg_color=self.primary_color if not is_read else "transparent",
+                               fg_color=self.primary_color if not is_read else self.entry_border,
                                corner_radius=4)
             dot.pack(side="left", padx=(0, 10))
 
             type_lbl = ctk.CTkLabel(inner, text=notif_type.capitalize(),
                                     font=self.body_description_font,
-                                    text_color=self.primary_color, width=60)
+                                    text_color=self.primary_color if not is_read else self.entry_border,
+                                    width=60)
             type_lbl.pack(side="left")
 
-            ctk.CTkLabel(inner, text=content, font=self.body_paragraph_font,
-                         text_color=self.text_color).pack(side="left", padx=(10, 0), fill="x", expand=True)
+            content_font = ctk.CTkFont(family="Poppins", size=16, weight="bold" if not is_read else "normal")
+            content_lbl = ctk.CTkLabel(inner, text=content, font=content_font,
+                                       text_color=self.text_color, wraplength=300)
+            content_lbl.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
             ctk.CTkLabel(inner, text=created_at, font=self.body_description_font,
-                         text_color=self.text_color).pack(side="right", padx=(10, 0))
+                         text_color=self.entry_border if is_read else self.text_color).pack(side="right", padx=(10, 0))
 
             if not is_read:
                 card.bind("<Button-1>", lambda e, nid=notif_id: self._mark_one_read(nid))
                 card.configure(cursor="hand2")
 
-            self._notif_widgets[notif_id] = (card, dot)
+            self._notif_widgets[notif_id] = (card, dot, content_lbl, type_lbl, content_font)
 
     def _mark_one_read(self, notif_id):
         widgets = self._notif_widgets.get(notif_id)
         if widgets:
-            card, _ = widgets
+            card, _, _, _, _ = widgets
             card.unbind("<Button-1>")
 
         def _do():
@@ -144,10 +148,13 @@ class NotificationsMixin:
         widgets = self._notif_widgets.get(notif_id)
         if not widgets:
             return
-        card, dot = widgets
+        card, dot, content_lbl, type_lbl, content_font = widgets
         if success:
-            dot.configure(fg_color="transparent")
-            card.configure(cursor="")
+            dot.configure(fg_color=self.entry_border)
+            card.configure(fg_color=self.fg_color, cursor="")
+            card.unbind("<Button-1>")
+            content_font.configure(weight="normal")
+            type_lbl.configure(text_color=self.entry_border)
         else:
             card.bind("<Button-1>", lambda e, nid=notif_id: self._mark_one_read(nid))
             card.configure(cursor="hand2")
@@ -174,10 +181,12 @@ class NotificationsMixin:
     def _update_all_read_ui(self):
         self.mark_all_btn.configure(state="normal", text="Mark All Read")
         for notif_id in self._notif_widgets:
-            card, dot = self._notif_widgets[notif_id]
-            dot.configure(fg_color="transparent")
-            card.configure(cursor="")
+            card, dot, content_lbl, type_lbl, content_font = self._notif_widgets[notif_id]
+            dot.configure(fg_color=self.entry_border)
+            card.configure(fg_color=self.fg_color, cursor="")
             card.unbind("<Button-1>")
+            content_font.configure(weight="normal")
+            type_lbl.configure(text_color=self.entry_border)
 
     def _back_to_dashboard(self):
         role = getattr(self, 'current_user', {}).get('role')

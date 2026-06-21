@@ -1,4 +1,5 @@
 import secrets
+from fastapi import HTTPException as FastAPIHTTPException
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import desc, func
 from src.logger import logger
@@ -109,6 +110,10 @@ class UsersCRUD:
         user = self.get_user_by_email(email)
         if user and user.reset_code_hash and secrets.compare_digest(hashlib.sha256(code.encode()).hexdigest(), user.reset_code_hash) and user.reset_code_expires:
             if user.reset_code_expires.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+                user.reset_code_hash = None
+                user.reset_code_expires = None
+                self.db.commit()
+                self.db.refresh(user)
                 return user
         return None
 
@@ -300,7 +305,7 @@ class BoardingHousesCRUD:
             return True
         return False
 
-    def get_dashboard_listings(self, limit: int = 20, offset: int = 0) -> list[dict]:
+    def get_dashboard_listings(self, limit: int = 20, offset: int = 0, user_id: int | None = None) -> list[dict]:
         houses = self.db.query(BoardingHouse).filter(
             BoardingHouse.status == 'active'
         ).options(
@@ -308,7 +313,12 @@ class BoardingHousesCRUD:
             joinedload(BoardingHouse.location),
             joinedload(BoardingHouse.photos)
         ).offset(offset).limit(limit).all()
-        
+
+        fav_listing_ids: set[int] = set()
+        if user_id is not None:
+            favorites = self.db.query(Favorites).filter(Favorites.user_id == user_id).all()
+            fav_listing_ids = {f.listing_id for f in favorites}
+
         result = []
         for house in houses:
             house: BoardingHouse 
@@ -330,7 +340,8 @@ class BoardingHousesCRUD:
                 "location": f"{house.location.city}, {house.location.province}" if house.location else "Unknown",
                 "amenities": " • ".join(amenities) if amenities else "Basic Room",
                 "desc": house.description,
-                "photo_url": photo_url
+                "photo_url": photo_url,
+                "is_favorite": house.listing_id in fav_listing_ids
             })
             
         return result
@@ -661,6 +672,40 @@ class FavoritesCRUD:
         """Clean Syntax: Fixed get_user_fav abbreviation drift."""
         return self.db.query(Favorites).filter(Favorites.user_id == user_id).all()
     
+    def get_user_favorites_detailed(self, user_id: int) -> list[dict]:
+        """Returns favorites joined with listing details (name, photo, location)."""
+        results = (
+            self.db.query(Favorites, BoardingHouse)
+            .join(BoardingHouse, Favorites.listing_id == BoardingHouse.listing_id)
+            .filter(Favorites.user_id == user_id)
+            .order_by(Favorites.saved_at.desc())
+            .all()
+        )
+        output = []
+        for fav, house in results:
+            photo_url = None
+            if house.photos:
+                primary = next((p for p in house.photos if p.is_primary), None)
+                photo_url = (primary or house.photos[0]).photo_url
+
+            location_str = "Unknown"
+            if house.location:
+                location_str = f"{house.location.city}, {house.location.province}"
+
+            output.append({
+                "favorite_id": fav.favorite_id,
+                "listing_id": fav.listing_id,
+                "saved_at": fav.saved_at,
+                "notes": fav.notes,
+                "listing_name": house.bh_name,
+                "location": location_str,
+                "photo_url": photo_url,
+                "price_range": house.price_range,
+                "property_type": house.property_type,
+                "is_active": house.status == "active",
+            })
+        return output
+    
 
 class BookingsCRUD:
     def __init__(self, db: Session):
@@ -668,7 +713,6 @@ class BookingsCRUD:
 
     def create(self, user_id: int, room_id: int, check_in, check_out, total_price: float, notes: str = None, **kwargs) -> Bookings:
         if check_out <= check_in:
-            from fastapi import HTTPException as FastAPIHTTPException
             raise FastAPIHTTPException(status_code=422, detail="Check-out must be after check-in")
 
         overlap = self.db.query(Bookings).filter(
@@ -678,7 +722,6 @@ class BookingsCRUD:
             Bookings.check_out > check_in,
         ).first()
         if overlap:
-            from fastapi import HTTPException as FastAPIHTTPException
             raise FastAPIHTTPException(status_code=409, detail="Room is already booked for the selected dates")
 
         booking = Bookings(
@@ -983,7 +1026,7 @@ class PaymentsCRUD:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, booking_id: int, amount: float, method: str, reference_no: str = None, **kwargs) -> Payments:
+    def create(self, booking_id: int, amount: float, method: str = None, reference_no: str = None, **kwargs) -> Payments:
         payments = Payments(
             booking_id=booking_id,
             amount=amount,
@@ -1022,18 +1065,73 @@ class PaymentsCRUD:
             BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
         ).filter(
             BoardingHouse.owner_id == owner_id
-        ).order_by(Payments.paid_at.desc()).all()
+        ).order_by(Payments.due_date.desc()).all()
 
-    def update_status(self, payment_id: int, new_status: str) -> Payments:
-        """
-        Regional Localization Logic Side-Effect: Automatically stamps full transaction 
-        completion times when transactions transition to 'completed' states.
-        """
+    def get_pending_by_owner(self, owner_id: int):
+        return self.db.query(Payments).join(
+            Bookings, Payments.booking_id == Bookings.booking_id
+        ).join(
+            Rooms, Bookings.room_id == Rooms.room_id
+        ).join(
+            BoardingHouse, Rooms.listing_id == BoardingHouse.listing_id
+        ).filter(
+            BoardingHouse.owner_id == owner_id,
+            Payments.status == 'paid'
+        ).order_by(Payments.submitted_at.desc()).all()
+
+    def create_monthly_payments(self, booking_id: int, amount: float, check_in, check_out):
+        import calendar
+        payments = []
+        current = check_in
+        while current < check_out:
+            month = current.month - 1 + 1
+            year = current.year + month // 12
+            month = month % 12 + 1
+            day = min(current.day, calendar.monthrange(year, month)[1])
+            next_date = check_out.__class__(year, month, day)
+            period_end = min(next_date, check_out)
+            due = current
+            payment = Payments(
+                booking_id=booking_id,
+                amount=amount,
+                status='pending',
+                period_start=current,
+                period_end=period_end,
+                due_date=due,
+            )
+            self.db.add(payment)
+            payments.append(payment)
+            current = next_date
+        self.db.commit()
+        for p in payments:
+            self.db.refresh(p)
+        return payments
+
+    def submit_payment(self, payment_id: int, method: str, reference_no: str, notes: str = None, tenant_id: int = None) -> Payments:
+        from datetime import datetime, timezone
+        payment = self.get(payment_id)
+        if payment:
+            payment.method = method
+            payment.reference_no = reference_no
+            if notes:
+                payment.notes = notes
+            payment.status = 'paid'
+            payment.submitted_at = datetime.now(timezone.utc)
+            if tenant_id:
+                payment.tenant_id = tenant_id
+            self.db.commit()
+            self.db.refresh(payment)
+        return payment
+
+    def verify_payment(self, payment_id: int, new_status: str, verified_by: int = None) -> Payments:
+        from datetime import datetime, timezone
         payment = self.get(payment_id)
         if payment:
             payment.status = new_status
+            if verified_by:
+                payment.verified_by = verified_by
             if new_status == 'completed':
-                payment.paid_at = func.now() # Synchronizes GCash completion audit times safely
+                payment.paid_at = datetime.now(timezone.utc)
             self.db.commit()
             self.db.refresh(payment)
         return payment

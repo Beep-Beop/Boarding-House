@@ -10,23 +10,26 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 
 if sys.platform.startswith("linux"):
-    from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
+    def _find_scrollable_canvas(widget):
+        while widget:
+            canvas = getattr(widget, "_parent_canvas", None)
+            if canvas is not None:
+                return canvas
+            try:
+                widget = widget.master
+            except Exception:
+                break
+        return None
 
-    def _linux_scroll_handler(self, event):
-        if self.check_if_master_is_canvas(event.widget):
-            if self._parent_canvas.yview() != (0.0, 1.0):
-                if event.num == 4:
-                    self._parent_canvas.yview("scroll", -1, "units")
-                elif event.num == 5:
-                    self._parent_canvas.yview("scroll", 1, "units")
+    def _linux_wheel_up(event):
+        canvas = _find_scrollable_canvas(event.widget)
+        if canvas and canvas.yview() != (0.0, 1.0):
+            canvas.yview("scroll", -1, "units")
 
-    CTkScrollableFrame._linux_scroll_handler = _linux_scroll_handler
-    _orig_init = CTkScrollableFrame.__init__
-    def _patched_init(self, *args, **kwargs):
-        _orig_init(self, *args, **kwargs)
-        self.bind_all("<Button-4>", lambda e: self._linux_scroll_handler(e), add="+")
-        self.bind_all("<Button-5>", lambda e: self._linux_scroll_handler(e), add="+")
-    CTkScrollableFrame.__init__ = _patched_init
+    def _linux_wheel_down(event):
+        canvas = _find_scrollable_canvas(event.widget)
+        if canvas and canvas.yview() != (0.0, 1.0):
+            canvas.yview("scroll", 1, "units")
 
 from gui.api_client import APIClient
 from src.logger import logger
@@ -76,9 +79,13 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self._screen_active = True
         self._menu_showing = False
         self.bind_all("<Button-1>", self._on_global_menu_click)
+        if sys.platform.startswith("linux"):
+            self.bind_all("<Button-4>", _linux_wheel_up)
+            self.bind_all("<Button-5>", _linux_wheel_down)
 
         # --- API Client ---
         self.api = APIClient()
+        self.api.on_unauthorized = self._handle_force_logout
 
         # --- Toast / Screen state ---
         self.current_toast = None
@@ -115,6 +122,8 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
             ("pfp_placeholder_lg", "pfp_placeholder.png", (100, 100)),
             ("search_icon", "search.png", (30, 30)),
             ("bookmark_icon", "bookmark.png", (25, 25)),
+            ("heart_icon", "heart.png", (25, 25)),
+            ("favorite_icon", "favorite.png", (25, 25)),
             ("upload_image_icon", "upload_image.png", (60, 60)),
             ("yellow_star", "yellow_star.png", (16, 16)),
             ("grey_star", "grey_star.png", (16, 16)),
@@ -295,9 +304,6 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                 except Exception:
                     pass
 
-        self.unbind_all("<Button-4>")
-        self.unbind_all("<Button-5>")
-
     def show_toast(self, message, is_error=True):
 
         if self.toast_timer is not None:
@@ -382,7 +388,8 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
                     on_done()
                 return
             sidebar_frame.configure(width=current)
-            self.after(16, _step)
+            aid = self.after(16, _step)
+            self.after_ids.append(aid)
 
         setattr(self, width_attr, current)
         _step()
@@ -400,7 +407,9 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
             return
         try:
             label.configure(image=frames[idx])
-            label._anim_timer = self.after(40, lambda: self._animate_eye(label, frames, idx + 1))
+            aid = self.after(40, lambda: self._animate_eye(label, frames, idx + 1))
+            label._anim_timer = aid
+            self.after_ids.append(aid)
         except Exception:
             label._anim_timer = None
 
@@ -424,6 +433,18 @@ class BoardingHouseApp(ctk.CTk, LoginMixin, AccountTypeMixin, RegisterMixin,
         self._clear_session()
         self.show_login_page()
         self.update()
+
+    def _handle_force_logout(self, response):
+        if getattr(self, '_force_logging_out', False):
+            return
+        self._force_logging_out = True
+        try:
+            detail = response.json().get("detail", "Your session has expired.")
+        except Exception:
+            detail = "Your session has expired."
+        self.show_toast(detail, is_error=True)
+        self._handle_logout()
+        self._force_logging_out = False
 
     def show_location(self):
         self.clear_container()

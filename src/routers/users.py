@@ -117,6 +117,11 @@ def update_user_status(user_id: int, update_data: schemas.UserStatusUpdate, db: 
             detail="User not found"
         )
 
+    if update_data.new_status in ("banned", "suspended"):
+        user.token_version = (user.token_version or 0) + 1
+        db.commit()
+        db.refresh(user)
+
     if update_data.reason:
         admin_logs_crud = crud.AdminLogsCRUD(db)
         admin_logs_crud.create(

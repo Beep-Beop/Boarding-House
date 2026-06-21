@@ -305,8 +305,11 @@ class AdminDashboardMixin:
                 dialog.destroy()
             elif entry.get().strip().upper() != keyword:
                 self.show_toast(f"Type {keyword} to confirm", is_error=True)
+                entry.delete(0, "end")
+                entry.focus_force()
             else:
                 self.show_toast("Please provide a reason", is_error=True)
+                textbox.focus_force()
 
         def on_cancel():
             dialog.destroy()
@@ -388,6 +391,7 @@ class AdminDashboardMixin:
             except Exception:
                 pass
         self._admin_search_timer = self.after(300, cb)
+        self.after_ids.append(self._admin_search_timer)
 
     # ════════════════════════════════════
     #  SECTION 1: DASHBOARD
@@ -1853,6 +1857,25 @@ class AdminDashboardMixin:
                 ttk.Separator(card, orient="horizontal").grid(
                     row=sep_row, column=0, columnspan=7, padx=20, pady=4, sticky="ew")
 
+    def _admin_refresh_reviews(self):
+        if not hasattr(self, '_admin_reviews_container') or not self._admin_reviews_container:
+            self._build_admin_reviews_content()
+            return
+        card = self._admin_reviews_container
+        for w in card.winfo_children():
+            w.destroy()
+        self._admin_show_loading(card)
+        def _do():
+            reviews = []
+            try:
+                resp = self.api.get("/social/reviews/all", timeout=5)
+                if resp.status_code == 200:
+                    reviews = resp.json()
+            except Exception:
+                self.after(0, lambda: self.show_toast("Failed to load reviews. Check your connection.", is_error=True))
+            self.after(0, lambda: self._admin_populate_reviews(reviews))
+        threading.Thread(target=_do, daemon=True).start()
+
     def _admin_delete_review(self, review_id, btn=None):
         confirmed, reason = self._admin_confirm_with_reason(
             "Type DELETE to confirm:", "DELETE", "Delete Review")
@@ -1872,7 +1895,7 @@ class AdminDashboardMixin:
                 self.after(0, lambda: self.show_toast("Cannot connect to server", is_error=True))
             if btn:
                 self.after(0, lambda: btn.configure(state="normal", text="Delete"))
-            self.after(0, self._build_admin_reviews_content)
+            self.after(0, self._admin_refresh_reviews)
         threading.Thread(target=_do, daemon=True).start()
 
     # ════════════════════════════════════

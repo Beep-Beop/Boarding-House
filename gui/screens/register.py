@@ -7,8 +7,7 @@ import datetime
 from gui.screens.register_form import RegisterFormMixin
 from gui.screens.register_validation import RegisterValidationMixin
 
-PHONE_PREFIX = "09"
-PHONE_LENGTH = 11
+PHONE_PATTERN = re.compile(r'^\+?[\d\s\-\(\)]{7,20}$')
 
 
 class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
@@ -90,12 +89,8 @@ class RegisterMixin(RegisterFormMixin, RegisterValidationMixin):
             self.phone_error_lbl.configure(text="Phone number is required.")
             self.phone_bg_frame.configure(border_color=self.error_red)
             has_error = True
-        elif not phone.startswith(PHONE_PREFIX):
-            self.phone_error_lbl.configure(text=f"Mobile numbers must start with {PHONE_PREFIX}.")
-            self.phone_bg_frame.configure(border_color=self.error_red)
-            has_error = True
-        elif len(phone) != PHONE_LENGTH:
-            self.phone_error_lbl.configure(text=f"Must be exactly {PHONE_LENGTH} digits ({PHONE_PREFIX}XXXXXXXXX).")
+        elif not PHONE_PATTERN.match(phone):
+            self.phone_error_lbl.configure(text="Enter a valid phone number (e.g. +639123456789).")
             self.phone_bg_frame.configure(border_color=self.error_red)
             has_error = True
 

@@ -1,4 +1,5 @@
 import secrets
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
@@ -15,24 +16,28 @@ class _TTLCache:
     def __init__(self, ttl_seconds: int = 300):
         self._store: dict = {}
         self._ttl = ttl_seconds
+        self._lock = threading.Lock()
 
     def __setitem__(self, key, value):
-        self._store[key] = (value, time.monotonic())
+        with self._lock:
+            self._store[key] = (value, time.monotonic())
 
     def __contains__(self, key):
-        if key not in self._store:
-            return False
-        _, ts = self._store[key]
-        if time.monotonic() - ts > self._ttl:
-            del self._store[key]
-            return False
-        return True
+        with self._lock:
+            if key not in self._store:
+                return False
+            _, ts = self._store[key]
+            if time.monotonic() - ts > self._ttl:
+                del self._store[key]
+                return False
+            return True
 
     def pop(self, key, default=None):
-        if key in self._store:
-            val, _ = self._store.pop(key)
-            return val
-        return default
+        with self._lock:
+            if key in self._store:
+                val, _ = self._store.pop(key)
+                return val
+            return default
 
 _oauth_states = _TTLCache(ttl_seconds=300)
 
@@ -77,10 +82,15 @@ def login(request: Request, credentials: schemas.UserLogin, db: Session = Depend
             detail="Please verify your email before logging in."
         )
     
+    user.token_version = (user.token_version or 0) + 1
+    db.commit()
+    db.refresh(user)
+
     token_expiry = timedelta(days=7) if credentials.remember_me else None
     access_token = security.create_access_token(
         data={"sub": str(user.user_id), "role": user.role},
-        expires_delta=token_expiry
+        expires_delta=token_expiry,
+        token_version=user.token_version
     )
     
     return {
@@ -292,6 +302,10 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google OAuth is not configured")
 
+    if not state or state not in _oauth_states:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or missing OAuth state parameter")
+    redirect_port = _oauth_states.pop(state, "9876")
+
     try:
         token_response = requests.post("https://oauth2.googleapis.com/token", data={
             "code": code,
@@ -355,14 +369,14 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     else:
         account_setup_complete = True
 
+    user.token_version = (user.token_version or 0) + 1
+    db.commit()
+    db.refresh(user)
+
     access_token = security.create_access_token(
-        data={"sub": str(user.user_id), "role": user.role}
+        data={"sub": str(user.user_id), "role": user.role},
+        token_version=user.token_version
     )
-
-    if not state or state not in _oauth_states:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or missing OAuth state parameter")
-
-    redirect_port = _oauth_states.pop(state, "9876")
 
     from fastapi.responses import HTMLResponse
     import json
