@@ -1474,7 +1474,8 @@ class DashboardMixin:
                                      width=25, height=25,
                                      fg_color="transparent",
                                      hover_color=self.hover_color,
-                                     command=lambda lid=listing_id, btn=bookmark_btn: self.toggle_bookmark(lid, btn))
+                                     )
+        bookmark_btn.configure(command=lambda lid=listing_id, btn=bookmark_btn: self.toggle_bookmark(lid, btn))
         bookmark_btn.pack(side="right")
 
         # ── Make the entire card clickable to open property details ──
@@ -2507,7 +2508,7 @@ class DashboardMixin:
                     ctk.CTkLabel(row, text=line.strip(),
                                  font=self.body_light_font,
                                  text_color=self.text_color,
-                                 wraplength=280).pack(side="left")
+                                 wraplength=700).pack(side="left")
         else:
             ctk.CTkLabel(body, text="No specific house rules listed.",
                          font=self.body_light_font,
@@ -2768,7 +2769,7 @@ class DashboardMixin:
                                      text_color="white",
                                      hover_color=self.hover_color,
                                      cursor="hand2")
-        booking_btn.pack(fill="x", pady=(0, 12))
+        booking_btn.pack(anchor="center", pady=(0, 12))
 
         def _request_booking():
             user_id = getattr(self, 'current_user', {}).get('user_id')
